@@ -1,0 +1,657 @@
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: #f8fafc;
+}
+
+/* Loading Animation */
+.loading-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(255, 255, 255, 0.9);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+    backdrop-filter: blur(8px);
+}
+
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #e0e7ff;
+    border-bottom-color: #6366f1;
+    border-radius: 50%;
+    display: inline-block;
+    box-sizing: border-box;
+    animation: rotation 1s linear infinite;
+}
+
+@media (min-width: 640px) {
+    .spinner {
+        width: 56px;
+        height: 56px;
+        border-width: 5px;
+    }
+}
+
+@keyframes rotation {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Drag and Drop Styles */
+.sortable-ghost {
+    opacity: 0.5;
+    background-color: #e0e7ff !important;
+    border: 2px dashed #6366f1 !important;
+    box-shadow: none !important;
+}
+
+.sortable-drag { 
+    opacity: 1 !important; 
+    cursor: grabbing;
+    transform: scale(1.02);
+    z-index: 10;
+}
+
+.sortable-chosen {
+    background-color: #f5f5ff;
+}
+
+.toolbox-item {
+    cursor: grab;
+    transition: all 0.2s ease-in-out;
+    touch-action: none; /* Melhora o comportamento de toque em dispositivos móveis */
+}
+
+.toolbox-item:hover {
+    transform: translateY(-2px);
+}
+
+.toolbox-item:active {
+    cursor: grabbing;
+}
+
+.toolbox-item[data-field-type="relationship"],
+.toolbox-item[data-field-type="sub-entity"] {
+    background-color: #eef2ff;
+    border-color: #c7d2fe;
+}
+
+/* Animation for new elements */
+@keyframes highlight-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4); }
+    70% { box-shadow: 0 0 0 10px rgba(99, 102, 241, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
+}
+
+.animate-pulse {
+    animation: highlight-pulse 2s 1;
+}
+
+/* Animação para dicas */
+@keyframes tip-fade-in {
+    0% { opacity: 0; transform: translateY(-10px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+
+#welcome-tip, #quick-tip, #modules-tip {
+    animation: tip-fade-in 0.5s ease-out;
+}
+
+.close-tip-btn {
+    transition: all 0.2s ease;
+}
+
+.close-tip-btn:hover {
+    transform: scale(1.1);
+}
+
+/* Estilos para o Hub de Visualização */
+.view-tab {
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+.view-tab.active {
+    color: #4f46e5; /* indigo-600 */
+    background-color: rgba(79, 70, 229, 0.05);
+}
+
+/* Estilos para o Kanban Board */
+.kanban-column {
+    min-width: 280px;
+    max-width: 280px;
+    background-color: #f8fafc; /* slate-50 */
+    border-radius: 0.5rem;
+    border: 1px solid #e2e8f0; /* slate-200 */
+}
+
+.kanban-column-header {
+    padding: 0.75rem;
+    border-bottom: 1px solid #e2e8f0; /* slate-200 */
+    background-color: #f1f5f9; /* slate-100 */
+    border-radius: 0.5rem 0.5rem 0 0;
+}
+
+.kanban-items {
+    min-height: 200px;
+    padding: 0.5rem;
+}
+
+.kanban-item {
+    margin-bottom: 0.5rem;
+    background-color: white;
+    border-radius: 0.375rem;
+    padding: 0.75rem;
+    border: 1px solid #e2e8f0; /* slate-200 */
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    cursor: grab;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.kanban-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
+/* Estilos para a visualização em galeria */
+.gallery-item {
+    background-color: white;
+    border-radius: 0.5rem;
+    border: 1px solid #e2e8f0; /* slate-200 */
+    overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.gallery-item:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 15px rgba(0, 0, 0, 0.05);
+}
+
+.gallery-item-header {
+    padding: 1rem;
+    border-bottom: 1px solid #e2e8f0; /* slate-200 */
+}
+
+.gallery-item-body {
+    padding: 1rem;
+}
+
+.gallery-item-footer {
+    padding: 0.75rem 1rem;
+    background-color: #f8fafc; /* slate-50 */
+    border-top: 1px solid #e2e8f0; /* slate-200 */
+}
+
+/* Estilos para a tabela responsiva */
+.table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 640px) {
+    .table-responsive th, 
+    .table-responsive td {
+        white-space: nowrap;
+    }
+}
+
+/* Estilos para elementos arrastáveis (Sortable.js) */
+.sortable-ghost {
+    opacity: 0.4;
+    background-color: rgba(99, 102, 241, 0.1) !important;
+    border: 2px dashed rgba(99, 102, 241, 0.5) !important;
+}
+
+.sortable-chosen {
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    z-index: 10;
+}
+
+.sortable-drag {
+    cursor: grabbing;
+    opacity: 0.9;
+    transform: scale(1.02);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+}
+
+.module-quadro {
+    cursor: grab;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.module-quadro:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+}
+
+/* Empty States */
+#empty-form-state:only-child {
+    display: flex;
+}
+
+#form-builder-dropzone:empty + #empty-form-state {
+    display: flex;
+}
+
+#module-container:empty + #empty-state {
+    display: flex;
+}
+
+/* Improved Scrollbars */
+.no-scrollbar::-webkit-scrollbar { 
+    width: 4px;
+    height: 4px;
+}
+
+@media (min-width: 640px) {
+    .no-scrollbar::-webkit-scrollbar { 
+        width: 6px;
+        height: 6px;
+    }
+}
+
+.no-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.no-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(203, 213, 225, 0.5);
+    border-radius: 3px;
+}
+
+.no-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(148, 163, 184, 0.7);
+}
+
+/* Modal Animations */
+#entity-builder-modal .bg-white {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#entity-builder-modal.hidden .bg-white {
+    transform: scale(0.95);
+    opacity: 0;
+}
+
+/* Transitions for hover states */
+.module-quadro,
+.entity-card,
+.dropped-entity-card,
+.form-field-card,
+button {
+    transition: all 0.2s ease-in-out;
+}
+
+/* Custom effects */
+.shadow-highlight {
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3);
+}
+
+/* Button hover effects */
+button:active {
+    transform: translateY(1px);
+}
+
+/* Entity cards with no-results states */
+.entities-dropzone:empty::after {
+    content: 'Sem entidades';
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 80px;
+    width: 100%;
+    color: #94a3b8;
+    font-size: 0.75rem;
+    font-style: italic;
+    border: 2px dashed #e2e8f0;
+    border-radius: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+@media (min-width: 640px) {
+    .entities-dropzone:empty::after {
+        content: 'Sem entidades neste módulo';
+        height: 100px;
+        font-size: 0.875rem;
+    }
+}
+
+#form-builder-dropzone:empty::after {
+    content: 'Arraste campos aqui';
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 80px;
+    width: 100%;
+    color: #94a3b8;
+    font-size: 0.75rem;
+    font-style: italic;
+}
+
+@media (min-width: 640px) {
+    #form-builder-dropzone:empty::after {
+        content: 'Arraste campos aqui para criar o formulário';
+        height: 100px;
+        font-size: 0.875rem;
+    }
+}
+
+/* Mobile Sidebar Toggle */
+#desktop-sidebar {
+    transition: transform 0.3s ease-in-out;
+}
+
+#desktop-sidebar.open {
+    transform: translateX(0);
+}
+
+/* Modal sidebar toggle */
+#modal-sidebar-container {
+    transition: height 0.3s ease-in-out;
+}
+
+#modal-sidebar-container.open #modal-sidebar-content {
+    display: block;
+}
+
+/* Limitação de texto em elementos móveis */
+.module-title, .entity-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 150px;
+}
+
+@media (min-width: 640px) {
+    .module-title, .entity-name {
+        max-width: 200px;
+    }
+}
+
+/* Breadcrumb responsivo */
+#modal-breadcrumb {
+    max-width: 180px;
+}
+
+@media (min-width: 640px) {
+    #modal-breadcrumb {
+        max-width: none;
+    }
+}
+
+/* Estilos para a página de login */
+.auth-container {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #f0f4ff 0%, #e5e9ff 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+
+.auth-card {
+    background-color: white;
+    border-radius: 1rem;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 450px;
+    overflow: hidden;
+}
+
+.auth-header {
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    padding: 2rem;
+    text-align: center;
+    color: white;
+}
+
+.auth-tabs {
+    display: flex;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.auth-tab {
+    flex: 1;
+    text-align: center;
+    padding: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    color: #64748b;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+}
+
+.auth-tab.active {
+    color: #6366f1;
+    border-bottom-color: #6366f1;
+}
+
+.auth-content {
+    padding: 2rem;
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.auth-social-btn {
+    width: 100%;
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.auth-google-btn {
+    background-color: white;
+    color: #4285f4;
+    border: 1px solid #e2e8f0;
+}
+
+.auth-google-btn:hover {
+    background-color: #f8fafc;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.auth-phone-btn {
+    background-color: white;
+    color: #10b981;
+    border: 1px solid #e2e8f0;
+}
+
+.auth-phone-btn:hover {
+    background-color: #f8fafc;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.auth-input {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.auth-input label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #475569;
+}
+
+.auth-input input {
+    padding: 0.75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    font-size: 1rem;
+    transition: all 0.2s;
+}
+
+.auth-input input:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.auth-submit-btn {
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    color: white;
+    padding: 0.75rem;
+    border: none;
+    border-radius: 0.5rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.auth-submit-btn:hover {
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+}
+
+.auth-submit-btn:active {
+    transform: translateY(1px);
+}
+
+.auth-divider {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin: 1.5rem 0;
+}
+
+.auth-divider-line {
+    flex: 1;
+    height: 1px;
+    background-color: #e2e8f0;
+}
+
+.auth-divider-text {
+    color: #94a3b8;
+    font-size: 0.875rem;
+}
+
+.auth-footer {
+    text-align: center;
+    margin-top: 1.5rem;
+    font-size: 0.875rem;
+    color: #64748b;
+}
+
+.auth-footer a {
+    color: #6366f1;
+    font-weight: 500;
+    text-decoration: none;
+}
+
+.auth-footer a:hover {
+    text-decoration: underline;
+}
+
+/* Estilos para o componente de verificação por telefone */
+.phone-verification {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.verification-code-container {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+}
+
+.verification-code-input {
+    width: 3rem;
+    height: 3rem;
+    font-size: 1.25rem;
+    text-align: center;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+}
+
+.verification-code-input:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.resend-code {
+    text-align: center;
+    margin-top: 1rem;
+    font-size: 0.875rem;
+    color: #64748b;
+}
+
+.resend-code button {
+    color: #6366f1;
+    font-weight: 500;
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+
+.resend-code button:hover {
+    text-decoration: underline;
+}
+
+/* Estilos para páginas de código */
+pre {
+    margin: 0;
+    padding: 0;
+    overflow-x: auto;
+    font-family: 'Fira Code', monospace;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.code-container {
+    max-height: 600px;
+    overflow-y: auto;
+    border-radius: 0.5rem;
+}
+
+.code-container::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.code-container::-webkit-scrollbar-track {
+    background: #2d333b;
+}
+
+.code-container::-webkit-scrollbar-thumb {
+    background-color: #444c56;
+    border-radius: 4px;
+}
+
+.code-container::-webkit-scrollbar-thumb:hover {
+    background-color: #555f6a;
+}
+
+.tab-button {
+    position: relative;
+    transition: all 0.2s;
+}
+
+.tab-button.active::after {
+    content: "";
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: #6366f1;
+    border-radius: 2px;
+}
+
+@media (max-width: 640px) {
+    .code-container {
+        max-height: 400px;
+    }
+}

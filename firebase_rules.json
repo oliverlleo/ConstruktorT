@@ -1,0 +1,37 @@
+{
+  "rules": {
+    "users": {
+      "$uid": {
+        ".read": "$uid === auth.uid",
+        ".write": "$uid === auth.uid"
+      }
+    },
+    "accessControl": {
+      "$uid": {
+        ".read": "$uid === auth.uid",
+        ".write": "auth != null"
+      }
+    },
+    "sharedWorkspaces": {
+      "$workspaceId": {
+        ".read": "root.child('accessControl').child(auth.uid).child($workspaceId).exists()",
+        ".write": "auth != null"
+      }
+    },
+    "invitations": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      ".indexOn": ["fromUserId", "toEmail", "resourceId"],
+      "$inviteId": {
+        ".validate": "
+          (newData.hasChildren(['fromUserId', 'toEmail', 'resourceType', 'resourceId', 'role', 'status']) && 
+           newData.child('fromUserId').val() == auth.uid && 
+           newData.child('status').val() == 'pending') ||
+          (data.exists() && 
+           (data.child('fromUserId').val() == auth.uid || 
+            data.child('toEmail').val() == auth.token.email))
+        "
+      }
+    }
+  }
+}

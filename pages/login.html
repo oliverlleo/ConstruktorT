@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Construktor</title>
+    
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/js/all.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.395.0/dist/umd/lucide.min.js"></script>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-database-compat.js"></script>
+
+    <!-- Link para o ficheiro CSS externo -->
+    <link rel="stylesheet" href="/css/style.css">
+    
+    <style>
+        /* Estilos específicos para a página de login inspirada no Notion */
+        body {
+            background-color: #ffffff;
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .notion-auth-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem 1rem;
+        }
+        
+        .notion-auth-card {
+            width: 100%;
+            max-width: 420px;
+            margin: 0 auto;
+        }
+        
+        .notion-auth-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        
+        .notion-auth-logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+        }
+        
+        .notion-logo-container {
+            width: 70px;
+            height: 70px;
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+        }
+        
+        .notion-auth-form {
+            background-color: white;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        
+        .notion-auth-tabs {
+            display: flex;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid #f1f5f9;
+            padding-bottom: 0.5rem;
+        }
+        
+        .notion-auth-tab {
+            flex: 1;
+            text-align: center;
+            padding: 0.75rem 0;
+            font-weight: 500;
+            color: #64748b;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.2s;
+        }
+        
+        .notion-auth-tab.active {
+            color: #0f172a;
+            font-weight: 600;
+        }
+        
+        .notion-auth-tab.active:after {
+            content: "";
+            position: absolute;
+            bottom: -0.5rem;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background-color: #6366f1;
+        }
+        
+        .notion-auth-content {
+            padding: 0.5rem 0 1.5rem 0;
+        }
+        
+        .notion-auth-panel {
+            display: none;
+        }
+        
+        .notion-auth-panel.active {
+            display: block;
+        }
+        
+        .notion-social-btn {
+            width: 100%;
+            padding: 0.75rem;
+            border-radius: 8px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 0.75rem;
+            border: 1px solid #e2e8f0;
+            background-color: white;
+        }
+        
+        .notion-social-btn:hover {
+            background-color: #f8fafc;
+        }
+        
+        .notion-google-btn {
+            color: #0f172a;
+        }
+        
+        .notion-phone-btn {
+            color: #0f172a;
+        }
+        
+        .notion-divider {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+        
+        .notion-divider-line {
+            flex: 1;
+            height: 1px;
+            background-color: #e2e8f0;
+        }
+        
+        .notion-divider-text {
+            color: #94a3b8;
+            font-size: 0.875rem;
+        }
+        
+        .notion-input-group {
+            margin-bottom: 1.25rem;
+        }
+        
+        .notion-input-group label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #475569;
+            margin-bottom: 0.5rem;
+        }
+        
+        .notion-input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: all 0.2s;
+            background-color: #f8fafc;
+        }
+        
+        .notion-input:focus {
+            outline: none;
+            border-color: #6366f1;
+            background-color: white;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+        
+        .notion-submit-btn {
+            width: 100%;
+            padding: 0.75rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            background-color: #0f172a;
+            color: white;
+            font-size: 0.95rem;
+        }
+        
+        .notion-submit-btn:hover {
+            background-color: #1e293b;
+        }
+        
+        .notion-submit-btn:active {
+            transform: translateY(1px);
+        }
+        
+        .notion-footer {
+            text-align: center;
+            margin-top: 2rem;
+            font-size: 0.875rem;
+            color: #64748b;
+        }
+        
+        .notion-link {
+            color: #6366f1;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        
+        .notion-link:hover {
+            text-decoration: underline;
+        }
+        
+        .notion-verification-code {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: center;
+            margin: 1.5rem 0;
+        }
+        
+        .notion-code-input {
+            width: 2.75rem;
+            height: 2.75rem;
+            text-align: center;
+            font-size: 1.25rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            background-color: #f8fafc;
+        }
+        
+        .notion-code-input:focus {
+            outline: none;
+            border-color: #6366f1;
+            background-color: white;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+    </style>
+<script src="https://lib.youware.com/youware-lib.1747145198.js" id="yourware-lib"></script><script src="https://lib.youware.com/youware-lib.1747145198.js" id="yourware-lib"></script><script src="https://lib.youware.com/youware-lib.1747145198.js" id="yourware-lib"></script><script src="https://lib.youware.com/youware-lib.1747145198.js" id="yourware-lib"></script><script src="https://lib.youware.com/youware-lib.1747145198.js" id="yourware-lib"></script><script src="https://lib.youware.com/youware-lib.1747145198.js" id="yourware-lib"></script><script src="https://lib.youware.com/youware-lib.1747145198.js" id="yourware-lib"></script><script src="https://lib.youware.com/youware-lib.1747145198.js" id="yourware-lib"></script><script src="https://lib.youware.com/youware-lib.1747145198.js" id="yourware-lib"></script><script src="https://lib.youware.com/youware-lib.1747145198.js" id="yourware-lib"></script></head>
+<body>
+    <div class="notion-auth-container">
+        <div class="notion-auth-card">
+            <div class="notion-auth-header">
+                <div class="notion-auth-logo">
+                    <div class="notion-logo-container">
+                        <i data-lucide="layout-dashboard" class="w-9 h-9"></i>
+                    </div>
+                </div>
+                <h1 class="text-2xl font-bold text-slate-900 mb-1">Construktor</h1>
+                <p class="text-slate-500">Sua plataforma visual para construção de sistemas</p>
+            </div>
+            
+            <div class="notion-auth-form shadow-sm">
+                <div class="notion-auth-tabs">
+                    <div id="tab-login" class="notion-auth-tab active" data-tab="login">Entrar</div>
+                    <div id="tab-register" class="notion-auth-tab" data-tab="register">Registrar</div>
+                </div>
+                
+                <div class="notion-auth-content px-6">
+                    <!-- Tab de Login -->
+                    <div id="content-login" class="notion-auth-panel active">
+                        <button id="google-login" class="notion-social-btn notion-google-btn">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.9 10.2h1.2a9.8 9.8 0 0 0-9.2-6.7 10 10 0 0 0-10 10c0 5.5 4.5 10 10 10 5.2 0 9.5-4 9.9-9m-18.3 0H5"/><circle cx="10.8" cy="13.5" r="5.5"/></svg>
+                            <span>Continuar com Google</span>
+                        </button>
+                        
+                        <button id="phone-login" class="notion-social-btn notion-phone-btn">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                            <span>Entrar com telefone</span>
+                        </button>
+                        
+                        <div class="notion-divider">
+                            <div class="notion-divider-line"></div>
+                            <div class="notion-divider-text">ou</div>
+                            <div class="notion-divider-line"></div>
+                        </div>
+                        
+                        <div id="email-login-form">
+                            <div class="notion-input-group">
+                                <label for="login-email">Email</label>
+                                <input type="email" id="login-email" class="notion-input" placeholder="seu.email@exemplo.com" required>
+                            </div>
+                            
+                            <div class="notion-input-group">
+                                <label for="login-password">Senha</label>
+                                <input type="password" id="login-password" class="notion-input" placeholder="Sua senha" required>
+                            </div>
+                            
+                            <div class="flex justify-end mb-4">
+                                <a href="#" id="forgot-password" class="notion-link text-sm">Esqueceu a senha?</a>
+                            </div>
+                            
+                            <button id="email-login-btn" class="notion-submit-btn">Entrar</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Tab de Registro -->
+                    <div id="content-register" class="notion-auth-panel">
+                        <div class="notion-input-group">
+                            <label for="register-email">Email</label>
+                            <input type="email" id="register-email" class="notion-input" placeholder="seu.email@exemplo.com" required>
+                        </div>
+                        
+                        <div class="notion-input-group">
+                            <label for="register-password">Senha</label>
+                            <input type="password" id="register-password" class="notion-input" placeholder="Crie uma senha segura" required>
+                        </div>
+                        
+                        <div class="notion-input-group">
+                            <label for="register-confirm-password">Confirmar Senha</label>
+                            <input type="password" id="register-confirm-password" class="notion-input" placeholder="Repita a senha" required>
+                        </div>
+                        
+                        <button id="register-btn" class="notion-submit-btn">Criar Conta</button>
+                    </div>
+                    
+                    <!-- Painel de verificação por telefone (inicialmente oculto) -->
+                    <div id="phone-verification-panel" class="notion-auth-panel">
+                        <div id="phone-step-1">
+                            <div class="notion-input-group">
+                                <label for="phone-number">Número de Telefone</label>
+                                <input type="tel" id="phone-number" class="notion-input" placeholder="+55 11 99999-9999" required>
+                                <p class="text-xs text-slate-500 mt-1">Incluir código do país (ex: +55 para Brasil)</p>
+                            </div>
+                            
+                            <div id="recaptcha-container" class="my-4"></div>
+                            
+                            <button id="send-code-btn" class="notion-submit-btn mb-4">Enviar Código</button>
+                            
+                            <div class="text-center">
+                                <button id="back-to-login" class="notion-link text-sm">
+                                    Voltar para opções de login
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div id="phone-step-2" class="hidden">
+                            <h3 class="text-lg font-semibold text-slate-800 mb-4">Verifique seu telefone</h3>
+                            <p class="text-sm text-slate-600 mb-4">Enviamos um código de verificação para o número fornecido. Digite o código abaixo:</p>
+                            
+                            <div class="notion-verification-code">
+                                <input type="text" class="notion-code-input" maxlength="1" data-index="1">
+                                <input type="text" class="notion-code-input" maxlength="1" data-index="2">
+                                <input type="text" class="notion-code-input" maxlength="1" data-index="3">
+                                <input type="text" class="notion-code-input" maxlength="1" data-index="4">
+                                <input type="text" class="notion-code-input" maxlength="1" data-index="5">
+                                <input type="text" class="notion-code-input" maxlength="1" data-index="6">
+                            </div>
+                            
+                            <div class="text-center text-sm text-slate-500 mb-4">
+                                <span>Não recebeu o código?</span>
+                                <button id="resend-code-btn" class="notion-link ml-1">Reenviar</button>
+                            </div>
+                            
+                            <button id="verify-code-btn" class="notion-submit-btn">Verificar</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Painel de recuperação de senha (inicialmente oculto) -->
+                    <div id="password-recovery-panel" class="notion-auth-panel">
+                        <h3 class="text-lg font-semibold text-slate-800 mb-4">Recuperação de Senha</h3>
+                        <p class="text-sm text-slate-600 mb-4">Digite seu email para receber um link de redefinição de senha.</p>
+                        
+                        <div class="notion-input-group">
+                            <label for="recovery-email">Email</label>
+                            <input type="email" id="recovery-email" class="notion-input" placeholder="seu.email@exemplo.com" required>
+                        </div>
+                        
+                        <button id="send-recovery-btn" class="notion-submit-btn mb-4">Enviar Link de Recuperação</button>
+                        
+                        <div class="text-center">
+                            <button id="back-to-login-from-recovery" class="notion-link text-sm">
+                                Voltar para o login
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="notion-footer">
+                <p>© 2025 Construktor. Todos os direitos reservados.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script JS modularizado -->
+    <script type="module" src="/js/login.js"></script>
+</body>
+</html>
