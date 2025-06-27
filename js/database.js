@@ -17,11 +17,7 @@ let sharedResources = []; // Armazena recursos compartilhados com o usuário
 export async function initDatabase(firebase) {
     try {
         db = firebase.database();
-        
-        // Carrega preferências do usuário
         await loadUserPreferences();
-        
-        // Carrega recursos compartilhados com o usuário
         await loadSharedResources();
     } catch (error) {
         console.error("Erro ao inicializar banco de dados:", error);
@@ -37,35 +33,43 @@ export async function initDatabase(firebase) {
  * @returns {Promise<Array>} - Array com todas as entidades
  */
 export async function loadAllEntities(workspaceId = 'default', ownerId = null) {
+    const currentUserId = getUsuarioId();
+    const targetUserId = ownerId || currentUserId;
+
+    console.log(`[loadAllEntities] Tentando carregar entidades. Solicitado por: ${currentUserId}, Dono do Recurso: ${targetUserId}, Workspace: ${workspaceId}`);
+    
+    if (!targetUserId) {
+        console.error("[loadAllEntities] ERRO: ID do usuário alvo é nulo.");
+        showError('Erro de Autenticação', 'Não foi possível identificar o usuário.');
+        return [];
+    }
+    
+    const readPath = `users/${targetUserId}/workspaces/${workspaceId}/entities`;
+    console.log(`[loadAllEntities] Caminho de leitura: ${readPath}`);
+
     try {
-        const userId = ownerId || getUsuarioId();
-        if (!userId) {
-            throw new Error('Usuário não autenticado');
-        }
-        
-        console.log(`Buscando entidades para a área de trabalho: ${workspaceId} do usuário: ${userId}`);
-        const snapshot = await db.ref(`users/${userId}/workspaces/${workspaceId}/entities`).get();
+        const snapshot = await db.ref(readPath).get();
         allEntities = [];
         
         if (snapshot.exists()) {
-            console.log("Entidades encontradas no Firebase");
+            console.log("[loadAllEntities] Entidades encontradas no Firebase.", snapshot.val());
             const customEntities = snapshot.val();
             for (const entityId in customEntities) {
-                console.log(`Processando entidade: ${entityId}`, customEntities[entityId]);
                 allEntities.push({ ...customEntities[entityId], id: entityId });
             }
         } else {
-            console.log("Nenhuma entidade encontrada no Firebase");
+            console.log("[loadAllEntities] Nenhuma entidade encontrada no Firebase neste caminho.");
         }
         
-        console.log(`Total de entidades carregadas: ${allEntities.length}`);
+        console.log(`[loadAllEntities] Sucesso. Total de entidades carregadas: ${allEntities.length}`);
         return allEntities;
     } catch (error) {
-        console.error("Erro ao carregar entidades:", error);
-        showError('Erro de Dados', 'Não foi possível carregar as entidades.');
+        console.error(`[loadAllEntities] Falha ao carregar entidades do caminho: ${readPath}`, error);
+        showError('Erro de Dados', 'Não foi possível carregar as entidades. Verifique as permissões.');
         throw error;
     }
 }
+
 
 /**
  * Obtém todas as entidades já carregadas
@@ -83,50 +87,41 @@ export function getEntities() {
  * @returns {Promise<Array>} - Array com todos os módulos
  */
 export async function loadAndRenderModules(renderCallback, workspaceId = 'default', ownerId = null) {
+    const userId = ownerId || getUsuarioId();
+    if (!userId) throw new Error('Usuário não autenticado');
+    
+    const modulesPath = `users/${userId}/workspaces/${workspaceId}/modules`;
+    console.log(`[loadAndRenderModules] Carregando de: ${modulesPath}`);
+    
     try {
-        const userId = ownerId || getUsuarioId();
-        if (!userId) {
-            throw new Error('Usuário não autenticado');
-        }
-        
-        const snapshot = await db.ref(`users/${userId}/workspaces/${workspaceId}/modules`).get();
+        const snapshot = await db.ref(modulesPath).get();
         if (!snapshot.exists()) {
+            console.log("[loadAndRenderModules] Nenhum módulo encontrado.");
             return [];
         }
         
         const modules = snapshot.val();
         
-        // Verifica se há uma ordem personalizada salva
-        const orderSnapshot = await db.ref(`users/${userId}/workspaces/${workspaceId}/modules_order`).get();
+        const orderPath = `users/${userId}/workspaces/${workspaceId}/modules_order`;
+        const orderSnapshot = await db.ref(orderPath).get();
         if (orderSnapshot.exists()) {
-            modulesOrder = orderSnapshot.val();
-            
-            // Filtra IDs inválidos (módulos que não existem mais)
-            modulesOrder = modulesOrder.filter(id => modules[id]);
-            
-            // Adiciona quaisquer novos módulos que não estejam na ordem
+            modulesOrder = orderSnapshot.val().filter(id => modules[id]);
             Object.keys(modules).forEach(moduleId => {
-                if (!modulesOrder.includes(moduleId)) {
-                    modulesOrder.push(moduleId);
-                }
+                if (!modulesOrder.includes(moduleId)) modulesOrder.push(moduleId);
             });
         } else {
-            // Se não houver ordem personalizada, usa a ordem padrão
             modulesOrder = Object.keys(modules);
         }
         
-        // Renderiza os módulos na ordem salva
         if (renderCallback) {
             modulesOrder.forEach(moduleId => {
-                if (modules[moduleId]) { // Verifica se o módulo ainda existe
-                    renderCallback({ ...modules[moduleId], id: moduleId });
-                }
+                if (modules[moduleId]) renderCallback({ ...modules[moduleId], id: moduleId });
             });
         }
         
         return modulesOrder.map(moduleId => ({...modules[moduleId], id: moduleId}));
     } catch (error) {
-        console.error("Erro ao carregar módulos:", error);
+        console.error(`[loadAndRenderModules] Erro ao carregar módulos de ${modulesPath}:`, error);
         showError('Erro de Dados', 'Não foi possível carregar os módulos.');
         throw error;
     }
@@ -140,16 +135,15 @@ export async function loadAndRenderModules(renderCallback, workspaceId = 'defaul
  * @returns {Promise<Object>} - Objeto com os schemas carregados
  */
 export async function loadDroppedEntitiesIntoModules(renderCallback, workspaceId = 'default', ownerId = null) {
+    const userId = ownerId || getUsuarioId();
+    if (!userId) throw new Error('Usuário não autenticado');
+
+    const schemasPath = `users/${userId}/workspaces/${workspaceId}/schemas`;
+    console.log(`[loadDroppedEntitiesIntoModules] Carregando de: ${schemasPath}`);
+
     try {
-        const userId = ownerId || getUsuarioId();
-        if (!userId) {
-            throw new Error('Usuário não autenticado');
-        }
-        
-        const snapshot = await db.ref(`users/${userId}/workspaces/${workspaceId}/schemas`).get();
-        if (!snapshot.exists()) {
-            return {};
-        }
+        const snapshot = await db.ref(schemasPath).get();
+        if (!snapshot.exists()) return {};
         
         const schemas = snapshot.val();
         
@@ -159,16 +153,16 @@ export async function loadDroppedEntitiesIntoModules(renderCallback, workspaceId
                     if (!schemas[moduleId][entityId]) continue;
                     
                     const entityInfo = allEntities.find(e => e.id === entityId);
-                    if (!entityInfo) continue;
-                    
-                    renderCallback(moduleId, entityId, schemas[moduleId][entityId], entityInfo);
+                    if (entityInfo) {
+                        renderCallback(moduleId, entityId, schemas[moduleId][entityId], entityInfo);
+                    }
                 }
             }
         }
         
         return schemas;
     } catch (error) {
-        console.error("Erro ao carregar entidades dos módulos:", error);
+        console.error(`[loadDroppedEntitiesIntoModules] Erro ao carregar schemas de ${schemasPath}:`, error);
         showError('Erro de Dados', 'Não foi possível carregar as entidades dos módulos.');
         throw error;
     }
