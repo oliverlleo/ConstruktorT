@@ -57,7 +57,6 @@
                                             hasNewNodes = true;
                                             break;
                                         }
-                                        
                                         // Verifica filhos
                                         if (node.querySelector && node.querySelector('[data-lucide]')) {
                                             hasNewNodes = true;
@@ -71,9 +70,14 @@
                         
                         if (hasNewNodes) {
                             console.log('Novos nós com data-lucide detectados, atualizando ícones');
+                            observer.disconnect(); // Desconecta o observer antes de atualizar
                             updateLucideIcons();
+                            observer.observe(document.body, { // Reconecta depois
+                                childList: true,
+                                subtree: true
+                            });
                         }
-                    }, 100);
+                    }, 100); // Debounce de 100ms
                 });
                 
                 observer.observe(document.body, {
