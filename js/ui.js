@@ -51,22 +51,31 @@ export function setupMobileInteractions() {
     
     if (mobileMenuToggle && desktopSidebar) {
         mobileMenuToggle.addEventListener('click', () => {
-            desktopSidebar.classList.toggle('open');
+            desktopSidebar.classList.toggle('-translate-x-full');
+            // Se -translate-x-full foi removido, o menu está abrindo, então garanta translate-x-0
+            if (!desktopSidebar.classList.contains('-translate-x-full')) {
+                desktopSidebar.classList.add('translate-x-0');
+            } else {
+            // Se -translate-x-full foi adicionado, o menu está fechando, remova translate-x-0
+                desktopSidebar.classList.remove('translate-x-0');
+            }
             mobileSidebarOpen = !mobileSidebarOpen;
         });
     }
     
     if (closeMobileMenu && desktopSidebar) {
         closeMobileMenu.addEventListener('click', () => {
-            desktopSidebar.classList.remove('open');
+            desktopSidebar.classList.add('-translate-x-full');
+            desktopSidebar.classList.remove('translate-x-0');
             mobileSidebarOpen = false;
         });
     }
     
     // Fechar menu ao clicar fora (overlay)
     document.addEventListener('click', (e) => {
-        if (mobileSidebarOpen && desktopSidebar && !desktopSidebar.contains(e.target) && e.target !== mobileMenuToggle) {
-            desktopSidebar.classList.remove('open');
+        if (mobileSidebarOpen && desktopSidebar && !desktopSidebar.contains(e.target) && e.target !== mobileMenuToggle && !mobileMenuToggle.contains(e.target)) { 
+            desktopSidebar.classList.add('-translate-x-full');
+            desktopSidebar.classList.remove('translate-x-0');
             mobileSidebarOpen = false;
         }
     });
