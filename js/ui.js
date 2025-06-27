@@ -51,8 +51,8 @@ export function setupMobileInteractions() {
     
     if (mobileMenuToggle && desktopSidebar) {
         mobileMenuToggle.addEventListener('click', () => {
-            desktopSidebar.classList.add('open');
-            mobileSidebarOpen = true;
+            desktopSidebar.classList.toggle('open');
+            mobileSidebarOpen = !mobileSidebarOpen;
         });
     }
     
