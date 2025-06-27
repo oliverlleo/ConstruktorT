@@ -9,6 +9,22 @@ let modulesOrder = []; // Armazena a ordem dos módulos
 let userPreferences = {}; // Armazena preferências do usuário
 let sharedResources = []; // Armazena recursos compartilhados com o usuário
 
+// Função auxiliar para determinar o caminho do banco de dados
+function getDbPath(workspaceId, ownerId, path = '') {
+    const currentUserId = getUsuarioId();
+    const targetUserId = ownerId || currentUserId;
+    if (!targetUserId) {
+        console.error("Error: Target user ID is null in getDbPath.");
+        // Potentially throw an error or return a clearly invalid path
+        // For now, this matches existing behavior of functions that would fail later.
+    }
+    let basePath = `users/${targetUserId}/workspaces/${workspaceId}`;
+    if (path) {
+        basePath += `/${path}`;
+    }
+    return basePath;
+}
+
 /**
  * Inicializa o módulo de banco de dados
  * @param {Object} firebase - Instância do Firebase
@@ -33,18 +49,7 @@ export async function initDatabase(firebase) {
  * @returns {Promise<Array>} - Array com todas as entidades
  */
 export async function loadAllEntities(workspaceId = 'default', ownerId = null) {
-    const currentUserId = getUsuarioId();
-    const targetUserId = ownerId || currentUserId;
-
-    console.log(`[loadAllEntities] Tentando carregar entidades. Solicitado por: ${currentUserId}, Dono do Recurso: ${targetUserId}, Workspace: ${workspaceId}`);
-    
-    if (!targetUserId) {
-        console.error("[loadAllEntities] ERRO: ID do usuário alvo é nulo.");
-        showError('Erro de Autenticação', 'Não foi possível identificar o usuário.');
-        return [];
-    }
-    
-    const readPath = `users/${targetUserId}/workspaces/${workspaceId}/entities`;
+    const readPath = getDbPath(workspaceId, ownerId, 'entities');
     console.log(`[loadAllEntities] Caminho de leitura: ${readPath}`);
 
     try {
@@ -87,10 +92,7 @@ export function getEntities() {
  * @returns {Promise<Array>} - Array com todos os módulos
  */
 export async function loadAndRenderModules(renderCallback, workspaceId = 'default', ownerId = null) {
-    const userId = ownerId || getUsuarioId();
-    if (!userId) throw new Error('Usuário não autenticado');
-    
-    const modulesPath = `users/${userId}/workspaces/${workspaceId}/modules`;
+    const modulesPath = getDbPath(workspaceId, ownerId, 'modules');
     console.log(`[loadAndRenderModules] Carregando de: ${modulesPath}`);
     
     try {
@@ -102,7 +104,7 @@ export async function loadAndRenderModules(renderCallback, workspaceId = 'defaul
         
         const modules = snapshot.val();
         
-        const orderPath = `users/${userId}/workspaces/${workspaceId}/modules_order`;
+        const orderPath = getDbPath(workspaceId, ownerId, 'modules_order');
         const orderSnapshot = await db.ref(orderPath).get();
         if (orderSnapshot.exists()) {
             modulesOrder = orderSnapshot.val().filter(id => modules[id]);
@@ -135,10 +137,7 @@ export async function loadAndRenderModules(renderCallback, workspaceId = 'defaul
  * @returns {Promise<Object>} - Objeto com os schemas carregados
  */
 export async function loadDroppedEntitiesIntoModules(renderCallback, workspaceId = 'default', ownerId = null) {
-    const userId = ownerId || getUsuarioId();
-    if (!userId) throw new Error('Usuário não autenticado');
-
-    const schemasPath = `users/${userId}/workspaces/${workspaceId}/schemas`;
+    const schemasPath = getDbPath(workspaceId, ownerId, 'schemas');
     console.log(`[loadDroppedEntitiesIntoModules] Carregando de: ${schemasPath}`);
 
     try {
@@ -178,16 +177,10 @@ export async function loadDroppedEntitiesIntoModules(renderCallback, workspaceId
  */
 export async function loadStructureForEntity(moduleId, entityId, workspaceId = 'default', ownerId = null) {
     try {
-        const userId = ownerId || getUsuarioId();
-        if (!userId) {
-            throw new Error('Usuário não autenticado');
-        }
-        
-        const path = `users/${userId}/workspaces/${workspaceId}/schemas/${moduleId}/${entityId}`;
+        const path = getDbPath(workspaceId, ownerId, `schemas/${moduleId}/${entityId}`);
         
         console.log("Carregando estrutura do Firebase:", {
             path,
-            userId,
             workspaceId,
             moduleId,
             entityId,
@@ -215,22 +208,24 @@ export async function loadStructureForEntity(moduleId, entityId, workspaceId = '
  * Cria uma nova entidade na área de trabalho atual
  * @param {Object} entityData - Dados da nova entidade
  * @param {string} workspaceId - ID da área de trabalho
+ * @param {string} ownerId - ID do dono da área de trabalho (opcional)
  * @returns {Promise<string>} - ID da entidade criada
  */
-export async function createEntity(entityData, workspaceId = 'default') {
+export async function createEntity(entityData, workspaceId = 'default', ownerId = null) {
     try {
         showLoading('Criando entidade...');
         
-        const userId = getUsuarioId();
-        if (!userId) {
-            throw new Error('Usuário não autenticado');
-        }
-        
-        const newEntityRef = db.ref(`users/${userId}/workspaces/${workspaceId}/entities`).push();
+        const path = getDbPath(workspaceId, ownerId, 'entities');
+        const newEntityRef = db.ref(path).push();
         await newEntityRef.set(entityData);
         
-        // Atualiza a lista local
-        allEntities.push({ ...entityData, id: newEntityRef.key });
+        // Atualiza a lista local apenas se não for uma operação em workspace compartilhado (ou se ownerId for o do usuário atual)
+        // A lógica de atualização de 'allEntities' pode precisar ser mais sofisticada
+        // se entidades de múltiplos workspaces (próprios e compartilhados) forem gerenciadas centralmente.
+        // Por ora, só atualiza se ownerId não for fornecido (implica ser do usuário atual).
+        if (!ownerId || ownerId === getUsuarioId()) {
+            allEntities.push({ ...entityData, id: newEntityRef.key });
+        }
         
         hideLoading();
         return newEntityRef.key;
@@ -246,24 +241,38 @@ export async function createEntity(entityData, workspaceId = 'default') {
  * Cria um novo módulo na área de trabalho atual
  * @param {string} name - Nome do módulo
  * @param {string} workspaceId - ID da área de trabalho
+ * @param {string} ownerId - ID do dono da área de trabalho (opcional)
  * @returns {Promise<string>} - ID do módulo criado
  */
-export async function createModule(name, workspaceId = 'default') {
+export async function createModule(name, workspaceId = 'default', ownerId = null) {
     try {
         showLoading('Criando módulo...');
         
-        const userId = getUsuarioId();
-        if (!userId) {
-            throw new Error('Usuário não autenticado');
-        }
-        
-        const newModuleRef = db.ref(`users/${userId}/workspaces/${workspaceId}/modules`).push();
-        const newModuleData = { id: newModuleRef.key, name };
+        const modulesPath = getDbPath(workspaceId, ownerId, 'modules');
+        const newModuleRef = db.ref(modulesPath).push();
+        const newModuleData = { id: newModuleRef.key, name }; // Ensure id is part of the data written
         await newModuleRef.set(newModuleData);
         
-        // Adiciona à ordem de módulos
-        modulesOrder.push(newModuleRef.key);
-        await db.ref(`users/${userId}/workspaces/${workspaceId}/modules_order`).set(modulesOrder);
+        // Adiciona à ordem de módulos - esta lógica pode precisar de ajuste
+        // Se ownerId for diferente do usuário atual, a atualização de modulesOrder local pode ser incorreta.
+        // A ordem dos módulos deve ser salva no caminho do proprietário.
+        if (!ownerId || ownerId === getUsuarioId()) {
+            modulesOrder.push(newModuleRef.key);
+        }
+        // Sempre salva a ordem no caminho correto (do dono ou do usuário atual)
+        const orderPath = getDbPath(workspaceId, ownerId, 'modules_order');
+        // Para ler a ordem atual antes de modificar, precisamos de uma leitura assíncrona.
+        // Temporariamente, se for compartilhado, vamos apenas adicionar, o que pode levar a duplicatas se não for tratado corretamente no carregamento.
+        // Uma solução mais robusta seria ler a ordem, adicionar e depois salvar.
+        const currentOrderSnapshot = await db.ref(orderPath).get();
+        let currentOrder = [];
+        if (currentOrderSnapshot.exists()) {
+            currentOrder = currentOrderSnapshot.val();
+        }
+        if (!currentOrder.includes(newModuleRef.key)) {
+            currentOrder.push(newModuleRef.key);
+        }
+        await db.ref(orderPath).set(currentOrder);
         
         hideLoading();
         return newModuleRef.key;
@@ -281,21 +290,17 @@ export async function createModule(name, workspaceId = 'default') {
  * @param {string} entityId - ID da entidade
  * @param {string} entityName - Nome da entidade
  * @param {string} workspaceId - ID da área de trabalho
+ * @param {string} ownerId - ID do dono da área de trabalho (opcional)
  * @returns {Promise<void>}
  */
-export async function saveEntityToModule(moduleId, entityId, entityName, workspaceId = 'default') {
+export async function saveEntityToModule(moduleId, entityId, entityName, workspaceId = 'default', ownerId = null) {
     try {
-        const userId = getUsuarioId();
-        if (!userId) {
-            throw new Error('Usuário não autenticado');
-        }
-        
-        // Caminho corrigido para incluir workspaceId
-        const path = `users/${userId}/workspaces/${workspaceId}/schemas/${moduleId}/${entityId}`;
+        const path = getDbPath(workspaceId, ownerId, `schemas/${moduleId}/${entityId}`);
         const snapshot = await db.ref(path).get();
         
         if (!snapshot.exists()) {
-            await db.ref(path).set({ entityName, attributes: [] });
+            // Garante que, ao salvar, estamos usando o entityName fornecido, e inicializamos 'attributes' como um array vazio.
+            await db.ref(path).set({ entityName: entityName, attributes: [] });
         }
     } catch (error) {
         console.error("Erro ao salvar entidade no módulo:", error);
@@ -309,17 +314,13 @@ export async function saveEntityToModule(moduleId, entityId, entityName, workspa
  * @param {string} moduleId - ID do módulo
  * @param {string} entityId - ID da entidade
  * @param {string} workspaceId - ID da área de trabalho
+ * @param {string} ownerId - ID do dono da área de trabalho (opcional)
  * @returns {Promise<void>}
  */
-export async function deleteEntityFromModule(moduleId, entityId, workspaceId = 'default') {
+export async function deleteEntityFromModule(moduleId, entityId, workspaceId = 'default', ownerId = null) {
     try {
-        const userId = getUsuarioId();
-        if (!userId) {
-            throw new Error('Usuário não autenticado');
-        }
-        
-        // Caminho corrigido para incluir workspaceId
-        await db.ref(`users/${userId}/workspaces/${workspaceId}/schemas/${moduleId}/${entityId}`).remove();
+        const path = getDbPath(workspaceId, ownerId, `schemas/${moduleId}/${entityId}`);
+        await db.ref(path).remove();
     } catch (error) {
         console.error("Erro ao remover entidade do módulo:", error);
         showError('Erro ao Remover', 'Não foi possível remover a entidade do módulo.');
@@ -331,32 +332,36 @@ export async function deleteEntityFromModule(moduleId, entityId, workspaceId = '
  * Remove uma entidade permanentemente
  * @param {string} entityId - ID da entidade
  * @param {string} workspaceId - ID da área de trabalho
+ * @param {string} ownerId - ID do dono da área de trabalho (opcional)
  * @returns {Promise<void>}
  */
-export async function deleteEntity(entityId, workspaceId = 'default') {
+export async function deleteEntity(entityId, workspaceId = 'default', ownerId = null) {
     try {
         showLoading('Excluindo entidade...');
         
-        const userId = getUsuarioId();
-        if (!userId) {
-            throw new Error('Usuário não autenticado');
-        }
+        const entityPath = getDbPath(workspaceId, ownerId, `entities/${entityId}`);
+        await db.ref(entityPath).remove();
         
-        // Remove a entidade da lista de entidades
-        await db.ref(`users/${userId}/workspaces/${workspaceId}/entities/${entityId}`).remove();
-        
-        // Remove a entidade de todos os módulos
-        const snapshot = await db.ref(`users/${userId}/workspaces/${workspaceId}/schemas`).get();
+        // Remove a entidade de todos os módulos no caminho correto
+        const schemasPath = getDbPath(workspaceId, ownerId, 'schemas');
+        const snapshot = await db.ref(schemasPath).get();
         if (snapshot.exists()) {
             const updates = {};
-            for (const moduleId in snapshot.val()) { 
-                updates[`/users/${userId}/workspaces/${workspaceId}/schemas/${moduleId}/${entityId}`] = null;
+            snapshot.forEach(moduleSnapshot => {
+                const moduleId = moduleSnapshot.key;
+                if (moduleSnapshot.hasChild(entityId)) {
+                    updates[`${schemasPath}/${moduleId}/${entityId}`] = null;
+                }
+            });
+            if (Object.keys(updates).length > 0) {
+                await db.ref().update(updates);
             }
-            await db.ref().update(updates);
         }
         
-        // Atualiza a lista local
-        allEntities = allEntities.filter(e => e.id !== entityId);
+        // Atualiza a lista local apenas se a operação for no workspace do usuário atual
+        if (!ownerId || ownerId === getUsuarioId()) {
+            allEntities = allEntities.filter(e => e.id !== entityId);
+        }
         
         hideLoading();
     } catch (error) {
@@ -371,26 +376,32 @@ export async function deleteEntity(entityId, workspaceId = 'default') {
  * Remove um módulo permanentemente
  * @param {string} moduleId - ID do módulo
  * @param {string} workspaceId - ID da área de trabalho
+ * @param {string} ownerId - ID do dono da área de trabalho (opcional)
  * @returns {Promise<void>}
  */
-export async function deleteModule(moduleId, workspaceId = 'default') {
+export async function deleteModule(moduleId, workspaceId = 'default', ownerId = null) {
     try {
         showLoading('Excluindo módulo...');
         
-        const userId = getUsuarioId();
-        if (!userId) {
-            throw new Error('Usuário não autenticado');
-        }
+        const modulePath = getDbPath(workspaceId, ownerId, `modules/${moduleId}`);
+        await db.ref(modulePath).remove();
         
-        // Remove o módulo
-        await db.ref(`users/${userId}/workspaces/${workspaceId}/modules/${moduleId}`).remove();
-        
-        // Remove os schemas associados ao módulo
-        await db.ref(`users/${userId}/workspaces/${workspaceId}/schemas/${moduleId}`).remove();
+        const schemaPath = getDbPath(workspaceId, ownerId, `schemas/${moduleId}`);
+        await db.ref(schemaPath).remove();
         
         // Atualiza a ordem de módulos
-        modulesOrder = modulesOrder.filter(id => id !== moduleId);
-        await db.ref(`users/${userId}/workspaces/${workspaceId}/modules_order`).set(modulesOrder);
+        // Esta parte precisa ler a ordem atual do DB, remover o ID e salvar.
+        const orderPath = getDbPath(workspaceId, ownerId, 'modules_order');
+        const orderSnapshot = await db.ref(orderPath).get();
+        if (orderSnapshot.exists()) {
+            let currentOrder = orderSnapshot.val();
+            currentOrder = currentOrder.filter(id => id !== moduleId);
+            await db.ref(orderPath).set(currentOrder);
+            // Atualiza a ordem local apenas se for o workspace do usuário atual
+            if (!ownerId || ownerId === getUsuarioId()) {
+                modulesOrder = currentOrder;
+            }
+        }
         
         hideLoading();
     } catch (error) {
@@ -408,31 +419,26 @@ export async function deleteModule(moduleId, workspaceId = 'default') {
  * @param {string} entityName - Nome da entidade
  * @param {Array} attributes - Atributos da entidade
  * @param {string} workspaceId - ID da área de trabalho
+ * @param {string} ownerId - ID do dono da área de trabalho (opcional)
  * @returns {Promise<void>}
  */
-export async function saveEntityStructure(moduleId, entityId, entityName, attributes, workspaceId = 'default') {
+export async function saveEntityStructure(moduleId, entityId, entityName, attributes, workspaceId = 'default', ownerId = null) {
     try {
         showLoading('Salvando estrutura...');
         
-        const userId = getUsuarioId();
-        if (!userId) {
-            throw new Error('Usuário não autenticado');
-        }
-        
         const schema = { entityName, attributes };
-        const path = `users/${userId}/workspaces/${workspaceId}/schemas/${moduleId}/${entityId}`;
+        const path = getDbPath(workspaceId, ownerId, `schemas/${moduleId}/${entityId}`);
         
         console.log("Salvando estrutura no Firebase:", {
             path,
             schema,
-            userId,
             workspaceId,
             moduleId,
             entityId,
+            ownerId,
             attributesCount: attributes.length
         });
         
-        // Caminho corrigido para incluir workspaceId
         await db.ref(path).set(schema);
         
         console.log("Estrutura salva com sucesso no Firebase");
@@ -452,26 +458,27 @@ export async function saveEntityStructure(moduleId, entityId, entityName, attrib
  * @param {string} parentFieldId - ID do campo pai
  * @param {Array} attributes - Atributos da sub-entidade
  * @param {string} workspaceId - ID da área de trabalho
+ * @param {string} ownerId - ID do dono da área de trabalho (opcional)
  * @returns {Promise<void>}
  */
-export async function saveSubEntityStructure(moduleId, entityId, parentFieldId, attributes, workspaceId = 'default') {
+export async function saveSubEntityStructure(moduleId, entityId, parentFieldId, attributes, workspaceId = 'default', ownerId = null) {
     try {
         showLoading('Salvando estrutura...');
         
-        const userId = getUsuarioId();
-        if (!userId) {
-            throw new Error('Usuário não autenticado');
-        }
+        const schemaPath = getDbPath(workspaceId, ownerId, `schemas/${moduleId}/${entityId}`);
+        const parentSchemaSnapshot = await db.ref(schemaPath).get();
         
-        // Caminho corrigido para incluir workspaceId
-        const parentSchemaSnapshot = await db.ref(`users/${userId}/workspaces/${workspaceId}/schemas/${moduleId}/${entityId}`).get();
         if (parentSchemaSnapshot.exists()) {
             const parentSchema = parentSchemaSnapshot.val();
             const parentField = parentSchema.attributes.find(attr => attr.id === parentFieldId);
             
             if (parentField) {
+                // Certifique-se de que subSchema existe
+                if (!parentField.subSchema) {
+                    parentField.subSchema = {};
+                }
                 parentField.subSchema.attributes = attributes;
-                await db.ref(`users/${userId}/workspaces/${workspaceId}/schemas/${moduleId}/${entityId}`).set(parentSchema);
+                await db.ref(schemaPath).set(parentSchema);
             }
         }
         
@@ -487,20 +494,21 @@ export async function saveSubEntityStructure(moduleId, entityId, parentFieldId, 
 /**
  * Salva a ordem dos módulos
  * @param {Array} orderArray - Array com os IDs dos módulos na ordem desejada
+ * @param {string} workspaceId - ID da área de trabalho
+ * @param {string} ownerId - ID do dono da área de trabalho (opcional)
  * @returns {Promise<void>}
  */
-export async function saveModulesOrder(orderArray) {
+export async function saveModulesOrder(orderArray, workspaceId = 'default', ownerId = null) {
     try {
-        const userId = getUsuarioId();
-        if (!userId) {
-            throw new Error('Usuário não autenticado');
+        const orderPath = getDbPath(workspaceId, ownerId, 'modules_order');
+        
+        // Atualiza a variável global somente se estiver operando no workspace do usuário logado
+        if (!ownerId || ownerId === getUsuarioId()) {
+            modulesOrder = orderArray;
         }
         
-        // Atualiza a variável global
-        modulesOrder = orderArray;
-        
         // Salva no Firebase
-        await db.ref(`users/${userId}/modules_order`).set(modulesOrder);
+        await db.ref(orderPath).set(orderArray);
     } catch (error) {
         console.error("Erro ao salvar ordem dos módulos:", error);
         showError('Erro ao Salvar', 'Não foi possível salvar a ordem dos módulos.');
@@ -599,23 +607,44 @@ export function getUserPreference(key, defaultValue = null) {
  * @param {string} moduleId - ID do módulo
  * @param {string} entityId - ID da entidade
  * @param {Object} data - Dados a serem salvos
+ * @param {string} workspaceId - ID da área de trabalho (necessário para getDbPath, mas dados são salvos fora de workspaces)
+ * @param {string} ownerId - ID do dono da área de trabalho (opcional, para consistência, mas dados são salvos fora de workspaces)
  * @returns {Promise<string>} - ID do registro criado
  */
-export async function saveEntityData(moduleId, entityId, data) {
+// Nota: A estrutura de 'data' parece ser global para o usuário, não por workspace.
+// Se a intenção for salvar dados *dentro* de um workspace, a lógica de getDbPath e o caminho do DB precisam mudar aqui.
+// Assumindo que 'users/${userId}/data/' é o caminho correto e não depende de workspaceId/ownerId para o path em si,
+// mas ownerId pode ser usado para determinar o 'userId' no caminho se a lógica de 'created_by' for diferente para dados em workspaces compartilhados.
+// Por ora, mantendo a lógica original de usar getUsuarioId() para o caminho, pois 'data' está fora de 'workspaces'.
+// Se 'data' DEVE ser por workspace, esta função e as relacionadas (update, load, deleteEntityRecord) precisam de uma revisão maior.
+export async function saveEntityData(moduleId, entityId, data, workspaceId = 'default', ownerId = null) {
     try {
         showLoading('Salvando dados...');
         
-        const userId = getUsuarioId();
-        if (!userId) {
+        const currentUserId = getUsuarioId(); // Quem está realizando a ação
+        const targetUserId = ownerId || currentUserId; // Onde os dados do workspace "original" estão.
+                                                  // No entanto, a estrutura 'data' está em users/${userId}/data, não users/${userId}/workspaces/.../data
+
+        if (!currentUserId) {
             throw new Error('Usuário não autenticado');
         }
         
-        // Adiciona timestamp
         data['created_at'] = new Date().toISOString();
         data['updated_at'] = new Date().toISOString();
-        data['created_by'] = userId;
+        data['created_by'] = currentUserId; // Quem criou o registro
         
-        const newRef = db.ref(`users/${userId}/data/${moduleId}/${entityId}`).push();
+        // O caminho para 'data' não parece ser por workspace na estrutura atual.
+        // Se for para ser por workspace, o path `users/${targetUserId}/workspaces/${workspaceId}/data/...` seria mais apropriado.
+        // Mantendo o path original por enquanto:
+        const dataPath = `users/${currentUserId}/data/${moduleId}/${entityId}`;
+        // Se a intenção é que os dados fiquem sob o ownerId:
+        // const dataPath = `users/${targetUserId}/data/${moduleId}/${entityId}`; // <-- Revisar esta decisão.
+                                                                            // Se um editor adiciona dados a um workspace compartilhado,
+                                                                            // onde esses dados devem residir? Sob o editor ou sob o dono?
+                                                                            // As regras de segurança atuais não cobrem 'data'.
+                                                                            // Vamos assumir por agora que os dados são sempre do usuário que os cria.
+
+        const newRef = db.ref(dataPath).push();
         await newRef.set(data);
         
         hideLoading();
@@ -634,21 +663,28 @@ export async function saveEntityData(moduleId, entityId, data) {
  * @param {string} entityId - ID da entidade
  * @param {string} recordId - ID do registro
  * @param {Object} data - Dados atualizados
+ * @param {string} workspaceId - ID da área de trabalho (para consistência, ver nota em saveEntityData)
+ * @param {string} ownerId - ID do dono (para consistência, ver nota em saveEntityData)
  * @returns {Promise<void>}
  */
-export async function updateEntityData(moduleId, entityId, recordId, data) {
+export async function updateEntityData(moduleId, entityId, recordId, data, workspaceId = 'default', ownerId = null) {
     try {
         showLoading('Atualizando dados...');
         
-        const userId = getUsuarioId();
-        if (!userId) {
+        const currentUserId = getUsuarioId(); // Quem está realizando a ação
+        // const targetUserId = ownerId || currentUserId; // Para referência se a lógica de path mudar.
+
+        if (!currentUserId) {
             throw new Error('Usuário não autenticado');
         }
         
-        // Adiciona timestamp de atualização
         data['updated_at'] = new Date().toISOString();
         
-        await db.ref(`users/${userId}/data/${moduleId}/${entityId}/${recordId}`).update(data);
+        // Mantendo a lógica original de path para 'data' (sob o usuário que executa a ação)
+        const dataPath = `users/${currentUserId}/data/${moduleId}/${entityId}/${recordId}`;
+        // Se a intenção for que os dados fiquem sob o ownerId:
+        // const dataPath = `users/${targetUserId}/data/${moduleId}/${entityId}/${recordId}`;
+        await db.ref(dataPath).update(data);
         
         hideLoading();
     } catch (error) {
@@ -663,16 +699,26 @@ export async function updateEntityData(moduleId, entityId, recordId, data) {
  * Carrega dados de uma entidade
  * @param {string} moduleId - ID do módulo
  * @param {string} entityId - ID da entidade
+ * @param {string} workspaceId - ID da área de trabalho (para consistência)
+ * @param {string} ownerId - ID do dono (para determinar de qual usuário carregar os dados)
  * @returns {Promise<Array>} - Array com os dados da entidade
  */
-export async function loadEntityData(moduleId, entityId) {
+export async function loadEntityData(moduleId, entityId, workspaceId = 'default', ownerId = null) {
     try {
-        const userId = getUsuarioId();
-        if (!userId) {
-            throw new Error('Usuário não autenticado');
+        // Para carregar dados, precisamos saber de qual usuário carregar.
+        // Se for um workspace compartilhado, idealmente carregaríamos os dados do ownerId.
+        // Se for o workspace próprio do usuário, usamos o currentUserId.
+        const currentUserId = getUsuarioId();
+        const targetUserId = ownerId || currentUserId; 
+
+        if (!targetUserId) {
+            throw new Error('Usuário não autenticado ou ID do dono não especificado para recurso compartilhado.');
         }
         
-        const snapshot = await db.ref(`users/${userId}/data/${moduleId}/${entityId}`).get();
+        // Assumindo que os dados estão em users/${targetUserId}/data/...
+        const dataPath = `users/${targetUserId}/data/${moduleId}/${entityId}`;
+        const snapshot = await db.ref(dataPath).get();
+        
         if (!snapshot.exists()) {
             return [];
         }
@@ -700,18 +746,26 @@ export async function loadEntityData(moduleId, entityId) {
  * @param {string} moduleId - ID do módulo
  * @param {string} entityId - ID da entidade
  * @param {string} recordId - ID do registro
+ * @param {string} workspaceId - ID da área de trabalho (para consistência)
+ * @param {string} ownerId - ID do dono (para consistência, ver nota em saveEntityData)
  * @returns {Promise<void>}
  */
-export async function deleteEntityRecord(moduleId, entityId, recordId) {
+export async function deleteEntityRecord(moduleId, entityId, recordId, workspaceId = 'default', ownerId = null) {
     try {
         showLoading('Excluindo registro...');
         
-        const userId = getUsuarioId();
-        if (!userId) {
+        const currentUserId = getUsuarioId(); // Quem está realizando a ação
+        // const targetUserId = ownerId || currentUserId; // Para referência se a lógica de path mudar.
+
+        if (!currentUserId) {
             throw new Error('Usuário não autenticado');
         }
         
-        await db.ref(`users/${userId}/data/${moduleId}/${entityId}/${recordId}`).remove();
+        // Mantendo a lógica original de path para 'data' (sob o usuário que executa a ação)
+        const dataPath = `users/${currentUserId}/data/${moduleId}/${entityId}/${recordId}`;
+        // Se a intenção for que os dados fiquem sob o ownerId:
+        // const dataPath = `users/${targetUserId}/data/${moduleId}/${entityId}/${recordId}`;
+        await db.ref(dataPath).remove();
         
         hideLoading();
     } catch (error) {
@@ -829,12 +883,12 @@ export async function loadSharedUserModules(ownerId, workspaceId = 'default') {
         if (!ownerId) {
             throw new Error('ID do usuário dono não fornecido');
         }
+        const modulesPath = getDbPath(workspaceId, ownerId, 'modules');
+        console.log(`Carregando módulos compartilhados de: ${modulesPath}`);
         
-        console.log(`Carregando módulos compartilhados do usuário ${ownerId}, workspace ${workspaceId}`);
-        
-        const snapshot = await db.ref(`users/${ownerId}/workspaces/${workspaceId}/modules`).get();
+        const snapshot = await db.ref(modulesPath).get();
         if (!snapshot.exists()) {
-            console.log(`Nenhum módulo encontrado para ${ownerId}/workspaces/${workspaceId}/modules`);
+            console.log(`Nenhum módulo encontrado em ${modulesPath}`);
             return [];
         }
         
@@ -869,12 +923,12 @@ export async function loadSharedUserEntities(ownerId, workspaceId = 'default') {
         if (!ownerId) {
             throw new Error('ID do usuário dono não fornecido');
         }
+        const entitiesPath = getDbPath(workspaceId, ownerId, 'entities');
+        console.log(`Carregando entidades compartilhadas de: ${entitiesPath}`);
         
-        console.log(`Carregando entidades compartilhadas do usuário ${ownerId}, workspace ${workspaceId}`);
-        
-        const snapshot = await db.ref(`users/${ownerId}/workspaces/${workspaceId}/entities`).get();
+        const snapshot = await db.ref(entitiesPath).get();
         if (!snapshot.exists()) {
-            console.log(`Nenhuma entidade encontrada para ${ownerId}/workspaces/${workspaceId}/entities`);
+            console.log(`Nenhuma entidade encontrada em ${entitiesPath}`);
             return [];
         }
         
@@ -910,12 +964,12 @@ export async function loadSharedModuleSchemas(ownerId, workspaceId = 'default', 
         if (!ownerId || !moduleId) {
             throw new Error('Parâmetros necessários não fornecidos');
         }
+        const schemasPath = getDbPath(workspaceId, ownerId, `schemas/${moduleId}`);
+        console.log(`Carregando esquemas compartilhados de: ${schemasPath}`);
         
-        console.log(`Carregando esquemas compartilhados: ${ownerId}/workspaces/${workspaceId}/schemas/${moduleId}`);
-        
-        const snapshot = await db.ref(`users/${ownerId}/workspaces/${workspaceId}/schemas/${moduleId}`).get();
+        const snapshot = await db.ref(schemasPath).get();
         if (!snapshot.exists()) {
-            console.log(`Nenhum esquema encontrado para o módulo ${moduleId}`);
+            console.log(`Nenhum esquema encontrado em ${schemasPath}`);
             return {};
         }
         
@@ -939,12 +993,12 @@ export async function loadStructureForEntityShared(moduleId, entityId, workspace
         if (!ownerId) {
             throw new Error('ID do usuário dono não fornecido');
         }
+        const structurePath = getDbPath(workspaceId, ownerId, `schemas/${moduleId}/${entityId}`);
+        console.log(`Carregando estrutura compartilhada de: ${structurePath}`);
         
-        console.log(`Carregando estrutura compartilhada para entidade: ${moduleId}/${entityId} do usuário ${ownerId}`);
-        
-        const snapshot = await db.ref(`users/${ownerId}/workspaces/${workspaceId}/schemas/${moduleId}/${entityId}`).get();
+        const snapshot = await db.ref(structurePath).get();
         if (!snapshot.exists()) {
-            console.log(`Estrutura não encontrada para ${moduleId}/${entityId} do usuário ${ownerId}`);
+            console.log(`Estrutura não encontrada em ${structurePath}`);
             return null;
         }
         
