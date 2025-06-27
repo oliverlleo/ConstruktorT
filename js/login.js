@@ -18,8 +18,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Verifica se já há um usuário logado
     auth.onAuthStateChanged(user => {
         if (user) {
-            // Usuário já autenticado, redireciona para a página principal
-            window.location.href = '/index.html';
+            // Usuário já autenticado, redireciona para a página principal (CAMINHO CORRIGIDO)
+            window.location.href = '../index.html';
         }
     });
     
