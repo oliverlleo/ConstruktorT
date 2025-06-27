@@ -85,7 +85,7 @@ export function setupMobileInteractions() {
         const mobileMenuToggle = document.getElementById('mobile-menu-toggle'); 
         if (mobileSidebarOpen && desktopSidebar && !desktopSidebar.contains(e.target) && e.target !== mobileMenuToggle && !mobileMenuToggle.contains(e.target)) { 
             closeMobileSidebar();
-        }
+        
     });
     
     // Toggle para a sidebar do modal em dispositivos móveis
