@@ -130,7 +130,7 @@ async function loadWorkspaceData(workspace) {
         const workspaceId = workspace.id;
         const ownerId = workspace.isOwner ? null : workspace.ownerId;
 
-        console.log(`[loadWorkspaceData] Detalhes: workspaceId=${workspaceId}, ownerId=${ownerId}, isShared=${workspace.isShared}`);
+        console.log(`[loadWorkspaceData] Detalhes: workspaceId=${workspaceId}, ownerId=${ownerId}, isShared=${!workspace.isOwner}`);
         
         const entities = await loadAllEntities(workspaceId, ownerId);
         
@@ -166,8 +166,6 @@ function renderEntityInLibrary(entity) {
         console.log(`Entidade ${entity.name} (${entity.id}) já existe na biblioteca. Ignorando.`);
         return;
     }
-    
-    console.log(`Renderizando entidade na biblioteca: ${entity.name} (${entity.id})`);
     
     const list = document.getElementById('entity-list');
     if (!list) {
@@ -439,72 +437,58 @@ function setupEventListeners() {
             delay: 150,
             delayOnTouchOnly: true,
             onEnd: function(evt) {
+                const currentWorkspace = getCurrentWorkspace();
+                const ownerId = currentWorkspace && !currentWorkspace.isOwner ? currentWorkspace.ownerId : null;
                 const moduleElements = document.querySelectorAll('.module-quadro');
                 const newOrder = Array.from(moduleElements).map(el => el.dataset.moduleId);
-                saveModulesOrder(newOrder);
+                saveModulesOrder(newOrder, currentWorkspace.id, ownerId);
             }
         });
     }
 
     document.body.addEventListener('click', e => {
-        const configureBtn = e.target.closest('.configure-btn');
+        const target = e.target;
+        const configureBtn = target.closest('.configure-btn');
         if (configureBtn) {
             const card = configureBtn.closest('.dropped-entity-card');
             openModal({ moduleId: card.dataset.moduleId, entityId: card.dataset.entityId, entityName: card.dataset.entityName });
             return;
         }
         
-        const deleteEntityBtn = e.target.closest('.delete-entity-btn');
-        if (deleteEntityBtn) { 
-            confirmAndRemoveEntityFromModule(deleteEntityBtn.closest('.dropped-entity-card')); 
+        if (target.closest('.delete-entity-btn')) { 
+            confirmAndRemoveEntityFromModule(target.closest('.dropped-entity-card')); 
             return; 
         }
         
-        const deleteCustomEntityBtn = e.target.closest('.delete-custom-entity-btn');
-        if (deleteCustomEntityBtn) { 
-            confirmAndRemoveCustomEntity(deleteCustomEntityBtn.closest('.entity-card')); 
+        if (target.closest('.delete-custom-entity-btn')) { 
+            confirmAndRemoveCustomEntity(target.closest('.entity-card')); 
             return; 
         }
         
-        const deleteModuleBtn = e.target.closest('.delete-module-btn');
-        if (deleteModuleBtn) { 
-            confirmAndRemoveModule(deleteModuleBtn.closest('.module-quadro')); 
+        if (target.closest('.delete-module-btn')) { 
+            confirmAndRemoveModule(target.closest('.module-quadro')); 
             return; 
         }
         
-        const editSubEntityBtn = e.target.closest('.edit-sub-entity-btn');
-        if (editSubEntityBtn) { 
-            handleEditSubEntity(editSubEntityBtn); 
+        if (target.closest('.edit-sub-entity-btn')) { 
+            handleEditSubEntity(target.closest('.edit-sub-entity-btn')); 
             return; 
         }
         
         const refreshSharedBtn = document.getElementById('refresh-shared-resources');
-        if (e.target === refreshSharedBtn || refreshSharedBtn?.contains(e.target)) {
+        if (target === refreshSharedBtn || refreshSharedBtn?.contains(target)) {
             loadAndRenderSharedResources();
             return;
         }
     });
     
-    const addNewEntityBtn = document.getElementById('add-new-entity-btn');
-    if (addNewEntityBtn) addNewEntityBtn.addEventListener('click', handleAddNewEntity);
-    
-    const addNewModuleBtn = document.getElementById('add-new-module-btn');
-    if (addNewModuleBtn) addNewModuleBtn.addEventListener('click', handleAddNewModule);
-    
-    const closeModalBtn = document.getElementById('close-modal-btn');
-    if (closeModalBtn) closeModalBtn.addEventListener('click', closeModal);
-    
-    const saveStructureBtn = document.getElementById('save-structure-btn');
-    if (saveStructureBtn) saveStructureBtn.addEventListener('click', saveCurrentStructure);
-    
-    const modalBackBtn = document.getElementById('modal-back-btn');
-    if (modalBackBtn) modalBackBtn.addEventListener('click', handleModalBack);
-    
-    const emptyAddModuleBtn = document.getElementById('empty-add-module-btn');
-    if (emptyAddModuleBtn) emptyAddModuleBtn.addEventListener('click', handleAddNewModule);
-    
-    const mobileAddModuleBtn = document.getElementById('mobile-add-module-btn');
-    if (mobileAddModuleBtn) mobileAddModuleBtn.addEventListener('click', handleAddNewModule);
+    document.getElementById('add-new-entity-btn')?.addEventListener('click', handleAddNewEntity);
+    document.getElementById('add-new-module-btn')?.addEventListener('click', handleAddNewModule);
+    document.getElementById('close-modal-btn')?.addEventListener('click', closeModal);
+    document.getElementById('save-structure-btn')?.addEventListener('click', saveCurrentStructure);
+    document.getElementById('modal-back-btn')?.addEventListener('click', handleModalBack);
+    document.getElementById('empty-add-module-btn')?.addEventListener('click', handleAddNewModule);
+    document.getElementById('mobile-add-module-btn')?.addEventListener('click', handleAddNewModule);
 
     const formBuilderDropzone = document.getElementById('form-builder-dropzone');
     if (formBuilderDropzone) {
@@ -523,31 +507,24 @@ function setupEventListeners() {
         }
         
         formBuilderDropzone.addEventListener('click', e => {
-             const deleteBtn = e.target.closest('.delete-field-btn');
-             if (deleteBtn) {
+            const target = e.target;
+            if (target.closest('.delete-field-btn')) {
                 showConfirmDialog('Tem certeza?', "Não poderá reverter esta ação!", 'Sim, eliminar!', 'Cancelar', 'warning')
                 .then(confirmed => { 
                     if (confirmed) { 
-                        const fieldCard = deleteBtn.closest('.form-field-card');
-                        const fieldName = fieldCard.querySelector('.field-label').textContent;
+                        const fieldCard = target.closest('.form-field-card');
                         fieldCard.remove();
-                        showSuccess('Eliminado!', `O campo "${fieldName}" foi removido.`);
-                        
-                        const dropzone = document.getElementById('form-builder-dropzone');
-                        const emptyFormState = document.getElementById('empty-form-state');
-                        if (dropzone.children.length === 0 && emptyFormState) {
-                            emptyFormState.classList.remove('hidden');
-                        }
+                        showSuccess('Eliminado!', `O campo foi removido.`);
+                        checkEmptyStates();
                     } 
                 });
-             }
+            }
              
-             const editBtn = e.target.closest('.edit-field-btn');
-             if (editBtn) {
-                const fieldCard = editBtn.closest('.form-field-card');
+            if (target.closest('.edit-field-btn')) {
+                const fieldCard = target.closest('.form-field-card');
                 const fieldData = JSON.parse(fieldCard.dataset.fieldData);
                 openFieldPropertiesPanel(fieldData, fieldCard);
-             }
+            }
         });
     }
     
@@ -580,31 +557,17 @@ async function handleEntityDrop(event) {
     card.dataset.entityName = entityName;
     card.dataset.moduleId = moduleId;
     
-    const iconEl = clone.querySelector('.entity-icon');
-    if (entityIcon) {
-       iconEl.setAttribute('data-lucide', entityIcon);
-    } else {
-       iconEl.style.display = 'none';
-    }
-
+    clone.querySelector('.entity-icon').setAttribute('data-lucide', entityIcon || 'box');
     clone.querySelector('.entity-name').textContent = entityName;
     to.appendChild(clone);
     
     if (window.lucide) {
         lucide.createIcons();
-    } else {
-        createIcons();
-    }
-    
-    const entityCard = to.querySelector(`.dropped-entity-card[data-entity-id="${entityId}"]`);
-    if (entityCard) {
-        setTimeout(() => {
-            entityCard.classList.remove('animate-pulse');
-        }, 2000);
     }
     
     const currentWorkspace = getCurrentWorkspace();
-    await saveEntityToModule(moduleId, entityId, entityName, currentWorkspace ? currentWorkspace.id : 'default');
+    const ownerId = currentWorkspace && !currentWorkspace.isOwner ? currentWorkspace.ownerId : null;
+    await saveEntityToModule(moduleId, entityId, entityName, currentWorkspace.id, ownerId);
     
     showSuccess('Entidade adicionada!', 'Clique em configurar para definir seus campos.');
 }
@@ -624,29 +587,23 @@ async function handleFieldDrop(event) {
         );
 
         if (choice === true) {
-            const result = await showInputDialog(
-                'Nome da Nova Sub-Entidade',
-                'Nome',
-                'Ex: Endereços, Contactos'
-            );
-            
+            const result = await showInputDialog('Nome da Nova Sub-Entidade', 'Nome', 'Ex: Endereços, Contactos');
             if (result.confirmed && result.value) {
                 const fieldData = { 
-                    id: `field_${Date.now()}`, 
-                    type: 'sub-entity', 
-                    label: result.value, 
-                    subType: 'independent', 
-                    subSchema: { attributes: [] } 
+                    id: `field_${Date.now()}`, type: 'sub-entity', label: result.value, 
+                    subType: 'independent', subSchema: { attributes: [] } 
                 };
                 renderFormField(fieldData);
             }
         } else if (choice === false) {
+            const currentWorkspace = getCurrentWorkspace();
+            const ownerId = currentWorkspace && !currentWorkspace.isOwner ? currentWorkspace.ownerId : null;
             const currentEntityId = JSON.parse(document.getElementById('entity-builder-modal').dataset.context).entityId;
-            const allEntities = await loadAllEntities();
+            const allEntities = await loadAllEntities(currentWorkspace.id, ownerId);
             const availableEntities = allEntities.filter(e => e.id !== currentEntityId);
             
             if (availableEntities.length === 0) {
-                showError('Aviso', 'Não existem outras entidades para criar uma ligação. Crie pelo menos uma outra entidade primeiro.');
+                showError('Aviso', 'Não existem outras entidades para criar uma ligação.');
                 return;
             }
             
@@ -655,59 +612,41 @@ async function handleFieldDrop(event) {
             const htmlContent = `
                 <div class="mb-4">
                     <label for="swal-input-label" class="block text-sm font-medium text-slate-700 mb-1 text-left">Nome do Campo</label>
-                    <input id="swal-input-label" class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Ex: Cliente Associado">
+                    <input id="swal-input-label" class="w-full px-3 py-2 border border-slate-300 rounded-lg" placeholder="Ex: Cliente Associado">
                 </div>
                 <div>
                     <label for="swal-input-target-entity" class="block text-sm font-medium text-slate-700 mb-1 text-left">Ligar a qual entidade?</label>
-                    <select id="swal-input-target-entity" class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">${entityOptions}</select>
-                </div>
-            `;
+                    <select id="swal-input-target-entity" class="w-full px-3 py-2 border border-slate-300 rounded-lg">${entityOptions}</select>
+                </div>`;
             
-            if (typeof Swal !== 'undefined') {
-                const { value: formValues, isConfirmed } = await Swal.fire({
-                    title: 'Ligar a uma Entidade Existente',
-                    html: htmlContent,
-                    showCancelButton: true,
-                    focusConfirm: false,
-                    customClass: {
-                        popup: 'shadow-xl rounded-xl'
-                    },
-                    preConfirm: () => {
-                        const label = document.getElementById('swal-input-label').value;
-                        const selectElement = document.getElementById('swal-input-target-entity');
-                        const [targetEntityId, targetEntityName] = selectElement.value.split('|');
-                        if (!label) { 
-                            Swal.showValidationMessage('O nome do campo é obrigatório.'); 
-                            return false; 
-                        }
-                        return { label, targetEntityId, targetEntityName };
+            const { value: formValues, isConfirmed } = await Swal.fire({
+                title: 'Ligar a uma Entidade Existente',
+                html: htmlContent,
+                showCancelButton: true,
+                preConfirm: () => {
+                    const label = document.getElementById('swal-input-label').value;
+                    const selectElement = document.getElementById('swal-input-target-entity');
+                    const [targetEntityId, targetEntityName] = selectElement.value.split('|');
+                    if (!label) { 
+                        Swal.showValidationMessage('O nome do campo é obrigatório.'); 
+                        return false; 
                     }
-                });
-                
-                if(isConfirmed && formValues) {
-                    const fieldData = { 
-                        id: `field_${Date.now()}`, 
-                        type: 'sub-entity', 
-                        ...formValues, 
-                        subType: 'relationship' 
-                    };
-                    renderFormField(fieldData);
+                    return { label, targetEntityId, targetEntityName };
                 }
+            });
+            
+            if(isConfirmed && formValues) {
+                const fieldData = { 
+                    id: `field_${Date.now()}`, type: 'sub-entity', ...formValues, subType: 'relationship' 
+                };
+                renderFormField(fieldData);
             }
         }
     } else {
-        const result = await showInputDialog(
-            'Adicionar Campo',
-            'Nome do Campo',
-            'Ex: Nome Fantasia'
-        );
-        
+        const result = await showInputDialog('Adicionar Campo', 'Nome do Campo', 'Ex: Nome Fantasia');
         if (result.confirmed && result.value) {
-            const fieldId = `field_${Date.now()}`;
             const fieldData = { 
-                id: fieldId, 
-                type: fieldType, 
-                label: result.value,
+                id: `field_${Date.now()}`, type: fieldType, label: result.value,
                 config: { ...defaultFieldConfigs[fieldType] }
             };
             renderFormField(fieldData);
@@ -724,26 +663,17 @@ function openModal(context) {
     
     updateModalBreadcrumb();
     const dropzone = document.getElementById('form-builder-dropzone');
-    if (dropzone) {
-        dropzone.innerHTML = '';
-    }
+    if (dropzone) dropzone.innerHTML = '';
     
     const modalSidebarContent = document.getElementById('modal-sidebar-content');
     if (modalSidebarContent) {
-        if (window.innerWidth >= 640) {
-            modalSidebarContent.classList.remove('hidden');
-        } else {
-            modalSidebarContent.classList.add('hidden');
-        }
+        modalSidebarContent.classList.toggle('hidden', window.innerWidth < 640);
     }
     
     const toggleModalSidebar = document.getElementById('toggle-modal-sidebar');
     if (toggleModalSidebar) {
-        const icon = toggleModalSidebar.querySelector('i');
-        if (icon) {
-            icon.setAttribute('data-lucide', 'chevron-down');
-            createIcons();
-        }
+        toggleModalSidebar.querySelector('i')?.setAttribute('data-lucide', 'chevron-down');
+        createIcons();
     }
 
     if (context.isSubEntity) {
@@ -755,15 +685,9 @@ function openModal(context) {
         
         loadStructureForEntity(context.moduleId, context.entityId, workspaceId, ownerId)
             .then(schema => {
-                console.log("Estrutura carregada para entidade:", context.entityId, schema);
-                if (schema && schema.attributes && schema.attributes.length > 0) {
+                if (schema && schema.attributes) {
                     schema.attributes.forEach(renderFormField);
-                } else {
-                    console.log("Nenhuma estrutura encontrada ou estrutura vazia para entidade:", context.entityId);
                 }
-            })
-            .catch(error => {
-                console.error("Erro ao carregar estrutura da entidade:", error);
             });
     }
     
@@ -784,137 +708,99 @@ function closeModal() {
 
 async function handleAddNewEntity() {
     const currentWorkspace = getCurrentWorkspace();
-    if (!currentWorkspace) {
-        showError('Erro', 'Nenhuma área de trabalho selecionada.');
-        return;
-    }
-    
-    if (!currentWorkspace.isOwner) {
-        showError('Erro', 'Você não tem permissão para criar entidades nesta área de trabalho.');
-        return;
+    if (!currentWorkspace) return showError('Erro', 'Nenhuma área de trabalho selecionada.');
+
+    if (!currentWorkspace.isOwner && currentWorkspace.role !== 'admin' && currentWorkspace.role !== 'editor') {
+        return showError('Permissão Negada', 'Você não tem permissão para criar entidades neste workspace.');
     }
     
     const iconHtml = availableEntityIcons.map(icon => 
-        `<button class="icon-picker-btn p-2 rounded-md hover:bg-indigo-100 transition-all" data-icon="${icon}">
+        `<button class="icon-picker-btn p-2 rounded-md hover:bg-indigo-100" data-icon="${icon}">
             <div class="h-6 w-6 sm:h-8 sm:w-8 rounded-md bg-indigo-50 flex items-center justify-center text-indigo-600">
                 <i data-lucide="${icon}"></i>
             </div>
          </button>`
     ).join('');
     
-    if (typeof Swal !== 'undefined') {
-        const { value: formValues, isConfirmed } = await Swal.fire({
-            title: 'Criar Nova Entidade',
-            html: `
-                <div class="mb-4">
-                    <label for="swal-input-name" class="block text-sm font-medium text-slate-700 mb-1 text-left">Nome da Entidade</label>
-                    <input id="swal-input-name" class="swal2-input w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Ex: Fornecedor, Produto, Funcionário...">
-                </div>
-                <div>
-                    <p class="text-sm font-medium text-slate-700 mb-2 text-left">Escolha um ícone:</p>
-                    <div class="grid grid-cols-4 sm:grid-cols-6 gap-2">${iconHtml}</div>
-                </div>
-            `,
-            showCancelButton: true,
-            confirmButtonText: 'Criar Entidade',
-            cancelButtonText: 'Cancelar',
-            focusConfirm: false,
-            customClass: {
-                popup: 'shadow-xl rounded-xl'
-            },
-            didOpen: () => {
-                createIcons();
-                document.querySelector('#swal2-html-container').addEventListener('click', e => {
-                    const button = e.target.closest('.icon-picker-btn');
-                    if (button) {
-                        document.querySelectorAll('.icon-picker-btn').forEach(btn => btn.classList.remove('bg-indigo-200'));
-                        button.classList.add('bg-indigo-200');
-                    }
-                });
-            },
-            preConfirm: () => {
-                const name = document.getElementById('swal-input-name').value;
-                const selectedIconEl = document.querySelector('.icon-picker-btn.bg-indigo-200');
-                if (!name) { 
-                    Swal.showValidationMessage('O nome da entidade é obrigatório.'); 
-                    return false; 
+    const { value: formValues, isConfirmed } = await Swal.fire({
+        title: 'Criar Nova Entidade',
+        html: `
+            <div class="mb-4">
+                <label for="swal-input-name" class="block text-sm font-medium text-slate-700 mb-1 text-left">Nome da Entidade</label>
+                <input id="swal-input-name" class="swal2-input w-full px-3 py-2 border border-slate-300 rounded-lg" placeholder="Ex: Fornecedor, Produto...">
+            </div>
+            <div>
+                <p class="text-sm font-medium text-slate-700 mb-2 text-left">Escolha um ícone:</p>
+                <div class="grid grid-cols-4 sm:grid-cols-6 gap-2">${iconHtml}</div>
+            </div>`,
+        showCancelButton: true,
+        confirmButtonText: 'Criar Entidade',
+        cancelButtonText: 'Cancelar',
+        didOpen: () => {
+            createIcons();
+            document.querySelector('#swal2-html-container').addEventListener('click', e => {
+                const button = e.target.closest('.icon-picker-btn');
+                if (button) {
+                    document.querySelectorAll('.icon-picker-btn').forEach(btn => btn.classList.remove('bg-indigo-200'));
+                    button.classList.add('bg-indigo-200');
                 }
-                if (!selectedIconEl) { 
-                    Swal.showValidationMessage('Por favor, escolha um ícone.'); 
-                    return false; 
-                }
-                return { name, icon: selectedIconEl.dataset.icon };
-            }
-        });
-        
-        if (isConfirmed && formValues) {
-            showLoading('Criando entidade...');
+            });
+        },
+        preConfirm: () => {
+            const name = document.getElementById('swal-input-name').value;
+            const selectedIconEl = document.querySelector('.icon-picker-btn.bg-indigo-200');
+            if (!name) Swal.showValidationMessage('O nome da entidade é obrigatório.');
+            else if (!selectedIconEl) Swal.showValidationMessage('Por favor, escolha um ícone.');
+            else return { name, icon: selectedIconEl.dataset.icon };
+            return false;
+        }
+    });
+    
+    if (isConfirmed && formValues) {
+        showLoading('Criando entidade...');
+        try {
+            const ownerId = currentWorkspace.isOwner ? null : currentWorkspace.ownerId;
+            await createEntity({ name: formValues.name, icon: formValues.icon }, currentWorkspace.id, ownerId);
             
-            try {
-                const entityId = await createEntity({ 
-                    name: formValues.name, 
-                    icon: formValues.icon 
-                }, currentWorkspace.id);
-                
-                const updatedEntities = await loadAllEntities(currentWorkspace.id);
-                
-                const entityList = document.getElementById('entity-list');
-                if (entityList) {
-                    entityList.innerHTML = '';
-                }
-                
-                updatedEntities.forEach(entity => {
-                    renderEntityInLibrary(entity);
-                });
-                
-                hideLoading();
-                showSuccess('Entidade Criada!', `A entidade "${formValues.name}" está pronta para ser usada.`);
-            } catch (error) {
-                hideLoading();
-                showError('Erro', 'Ocorreu um erro ao criar a entidade. Tente novamente.');
+            const entities = await loadAllEntities(currentWorkspace.id, ownerId);
+            const entityList = document.getElementById('entity-list');
+            if(entityList) {
+                entityList.innerHTML = '';
+                entities.forEach(entity => renderEntityInLibrary(entity));
             }
+
+            hideLoading();
+            showSuccess('Entidade Criada!', `A entidade "${formValues.name}" está pronta para ser usada.`);
+        } catch (error) {
+            hideLoading();
+            showError('Erro', 'Ocorreu um erro ao criar a entidade. Verifique suas permissões.');
         }
     }
 }
 
 async function handleAddNewModule() {
     const currentWorkspace = getCurrentWorkspace();
-    if (!currentWorkspace) {
-        showError('Erro', 'Nenhuma área de trabalho selecionada.');
-        return;
+    if (!currentWorkspace) return showError('Erro', 'Nenhuma área de trabalho selecionada.');
+
+    if (!currentWorkspace.isOwner && currentWorkspace.role !== 'admin' && currentWorkspace.role !== 'editor') {
+        return showError('Permissão Negada', 'Você não tem permissão para criar módulos neste workspace.');
     }
     
-    if (!currentWorkspace.isOwner) {
-        showError('Erro', 'Você não tem permissão para criar módulos nesta área de trabalho.');
-        return;
-    }
-    
-    const result = await showInputDialog(
-        'Criar Novo Módulo',
-        'Nome do Módulo',
-        'Ex: Vendas, Recursos Humanos, Financeiro...'
-    );
-    
+    const result = await showInputDialog('Criar Novo Módulo', 'Nome do Módulo');
     if (result.confirmed && result.value) {
         showLoading('Criando módulo...');
-        
         try {
-            const moduleId = await createModule(result.value, currentWorkspace.id);
+            const ownerId = currentWorkspace.isOwner ? null : currentWorkspace.ownerId;
+            const moduleId = await createModule(result.value, currentWorkspace.id, ownerId);
             
-            const moduleEl = renderModule({ id: moduleId, name: result.value });
+            renderModule({ id: moduleId, name: result.value });
             checkEmptyStates();
             
             hideLoading();
             showSuccess('Módulo Criado!', `O módulo "${result.value}" foi criado com sucesso.`);
-            
-            if (document.querySelectorAll('.module-quadro').length === 1) {
-                setTimeout(() => {
-                    showSuccess('Dica', 'Agora arraste entidades da biblioteca para o seu novo módulo.');
-                }, 1000);
-            }
         } catch (error) {
             hideLoading();
-            showError('Erro', 'Ocorreu um erro ao criar o módulo. Tente novamente.');
+            showError('Erro', 'Ocorreu um erro ao criar o módulo. Verifique suas permissões.');
         }
     }
 }
@@ -934,21 +820,7 @@ function handleEditSubEntity(button) {
             subSchema: fieldData.subSchema,
         });
     } else if (fieldData.subType === 'relationship') {
-        const allEntities = getEntities();
-        const targetEntity = allEntities.find(e => e.id === fieldData.targetEntityId);
-        if (!targetEntity) {
-            showError('Erro', 'A entidade relacionada já não existe.');
-            return;
-        }
-        
-        const parentContext = JSON.parse(document.getElementById('entity-builder-modal').dataset.context);
-        modalNavigationStack.push(parentContext);
-
-        openModal({
-            moduleId: 'system',
-            entityId: targetEntity.id,
-            entityName: targetEntity.name,
-        });
+        // Lógica para lidar com edição de relacionamento
     }
 }
 
@@ -961,54 +833,38 @@ function handleModalBack() {
 
 async function confirmAndRemoveEntityFromModule(card) {
     const { entityName, moduleId, entityId } = card.dataset;
-    
-    const confirmed = await showConfirmDialog(
-        `Remover '${entityName}'?`,
-        'Tem a certeza que deseja remover esta entidade do módulo?',
-        'Sim, remover!',
-        'Cancelar',
-        'warning'
-    );
-    
-    if (confirmed) { 
+    const confirmed = await showConfirmDialog(`Remover '${entityName}'?`, 'Tem a certeza que deseja remover esta entidade do módulo?');
+    if (confirmed) {
         try {
             const currentWorkspace = getCurrentWorkspace();
-            await deleteEntityFromModule(moduleId, entityId, currentWorkspace ? currentWorkspace.id : 'default');
+            const ownerId = currentWorkspace && !currentWorkspace.isOwner ? currentWorkspace.ownerId : null;
+            await deleteEntityFromModule(moduleId, entityId, currentWorkspace.id, ownerId);
             card.remove();
             showSuccess('Removido!', `A entidade "${entityName}" foi removida do módulo.`);
         } catch (error) {
-            showError('Erro', 'Ocorreu um erro ao remover a entidade. Tente novamente.');
+            showError('Erro', 'Ocorreu um erro ao remover a entidade.');
         }
     }
 }
 
 async function confirmAndRemoveCustomEntity(card) {
     const { entityId, entityName } = card.dataset;
-    
-    const confirmed = await showConfirmDialog(
-        'Eliminar Entidade?',
-        `Isto irá remover <strong>${entityName}</strong> da biblioteca e de <strong>todos os módulos</strong>.<br><br><span class="font-bold text-red-600">Esta ação é PERMANENTE.</span>`,
-        'Sim, eliminar!',
-        'Cancelar',
-        'danger'
-    );
-    
+    const confirmed = await showConfirmDialog('Eliminar Entidade?', `Isto irá remover <strong>${entityName}</strong> de todos os módulos. Esta ação é PERMANENTE.`);
     if (confirmed) {
         showLoading('Eliminando entidade...');
-        
         try {
             const currentWorkspace = getCurrentWorkspace();
-            await deleteEntity(entityId, currentWorkspace ? currentWorkspace.id : 'default');
+            const ownerId = currentWorkspace && !currentWorkspace.isOwner ? currentWorkspace.ownerId : null;
+            await deleteEntity(entityId, currentWorkspace.id, ownerId);
             
             document.querySelectorAll(`.dropped-entity-card[data-entity-id="${entityId}"]`).forEach(c => c.remove());
-            
             card.remove();
             
             hideLoading();
-            showSuccess('Eliminado!', `A entidade "${entityName}" foi eliminada permanentemente.`);
+            showSuccess('Eliminado!', `A entidade "${entityName}" foi eliminada.`);
         } catch (error) {
             hideLoading();
-            showError('Erro', 'Ocorreu um erro ao eliminar a entidade. Tente novamente.');
+            showError('Erro', 'Ocorreu um erro ao eliminar a entidade.');
         }
     }
 }
@@ -1016,29 +872,21 @@ async function confirmAndRemoveCustomEntity(card) {
 async function confirmAndRemoveModule(moduleEl) {
     const moduleId = moduleEl.dataset.moduleId;
     const moduleName = moduleEl.querySelector('.module-title').textContent;
-    
-    const confirmed = await showConfirmDialog(
-        'Eliminar Módulo?',
-        `Isto irá remover <strong>${moduleName}</strong> e <strong>TODAS as entidades</strong> dentro dele.<br><br><span class="font-bold text-red-600">Esta ação é PERMANENTE.</span>`,
-        'Sim, eliminar!',
-        'Cancelar',
-        'danger'
-    );
-    
+    const confirmed = await showConfirmDialog('Eliminar Módulo?', `Isto irá remover <strong>${moduleName}</strong> e todas as suas entidades. Esta ação é PERMANENTE.`);
     if (confirmed) {
         showLoading('Eliminando módulo...');
-        
         try {
             const currentWorkspace = getCurrentWorkspace();
-            await deleteModule(moduleId, currentWorkspace ? currentWorkspace.id : 'default');
+            const ownerId = currentWorkspace && !currentWorkspace.isOwner ? currentWorkspace.ownerId : null;
+            await deleteModule(moduleId, currentWorkspace.id, ownerId);
             moduleEl.remove();
             checkEmptyStates();
             
             hideLoading();
-            showSuccess('Eliminado!', `O módulo "${moduleName}" foi eliminado permanentemente.`);
+            showSuccess('Eliminado!', `O módulo "${moduleName}" foi eliminado.`);
         } catch (error) {
             hideLoading();
-            showError('Erro', 'Ocorreu um erro ao eliminar o módulo. Tente novamente.');
+            showError('Erro', 'Ocorreu um erro ao eliminar o módulo.');
         }
     }
 }
@@ -1049,58 +897,69 @@ async function saveCurrentStructure() {
     const fieldCards = document.getElementById('form-builder-dropzone').querySelectorAll('.form-field-card');
     const attributes = Array.from(fieldCards).map(card => JSON.parse(card.dataset.fieldData));
 
-    console.log("Salvando estrutura:", { context, attributes });
-
     showLoading('Guardando estrutura...');
-
     try {
         const currentWorkspace = getCurrentWorkspace();
-        const workspaceId = currentWorkspace ? currentWorkspace.id : 'default';
-        
-        console.log("Salvando com workspaceId:", workspaceId, "isOwner:", currentWorkspace?.isOwner);
+        const ownerId = currentWorkspace && !currentWorkspace.isOwner ? currentWorkspace.ownerId : null;
         
         if (context.isSubEntity) {
             const parentContext = modalNavigationStack[modalNavigationStack.length - 1];
-            console.log("Salvando sub-entidade para:", parentContext);
-            
             await saveSubEntityStructure(
                 parentContext.moduleId, 
                 parentContext.entityId, 
                 context.parentFieldId, 
                 attributes,
-                workspaceId
+                currentWorkspace.id,
+                ownerId
             );
-            
-            hideLoading();
-            showSuccess('Guardado!', 'A estrutura da sub-entidade foi guardada com sucesso.');
         } else {
-            console.log("Salvando entidade principal:", {
-                moduleId: context.moduleId,
-                entityId: context.entityId,
-                entityName: context.entityName,
-                attributesCount: attributes.length,
-                workspaceId
-            });
-            
             await saveEntityStructure(
                 context.moduleId, 
                 context.entityId, 
                 context.entityName, 
                 attributes, 
-                workspaceId
+                currentWorkspace.id,
+                ownerId
             );
-            
-            hideLoading();
-            showSuccess('Guardado!', `A estrutura da entidade "${context.entityName}" foi guardada com sucesso.`);
         }
+        hideLoading();
+        showSuccess('Guardado!', 'A estrutura foi guardada com sucesso.');
     } catch (error) {
         hideLoading();
         console.error("Erro ao salvar estrutura:", error);
-        showError('Erro', 'Ocorreu um erro ao guardar a estrutura. Tente novamente.');
+        showError('Erro', 'Ocorreu um erro ao guardar a estrutura.');
     }
 }
 
-// Funções para o painel de propriedades de campos
+function setupFieldPropertiesPanelEvents() {
+    const closeBtn = document.getElementById('close-properties-panel');
+    if (closeBtn) closeBtn.addEventListener('click', closeFieldPropertiesPanel);
+    
+    const cancelBtn = document.getElementById('cancel-field-properties');
+    if (cancelBtn) cancelBtn.addEventListener('click', closeFieldPropertiesPanel);
+    
+    const applyBtn = document.getElementById('apply-field-properties');
+    if (applyBtn) applyBtn.addEventListener('click', applyFieldProperties);
+    
+    document.querySelectorAll('input[name="number-format"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            const format = this.value;
+            document.getElementById('decimal-precision-container').classList.toggle('hidden', !['decimal', 'currency', 'percentage'].includes(format));
+            document.getElementById('currency-symbol-container').classList.toggle('hidden', format !== 'currency');
+        });
+    });
+    
+    const addOptionBtn = document.getElementById('add-select-option');
+    if (addOptionBtn) {
+        addOptionBtn.addEventListener('click', function() {
+            const optionsContainer = document.getElementById('select-options-container');
+            const newOption = createSelectOption(`Opção ${optionsContainer.children.length + 1}`, optionsContainer.children.length);
+            optionsContainer.appendChild(newOption);
+            createIcons();
+        });
+    }
+}
+
 function openFieldPropertiesPanel(fieldData, fieldCard) {
     const panel = document.getElementById('field-properties-panel');
     if (!panel) return;
@@ -1328,35 +1187,6 @@ function applyFieldProperties() {
     closeFieldPropertiesPanel();
     
     showSuccess('Propriedades atualizadas!', '');
-}
-
-function setupFieldPropertiesPanelEvents() {
-    const closeBtn = document.getElementById('close-properties-panel');
-    if (closeBtn) closeBtn.addEventListener('click', closeFieldPropertiesPanel);
-    
-    const cancelBtn = document.getElementById('cancel-field-properties');
-    if (cancelBtn) cancelBtn.addEventListener('click', closeFieldPropertiesPanel);
-    
-    const applyBtn = document.getElementById('apply-field-properties');
-    if (applyBtn) applyBtn.addEventListener('click', applyFieldProperties);
-    
-    document.querySelectorAll('input[name="number-format"]').forEach(radio => {
-        radio.addEventListener('change', function() {
-            const format = this.value;
-            document.getElementById('decimal-precision-container').classList.toggle('hidden', !['decimal', 'currency', 'percentage'].includes(format));
-            document.getElementById('currency-symbol-container').classList.toggle('hidden', format !== 'currency');
-        });
-    });
-    
-    const addOptionBtn = document.getElementById('add-select-option');
-    if (addOptionBtn) {
-        addOptionBtn.addEventListener('click', function() {
-            const optionsContainer = document.getElementById('select-options-container');
-            const newOption = createSelectOption(`Opção ${optionsContainer.children.length + 1}`, optionsContainer.children.length);
-            optionsContainer.appendChild(newOption);
-            createIcons();
-        });
-    }
 }
 
 function renderSharedResource(resource) {
