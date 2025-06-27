@@ -82,8 +82,6 @@ export function setupMobileInteractions() {
     // Fechar menu ao clicar fora (overlay)
     document.addEventListener('click', (e) => {
         // mobileMenuToggle precisa ser acessado aqui também para a verificação
-        const mobileMenuToggle = document.getElementById('mobile-menu-toggle'); 
-        if (mobileSidebarOpen && desktopSidebar && !desktopSidebar.contains(e.target) && e.target !== mobileMenuToggle && !mobileMenuToggle.contains(e.target)) { 
             closeMobileSidebar();
         }
     });
