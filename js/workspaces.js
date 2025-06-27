@@ -25,14 +25,14 @@ export async function initWorkspaces(database) {
     
     // Carrega as áreas de trabalho próprias e compartilhadas
     await loadUserWorkspaces();
-    await _loadSharedWorkspaces();
+    await ;
     
     // Configura listener para mudanças no controle de acesso
     const userId = getUsuarioId();
     if (userId) {
         db.ref(`accessControl/${userId}`).on('value', snapshot => {
             console.log("Mudança detectada no controle de acesso:", snapshot.val());
-            _loadSharedWorkspaces();
+            ;
         });
     }
 }
@@ -574,24 +574,6 @@ export function getSharedWorkspaces() {
 export async function loadSharedWorkspaces() {
     return await _loadSharedWorkspaces();
 }
-
-// Implementação interna
-async function _loadSharedWorkspaces() {
-    try {
-        const userId = getUsuarioId();
-        if (!userId) return [];
-
-        console.log("Carregando áreas de trabalho compartilhadas para:", userId);
-        sharedWorkspaces = [];
-
-        // 1. Lê a lista de permissões do próprio utilizador (isto é seguro)
-        const accessSnapshot = await db.ref(`accessControl/${userId}`).get();
-        if (!accessSnapshot.exists()) {
-            console.log("Nenhum recurso compartilhado encontrado.");
-            updateSharedWorkspacesDisplay();
-            updateWorkspaceSelector();
-            return [];
-        }
 
         const accessControl = accessSnapshot.val();
         const promises = [];
