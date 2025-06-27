@@ -25,14 +25,14 @@ export async function initWorkspaces(database) {
     
     // Carrega as áreas de trabalho próprias e compartilhadas
     await loadUserWorkspaces();
-    await ;
+    await _loadSharedWorkspaces(); // CORRIGIDO
     
     // Configura listener para mudanças no controle de acesso
     const userId = getUsuarioId();
     if (userId) {
         db.ref(`accessControl/${userId}`).on('value', snapshot => {
             console.log("Mudança detectada no controle de acesso:", snapshot.val());
-            ;
+            _loadSharedWorkspaces(); // CORRIGIDO
         });
     }
 }
@@ -122,35 +122,72 @@ async function loadUserWorkspaces() {
  */
 async function _loadSharedWorkspaces() {
     try {
-        console.log('Carregando áreas de trabalho compartilhadas...');
-        
-        const { loadSharedResources } = await import('./database.js');
-        const sharedResources = await loadSharedResources();
-        
-        console.log('Recursos compartilhados carregados:', sharedResources);
-        
-        // Filtra apenas workspaces compartilhadas
-        sharedWorkspaces = sharedResources.filter(resource => resource.type === 'workspace').map(resource => ({
-            id: resource.id,
-            name: `${resource.ownerName || 'Usuário'} - Workspace`,
-            description: `Compartilhada por ${resource.ownerName || 'um usuário'}`,
-            isShared: true,
-            isOwner: false,
-            ownerId: resource.ownerId,
-            ownerName: resource.ownerName,
-            role: resource.role
-        }));
-        
-        console.log('Áreas de trabalho compartilhadas processadas:', sharedWorkspaces);
-        
+        const userId = getUsuarioId();
+        if (!userId) return [];
+
+        console.log("Carregando áreas de trabalho compartilhadas para:", userId);
+        sharedWorkspaces = [];
+
+        // 1. Lê a lista de permissões do próprio utilizador (isto é seguro)
+        const accessSnapshot = await db.ref(`accessControl/${userId}`).get();
+        if (!accessSnapshot.exists()) {
+            console.log("Nenhum recurso compartilhado encontrado.");
+            updateSharedWorkspacesDisplay();
+            updateWorkspaceSelector();
+            return [];
+        }
+
+        const accessControl = accessSnapshot.val();
+        const promises = [];
+
+        // 2. Para cada ID de recurso que o utilizador tem acesso...
+        for (const resourceId in accessControl) {
+            if (resourceId === 'updatedAt') continue;
+
+            const role = accessControl[resourceId];
+            
+            // 3. ...lê a informação pública desse recurso a partir do novo nó /sharedWorkspaces
+            const promise = db.ref(`sharedWorkspaces/${resourceId}`).get().then(workspaceSnapshot => {
+                if (workspaceSnapshot.exists()) {
+                    const workspaceData = workspaceSnapshot.val();
+                    sharedWorkspaces.push({
+                        id: resourceId,
+                        name: workspaceData.name,
+                        isShared: true,
+                        isOwner: false,
+                        ownerId: workspaceData.ownerId,
+                        ownerName: workspaceData.ownerName,
+                        role: role
+                    });
+                } else {
+                    console.warn(`Informação para o workspace partilhado ${resourceId} não encontrada.`);
+                }
+            }).catch(error => {
+                console.warn(`Erro ao carregar informações do workspace ${resourceId}:`, error);
+            });
+            promises.push(promise);
+        }
+
+        // Aguarda que todas as leituras terminem
+        await Promise.all(promises);
+
+        console.log("Áreas de trabalho compartilhadas carregadas:", sharedWorkspaces);
+        updateSharedWorkspacesDisplay();
         updateWorkspaceSelector();
         return sharedWorkspaces;
+
     } catch (error) {
         console.error('Erro ao carregar áreas de trabalho compartilhadas:', error);
-        sharedWorkspaces = [];
+        // Não mostrar o erro ao utilizador se for apenas uma negação de permissão inicial, o que é normal.
+        if (error.code !== 'PERMISSION_DENIED') {
+            showError('Erro', 'Ocorreu um erro ao carregar as áreas de trabalho compartilhadas.');
+        }
+        updateSharedWorkspacesDisplay();
+        updateWorkspaceSelector();
         return [];
     }
 }
+
 
 /**
  * Cria uma área de trabalho padrão
@@ -573,57 +610,6 @@ export function getSharedWorkspaces() {
  */
 export async function loadSharedWorkspaces() {
     return await _loadSharedWorkspaces();
-}
-
-        const accessControl = accessSnapshot.val();
-        const promises = [];
-
-        // 2. Para cada ID de recurso que o utilizador tem acesso...
-        for (const resourceId in accessControl) {
-            if (resourceId === 'updatedAt') continue;
-
-            const role = accessControl[resourceId];
-            
-            // 3. ...lê a informação pública desse recurso a partir do novo nó /sharedWorkspaces
-            const promise = db.ref(`sharedWorkspaces/${resourceId}`).get().then(workspaceSnapshot => {
-                if (workspaceSnapshot.exists()) {
-                    const workspaceData = workspaceSnapshot.val();
-                    sharedWorkspaces.push({
-                        id: resourceId,
-                        name: workspaceData.name,
-                        isShared: true,
-                        isOwner: false,
-                        ownerId: workspaceData.ownerId,
-                        ownerName: workspaceData.ownerName,
-                        role: role
-                    });
-                } else {
-                    console.warn(`Informação para o workspace partilhado ${resourceId} não encontrada.`);
-                }
-            }).catch(error => {
-                console.warn(`Erro ao carregar informações do workspace ${resourceId}:`, error);
-            });
-            promises.push(promise);
-        }
-
-        // Aguarda que todas as leituras terminem
-        await Promise.all(promises);
-
-        console.log("Áreas de trabalho compartilhadas carregadas:", sharedWorkspaces);
-        updateSharedWorkspacesDisplay();
-        updateWorkspaceSelector();
-        return sharedWorkspaces;
-
-    } catch (error) {
-        console.error('Erro ao carregar áreas de trabalho compartilhadas:', error);
-        // Não mostrar o erro ao utilizador se for apenas uma negação de permissão inicial, o que é normal.
-        if (error.code !== 'PERMISSION_DENIED') {
-            showError('Erro', 'Ocorreu um erro ao carregar as áreas de trabalho compartilhadas.');
-        }
-        updateSharedWorkspacesDisplay();
-        updateWorkspaceSelector();
-        return [];
-    }
 }
 
 /**
