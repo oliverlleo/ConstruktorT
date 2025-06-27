@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Construktor - Construtor Visual de ERP/CRM</title>
     
+    <!-- Dependências Externas -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -86,20 +87,24 @@
         });
     </script>
 
+    <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-storage-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-functions-compat.js"></script>
 
+    <!-- Link para o ficheiro CSS externo -->
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body class="text-slate-800 bg-slate-50">
 
+    <!-- Indicador de Carregamento Visual -->
     <div id="loading-overlay" class="loading-overlay">
         <div class="spinner"></div>
     </div>
 
+    <!-- ESTRUTURA PRINCIPAL DA APLICAÇÃO -->
     <div id="app" class="h-screen w-screen flex flex-col overflow-hidden" style="display: none;">
         
         <header class="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex justify-between items-center shadow-sm z-30 sticky top-0">
@@ -151,15 +156,21 @@
                     <i class="fa-solid fa-circle-question h-5 w-5"></i>
                     <span class="text-sm font-medium hidden sm:inline">Ajuda</span>
                 </button>
-           
+                <a href="/pages/code-view.html" target="_blank" class="bg-gradient-to-r from-green-600 to-teal-600 text-white px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg hover:from-green-700 hover:to-teal-700 transition-all shadow-md flex items-center gap-2 text-sm sm:text-base">
+                    <i class="fa-solid fa-code h-4 w-4 sm:h-5 sm:w-5"></i>
+                    <span class="font-medium">Ver Código</span>
+                </a>
                 <a href="/pages/user-view.html" target="_blank" class="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all shadow-md flex items-center gap-2 text-sm sm:text-base">
                     <i class="fa-solid fa-eye h-4 w-4 sm:h-5 sm:w-5"></i>
                     <span class="font-medium">Ver Página</span>
                 </a>
-                </div>
+                <!-- Botão de logout removido pois agora está no menu do usuário -->
+                
+            </div>
         </header>
 
         <main class="flex-1 flex overflow-hidden relative">
+            <!-- Sidebar para desktop -->
             <aside id="desktop-sidebar" class="w-64 sm:w-80 bg-white border-r border-slate-200 flex flex-col overflow-hidden shadow-sm h-full absolute inset-y-0 left-0 transform -translate-x-full sm:translate-x-0 transition-transform duration-300 ease-in-out z-20">
                 <div class="p-4 border-b border-slate-200 flex justify-between items-center sm:hidden">
                     <h2 class="font-bold text-lg text-indigo-800">Biblioteca</h2>
@@ -176,6 +187,7 @@
                 </div>
                 
                 <div class="flex-1 overflow-y-auto p-4 sm:p-5 space-y-5">
+                    <!-- Seletor de Área de Trabalho -->
                     <div id="workspace-selector" class="mb-4">
                         <div class="flex items-center justify-between mb-2">
                             <h3 class="text-sm font-semibold text-slate-700 flex items-center gap-1">
@@ -214,6 +226,7 @@
                         </button>
                     </div>
                     
+                    <!-- Seção de Recursos Compartilhados -->
                     <div id="shared-resources" class="mt-5 pt-5 border-t border-slate-200">
                         <div class="flex items-center justify-between mb-3">
                             <h3 class="text-md font-semibold text-slate-700 flex items-center gap-1">
@@ -225,7 +238,8 @@
                         </div>
                         
                         <div id="shared-resources-list" class="space-y-2.5">
-                            </div>
+                            <!-- Aqui serão adicionados os recursos compartilhados -->
+                        </div>
                         
                         <div id="no-shared-resources" class="bg-slate-50 rounded-lg p-3 text-center text-slate-500 border border-slate-200">
                             <i class="fa-solid fa-circle-info h-5 w-5 mx-auto mb-2 text-slate-400"></i>
@@ -247,6 +261,7 @@
                 </div>
             </aside>
 
+            <!-- Conteúdo principal -->
             <section class="flex-1 overflow-hidden flex flex-col sm:ml-80">
                 <div class="border-b border-slate-200 bg-white py-3 px-4 sm:px-6 flex justify-between items-center shadow-sm">
                     <h2 class="text-lg sm:text-xl font-bold flex items-center gap-2 text-slate-800">
@@ -260,6 +275,7 @@
                 
                 <div class="flex-1 overflow-y-auto p-4 sm:p-6">
                     <div class="mx-auto">
+                        <!-- Mensagem de orientação inicial -->
                         <div id="welcome-tip" class="bg-white rounded-xl shadow-md p-4 sm:p-5 mb-5 border border-slate-200 transition-all duration-300">
                             <div class="flex flex-col sm:flex-row sm:items-start gap-4">
                                 <div class="bg-blue-100 p-3 rounded-full text-blue-600 self-center sm:self-start">
@@ -288,6 +304,7 @@
                             </div>
                         </div>
                         
+                        <!-- Dica sobre reorganização de módulos -->
                         <div id="modules-tip" class="bg-amber-50 rounded-lg shadow-sm p-3 sm:p-4 mb-5 border border-amber-200 flex items-center gap-3">
                             <div class="text-amber-600">
                                 <i class="fa-solid fa-arrows-up-down-left-right h-5 w-5 sm:h-6 sm:w-6"></i>
@@ -301,8 +318,10 @@
                         </div>
                         
                         <div id="module-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                            </div>
+                            <!-- Módulos criados dinamicamente aparecerão aqui -->
+                        </div>
 
+                        <!-- Elemento visual para indicar onde criar módulos quando vazio -->
                         <div id="empty-state" class="hidden flex flex-col items-center justify-center bg-white rounded-xl border-2 border-dashed border-indigo-200 p-6 sm:p-10 mt-4 text-center">
                             <div class="bg-indigo-100 p-3 rounded-full mb-3">
                                 <i class="fa-solid fa-table-cells-large h-8 w-8 text-indigo-600"></i>
@@ -319,6 +338,7 @@
             </section>
         </main>
 
+        <!-- Botão flutuante para adicionar módulo (visível apenas em mobile) -->
         <div class="fixed right-4 bottom-4 sm:hidden z-20">
             <button id="mobile-add-module-btn" class="bg-indigo-600 text-white p-3 rounded-full hover:bg-indigo-700 transition-colors shadow-lg flex items-center justify-center">
                 <i class="fa-solid fa-plus h-6 w-6"></i>
@@ -326,6 +346,7 @@
         </div>
     </div>
 
+    <!-- Modal de Perfil de Usuário -->
     <div id="profile-modal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center z-50 hidden p-4">
         <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 scale-95 opacity-0 transition-all duration-300">
             <div class="flex justify-between items-center mb-5">
@@ -360,6 +381,7 @@
         </div>
     </div>
     
+    <!-- Modal de Convite -->
     <div id="invite-modal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center z-50 hidden p-4">
         <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 scale-95 opacity-0 transition-all duration-300">
             <div class="flex justify-between items-center mb-5">
@@ -390,6 +412,7 @@
         </div>
     </div>
     
+    <!-- Modal de Gerenciar Convites -->
     <div id="manage-invites-modal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center z-50 hidden p-4">
         <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl p-6 scale-95 opacity-0 transition-all duration-300">
             <div class="flex justify-between items-center mb-4">
@@ -415,8 +438,10 @@
                     <i class="fa-solid fa-circle-info h-6 w-6 mx-auto mb-2 text-slate-400"></i>
                     <p>Você ainda não enviou nenhum convite</p>
                 </div>
+                <!-- Aqui serão adicionados os convites enviados dinamicamente -->
                 <div class="space-y-3" id="sent-invites-list">
-                    </div>
+                    <!-- Exemplo de cartão de convite enviado -->
+                </div>
             </div>
             
             <div id="received-invites-container" class="overflow-y-auto max-h-64 hidden">
@@ -424,8 +449,10 @@
                     <i class="fa-solid fa-circle-info h-6 w-6 mx-auto mb-2 text-slate-400"></i>
                     <p>Você não recebeu nenhum convite</p>
                 </div>
+                <!-- Aqui serão adicionados os convites recebidos dinamicamente -->
                 <div class="space-y-3" id="received-invites-list">
-                    </div>
+                    <!-- Exemplo de cartão de convite recebido -->
+                </div>
             </div>
             
             <div id="access-management-container" class="overflow-y-auto max-h-64 hidden">
@@ -433,15 +460,19 @@
                     <i class="fa-solid fa-circle-info h-6 w-6 mx-auto mb-2 text-slate-400"></i>
                     <p>Nenhum usuário com acesso compartilhado encontrado</p>
                 </div>
+                <!-- Aqui serão adicionados os usuários com acesso compartilhado -->
                 <div class="space-y-3" id="shared-access-list">
-                    </div>
+                    <!-- Os usuários com acesso serão adicionados aqui dinamicamente -->
+                </div>
             </div>
         </div>
     </div>
 
+    <!-- Modal de Construção de Entidade -->
     <div id="entity-builder-modal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center z-50 hidden p-4">
         <div class="bg-white w-full max-w-6xl h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden scale-95 opacity-0 transition-all duration-300">
             <div class="p-4 sm:p-5 border-b border-slate-200 flex justify-between items-center bg-gradient-to-r from-indigo-50 to-purple-50">
+                <!-- Breadcrumb para navegação hierárquica -->
                 <div id="modal-breadcrumb" class="flex items-center text-sm sm:text-lg overflow-hidden"></div>
                 <div class="flex items-center gap-2 sm:gap-4">
                     <button id="modal-back-btn" class="hidden text-slate-600 bg-white hover:bg-slate-100 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg transition-colors flex items-center gap-1 sm:gap-2 shadow-sm border border-slate-200 text-sm">
@@ -459,6 +490,7 @@
             </div>
             
             <div class="flex-1 flex flex-col sm:flex-row overflow-hidden">
+                <!-- Sidebar do modal - colapsável em mobile -->
                 <div id="modal-sidebar-container" class="w-full sm:w-72 bg-slate-50 border-b sm:border-r sm:border-b-0 border-slate-200 sm:flex-shrink-0 sm:overflow-y-auto">
                     <div class="p-4 flex items-center justify-between sm:hidden border-b border-slate-200">
                         <h3 class="font-bold text-md text-indigo-800">Caixa de Ferramentas</h3>
@@ -489,6 +521,7 @@
                     </div>
                 </div>
                 
+                <!-- Área do formulário -->
                 <main class="flex-1 overflow-y-auto bg-slate-100 p-4 sm:p-6">
                     <div class="bg-white p-4 sm:p-6 rounded-xl shadow-md min-h-full border border-slate-200">
                         <h3 class="text-base sm:text-lg font-semibold text-slate-800 mb-3 sm:mb-4 flex items-center gap-2">
@@ -511,7 +544,9 @@
         </div>
     </div>
     
+    <!-- Painel de Propriedades do Campo (inspirado no Notion) -->
     <div id="field-properties-panel" class="fixed inset-y-0 right-0 bg-white w-full sm:w-96 shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out z-50 flex flex-col">
+        <!-- Cabeçalho do painel -->
         <div class="p-4 sm:p-5 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white flex justify-between items-center">
             <div class="flex items-center gap-2">
                 <i id="field-properties-icon" class="fa-solid fa-calendar h-5 w-5 text-indigo-600"></i>
@@ -522,7 +557,9 @@
             </button>
         </div>
         
+        <!-- Conteúdo do painel com rolagem -->
         <div class="flex-1 overflow-y-auto p-4 sm:p-5">
+            <!-- Informações Básicas (comum a todos os tipos) -->
             <div class="mb-6">
                 <h4 class="text-base font-semibold text-slate-700 mb-3">Informações Básicas</h4>
                 <div class="space-y-4">
@@ -541,9 +578,11 @@
                 </div>
             </div>
             
+            <!-- Configurações específicas do tipo de campo -->
             <div>
                 <h4 class="text-base font-semibold text-slate-700 mb-3">Configurações Específicas</h4>
                 
+                <!-- Configurações para CAMPO DE DATA -->
                 <div id="date-field-config" class="field-type-config space-y-5">
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-2">Formato de Data</label>
@@ -614,6 +653,7 @@
                     </div>
                 </div>
                 
+                <!-- Configurações para CAMPO DE TEXTO -->
                 <div id="text-field-config" class="field-type-config space-y-5 hidden">
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-2">Tipo de Conteúdo</label>
@@ -653,6 +693,7 @@
                     </div>
                 </div>
                 
+                <!-- Configurações para CAMPO DE NÚMERO -->
                 <div id="number-field-config" class="field-type-config space-y-5 hidden">
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-2">Formato do Número</label>
@@ -701,6 +742,7 @@
                     </div>
                 </div>
                 
+                <!-- Configurações para CAMPO DE SELEÇÃO -->
                 <div id="select-field-config" class="field-type-config space-y-5 hidden">
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-2">Comportamento da Seleção</label>
@@ -739,6 +781,7 @@
                         </div>
                         
                         <div id="select-options-container" class="space-y-2 bg-slate-50 p-3 rounded-lg border border-slate-200 min-h-[100px] max-h-[200px] overflow-y-auto">
+                            <!-- As opções serão adicionadas aqui dinamicamente -->
                             <div class="select-option-item flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200">
                                 <div class="flex-1">
                                     <input type="text" class="w-full p-1.5 border border-slate-300 rounded text-sm" placeholder="Nome da opção" value="Opção 1">
@@ -759,6 +802,7 @@
             </div>
         </div>
         
+        <!-- Rodapé do painel com botões -->
         <div class="p-4 sm:p-5 border-t border-slate-200 bg-gradient-to-r from-slate-50 to-white flex gap-3 justify-end">
             <button id="cancel-field-properties" class="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors">
                 Cancelar
@@ -769,6 +813,7 @@
         </div>
     </div>
     
+    <!-- TEMPLATES -->
     <template id="module-template">
         <div class="module-quadro bg-white rounded-xl shadow-md overflow-hidden border border-slate-200 hover:shadow-lg transition-shadow" data-module-id="">
             <div class="bg-gradient-to-r from-indigo-500 to-purple-600 p-3 sm:p-4 text-white">
@@ -863,6 +908,7 @@
         </div>
     </template>
 
+    <!-- Template para Convite Enviado -->
     <template id="sent-invite-template">
         <div class="invite-card bg-white rounded-lg border border-slate-200 shadow-sm p-3" data-invite-id="">
             <div class="flex flex-col">
@@ -892,6 +938,7 @@
         </div>
     </template>
 
+    <!-- Template para Convite Recebido -->
     <template id="received-invite-template">
         <div class="invite-card bg-white rounded-lg border border-slate-200 shadow-sm p-3" data-invite-id="">
             <div class="flex flex-col">
@@ -926,6 +973,7 @@
         </div>
     </template>
     
+    <!-- Template para Recurso Compartilhado -->
     <template id="shared-resource-template">
         <div class="shared-resource-item bg-white rounded-lg border border-emerald-100 shadow-sm p-3 hover:shadow-md transition-shadow" data-resource-id="" data-owner-id="" data-resource-type="" data-role="">
             <div class="flex items-center justify-between">
@@ -946,6 +994,7 @@
         </div>
     </template>
     
+    <!-- Template para Usuário com Acesso Compartilhado -->
     <template id="shared-access-template">
         <div class="shared-access-item bg-white rounded-lg border border-slate-200 shadow-sm p-3" data-user-id="" data-email="" data-resource-id="" data-role="">
             <div class="flex flex-col">
@@ -980,6 +1029,7 @@
         </div>
     </template>
 
+    <!-- Scripts Modularizados -->
     <script type="module" src="js/main.js"></script>
 </body>
 </html>
