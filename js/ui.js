@@ -1,653 +1,514 @@
-body {
-    font-family: 'Inter', sans-serif;
-    background-color: #f8fafc;
+/**
+ * Conjunto de funções para manipulação da interface do usuário
+ * Gerencia animações, notificações, modais e interações
+ */
+
+import { TIPS_STATE } from './config.js';
+import { getUserPreference, saveUserPreference } from './database.js';
+
+// Variável para controle do estado da interface
+let mobileSidebarOpen = false;
+let modalSidebarOpen = false;
+let isLoading = false;
+
+/**
+ * Inicializa elementos e comportamentos da interface do usuário
+ */
+export function initUI() {
+    // Font Awesome já é inicializado automaticamente
+    
+    setupMobileInteractions();
+    setupTips();
+    checkEmptyStates();
 }
 
-/* Loading Animation */
-.loading-overlay {
-    position: fixed;
-    inset: 0;
-    background-color: rgba(255, 255, 255, 0.9);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 100;
-    backdrop-filter: blur(8px);
-}
-
-.spinner {
-    width: 40px;
-    height: 40px;
-    border: 4px solid #e0e7ff;
-    border-bottom-color: #6366f1;
-    border-radius: 50%;
-    display: inline-block;
-    box-sizing: border-box;
-    animation: rotation 1s linear infinite;
-}
-
-@media (min-width: 640px) {
-    .spinner {
-        width: 56px;
-        height: 56px;
-        border-width: 5px;
+/**
+ * Função para inicializar ícones
+ * Agora também inicializa os ícones Lucide, quando disponíveis
+ */
+export function createIcons() {
+    // Font Awesome é inicializado automaticamente
+    
+    // Também inicializa ícones Lucide, se disponíveis
+    if (window.lucide) {
+        try {
+            // Tentativa de criar ícones Lucide
+            lucide.createIcons();
+        } catch (error) {
+            console.warn('Erro ao criar ícones Lucide:', error);
+        }
     }
 }
 
-@keyframes rotation {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-/* Drag and Drop Styles */
-.sortable-ghost {
-    opacity: 0.5;
-    background-color: #e0e7ff !important;
-    border: 2px dashed #6366f1 !important;
-    box-shadow: none !important;
-}
-
-.sortable-drag { 
-    opacity: 1 !important; 
-    cursor: grabbing;
-    transform: scale(1.02);
-    z-index: 10;
-}
-
-.sortable-chosen {
-    background-color: #f5f5ff;
-}
-
-.toolbox-item {
-    cursor: grab;
-    transition: all 0.2s ease-in-out;
-    touch-action: none; /* Melhora o comportamento de toque em dispositivos móveis */
-}
-
-.toolbox-item:hover {
-    transform: translateY(-2px);
-}
-
-.toolbox-item:active {
-    cursor: grabbing;
-}
-
-.toolbox-item[data-field-type="relationship"],
-.toolbox-item[data-field-type="sub-entity"] {
-    background-color: #eef2ff;
-    border-color: #c7d2fe;
-}
-
-/* Animation for new elements */
-@keyframes highlight-pulse {
-    0% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4); }
-    70% { box-shadow: 0 0 0 10px rgba(99, 102, 241, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
-}
-
-.animate-pulse {
-    animation: highlight-pulse 2s 1;
-}
-
-/* Animação para dicas */
-@keyframes tip-fade-in {
-    0% { opacity: 0; transform: translateY(-10px); }
-    100% { opacity: 1; transform: translateY(0); }
-}
-
-#welcome-tip, #quick-tip, #modules-tip {
-    animation: tip-fade-in 0.5s ease-out;
-}
-
-.close-tip-btn {
-    transition: all 0.2s ease;
-}
-
-.close-tip-btn:hover {
-    transform: scale(1.1);
-}
-
-/* Estilos para o Hub de Visualização */
-.view-tab {
-    position: relative;
-    transition: all 0.2s ease;
-}
-
-.view-tab.active {
-    color: #4f46e5; /* indigo-600 */
-    background-color: rgba(79, 70, 229, 0.05);
-}
-
-/* Estilos para o Kanban Board */
-.kanban-column {
-    min-width: 280px;
-    max-width: 280px;
-    background-color: #f8fafc; /* slate-50 */
-    border-radius: 0.5rem;
-    border: 1px solid #e2e8f0; /* slate-200 */
-}
-
-.kanban-column-header {
-    padding: 0.75rem;
-    border-bottom: 1px solid #e2e8f0; /* slate-200 */
-    background-color: #f1f5f9; /* slate-100 */
-    border-radius: 0.5rem 0.5rem 0 0;
-}
-
-.kanban-items {
-    min-height: 200px;
-    padding: 0.5rem;
-}
-
-.kanban-item {
-    margin-bottom: 0.5rem;
-    background-color: white;
-    border-radius: 0.375rem;
-    padding: 0.75rem;
-    border: 1px solid #e2e8f0; /* slate-200 */
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-    cursor: grab;
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.kanban-item:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-}
-
-/* Estilos para a visualização em galeria */
-.gallery-item {
-    background-color: white;
-    border-radius: 0.5rem;
-    border: 1px solid #e2e8f0; /* slate-200 */
-    overflow: hidden;
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.gallery-item:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 10px 15px rgba(0, 0, 0, 0.05);
-}
-
-.gallery-item-header {
-    padding: 1rem;
-    border-bottom: 1px solid #e2e8f0; /* slate-200 */
-}
-
-.gallery-item-body {
-    padding: 1rem;
-}
-
-.gallery-item-footer {
-    padding: 0.75rem 1rem;
-    background-color: #f8fafc; /* slate-50 */
-    border-top: 1px solid #e2e8f0; /* slate-200 */
-}
-
-/* Estilos para a tabela responsiva */
-.table-container {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-}
-
-@media (max-width: 640px) {
-    .table-responsive th, 
-    .table-responsive td {
-        white-space: nowrap;
+/**
+ * Fecha o menu lateral mobile, se estiver aberto.
+ */
+export function closeMobileSidebar() {
+    const desktopSidebar = document.getElementById('desktop-sidebar');
+    if (desktopSidebar && mobileSidebarOpen) { // Apenas fecha se estiver aberto
+        desktopSidebar.classList.add('-translate-x-full');
+        desktopSidebar.classList.remove('translate-x-0');
+        mobileSidebarOpen = false;
     }
 }
 
-/* Estilos para elementos arrastáveis (Sortable.js) */
-.sortable-ghost {
-    opacity: 0.4;
-    background-color: rgba(99, 102, 241, 0.1) !important;
-    border: 2px dashed rgba(99, 102, 241, 0.5) !important;
-}
-
-.sortable-chosen {
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-    z-index: 10;
-}
-
-.sortable-drag {
-    cursor: grabbing;
-    opacity: 0.9;
-    transform: scale(1.02);
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
-}
-
-.module-quadro {
-    cursor: grab;
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.module-quadro:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
-}
-
-/* Empty States */
-#empty-form-state:only-child {
-    display: flex;
-}
-
-#form-builder-dropzone:empty + #empty-form-state {
-    display: flex;
-}
-
-#module-container:empty + #empty-state {
-    display: flex;
-}
-
-/* Improved Scrollbars */
-.no-scrollbar::-webkit-scrollbar { 
-    width: 4px;
-    height: 4px;
-}
-
-@media (min-width: 640px) {
-    .no-scrollbar::-webkit-scrollbar { 
-        width: 6px;
-        height: 6px;
+/**
+ * Configura interações específicas para dispositivos móveis
+ */
+export function setupMobileInteractions() {
+    // Toggle menu mobile
+    const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
+    const desktopSidebar = document.getElementById('desktop-sidebar');
+    const closeMobileMenu = document.getElementById('close-mobile-menu');
+    
+    if (mobileMenuToggle && desktopSidebar) {
+        mobileMenuToggle.addEventListener('click', () => {
+            desktopSidebar.classList.toggle('-translate-x-full');
+            // Se -translate-x-full foi removido, o menu está abrindo, então garanta translate-x-0
+            if (!desktopSidebar.classList.contains('-translate-x-full')) {
+                desktopSidebar.classList.add('translate-x-0');
+            } else {
+            // Se -translate-x-full foi adicionado, o menu está fechando, remova translate-x-0
+                desktopSidebar.classList.remove('translate-x-0');
+            }
+            mobileSidebarOpen = !mobileSidebarOpen;
+        });
+    }
+    
+    if (closeMobileMenu && desktopSidebar) {
+        closeMobileMenu.addEventListener('click', closeMobileSidebar);
+    }
+    
+    // Fechar menu ao clicar fora (overlay)
+    document.addEventListener('click', (e) => {
+        // mobileMenuToggle precisa ser acessado aqui também para a verificação
+        const mobileMenuToggle = document.getElementById('mobile-menu-toggle'); 
+        if (mobileSidebarOpen && desktopSidebar && !desktopSidebar.contains(e.target) && e.target !== mobileMenuToggle && !mobileMenuToggle.contains(e.target)) { 
+            closeMobileSidebar();
+        }
+    });
+    
+    // Toggle para a sidebar do modal em dispositivos móveis
+    const toggleModalSidebar = document.getElementById('toggle-modal-sidebar');
+    const modalSidebarContent = document.getElementById('modal-sidebar-content');
+    
+    if (toggleModalSidebar && modalSidebarContent) {
+        toggleModalSidebar.addEventListener('click', () => {
+            modalSidebarContent.classList.toggle('hidden');
+            modalSidebarOpen = !modalSidebarOpen;
+            
+            // Rotacionar ícone
+            const icon = toggleModalSidebar.querySelector('i');
+            if (icon) {
+                if (modalSidebarOpen) {
+                    icon.setAttribute('data-lucide', 'chevron-up');
+                } else {
+                    icon.setAttribute('data-lucide', 'chevron-down');
+                }
+                createIcons();
+            }
+        });
+    }
+    
+    // Botão flutuante para adicionar módulo em dispositivos móveis
+    const mobileAddModuleBtn = document.getElementById('mobile-add-module-btn');
+    if (mobileAddModuleBtn) {
+        mobileAddModuleBtn.addEventListener('click', () => {
+            // A ação específica será conectada no módulo principal
+        });
     }
 }
 
-.no-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.no-scrollbar::-webkit-scrollbar-thumb {
-    background-color: rgba(203, 213, 225, 0.5);
-    border-radius: 3px;
-}
-
-.no-scrollbar::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(148, 163, 184, 0.7);
-}
-
-/* Modal Animations */
-#entity-builder-modal .bg-white {
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-#entity-builder-modal.hidden .bg-white {
-    transform: scale(0.95);
-    opacity: 0;
-}
-
-/* Transitions for hover states */
-.module-quadro,
-.entity-card,
-.dropped-entity-card,
-.form-field-card,
-button {
-    transition: all 0.2s ease-in-out;
-}
-
-/* Custom effects */
-.shadow-highlight {
-    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3);
-}
-
-/* Button hover effects */
-button:active {
-    transform: translateY(1px);
-}
-
-/* Entity cards with no-results states */
-.entities-dropzone:empty::after {
-    content: 'Sem entidades';
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 80px;
-    width: 100%;
-    color: #94a3b8;
-    font-size: 0.75rem;
-    font-style: italic;
-    border: 2px dashed #e2e8f0;
-    border-radius: 0.5rem;
-    margin-top: 0.5rem;
-}
-
-@media (min-width: 640px) {
-    .entities-dropzone:empty::after {
-        content: 'Sem entidades neste módulo';
-        height: 100px;
-        font-size: 0.875rem;
+/**
+ * Configura o sistema de dicas
+ */
+export function setupTips() {
+    // Verifica o estado das dicas (primeiro no Firebase, depois no localStorage como fallback)
+    const welcomeTipClosed = getUserPreference(TIPS_STATE.WELCOME_TIP, false);
+    const quickTipClosed = getUserPreference(TIPS_STATE.QUICK_TIP, false);
+    const modulesTipClosed = getUserPreference(TIPS_STATE.MODULES_TIP, false);
+    
+    const welcomeTip = document.getElementById('welcome-tip');
+    const quickTip = document.getElementById('quick-tip');
+    const modulesTip = document.getElementById('modules-tip');
+    
+    // Mostra ou esconde as dicas baseado nas preferências do usuário
+    if (welcomeTip) {
+        if (welcomeTipClosed) {
+            welcomeTip.classList.add('hidden');
+        } else {
+            welcomeTip.classList.remove('hidden');
+        }
+    }
+    
+    if (quickTip) {
+        if (quickTipClosed) {
+            quickTip.classList.add('hidden');
+        } else {
+            quickTip.classList.remove('hidden');
+        }
+    }
+    
+    if (modulesTip) {
+        if (modulesTipClosed) {
+            modulesTip.classList.add('hidden');
+        } else {
+            modulesTip.classList.remove('hidden');
+        }
+    }
+    
+    // Configura os botões de fechar
+    document.querySelectorAll('.close-tip-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const tipId = btn.dataset.tipId;
+            const tipElement = document.getElementById(tipId);
+            
+            if (tipElement) {
+                tipElement.classList.add('hidden');
+                
+                // Salva a preferência do usuário no Firebase
+                if (tipId === 'welcome-tip') {
+                    saveUserPreference(TIPS_STATE.WELCOME_TIP, true);
+                } else if (tipId === 'quick-tip') {
+                    saveUserPreference(TIPS_STATE.QUICK_TIP, true);
+                } else if (tipId === 'modules-tip') {
+                    saveUserPreference(TIPS_STATE.MODULES_TIP, true);
+                }
+            }
+        });
+    });
+    
+    // Configura o botão de ajuda para mostrar as dicas novamente
+    const helpButton = document.getElementById('help-button');
+    if (helpButton) {
+        helpButton.addEventListener('click', () => {
+            // Limpa as preferências para mostrar as dicas novamente
+            saveUserPreference(TIPS_STATE.WELCOME_TIP, false);
+            saveUserPreference(TIPS_STATE.QUICK_TIP, false);
+            saveUserPreference(TIPS_STATE.MODULES_TIP, false);
+            
+            // Mostra as dicas quando o botão de ajuda é clicado
+            if (welcomeTip) welcomeTip.classList.remove('hidden');
+            if (quickTip) quickTip.classList.remove('hidden');
+            if (modulesTip) modulesTip.classList.remove('hidden');
+            
+            // Exibe uma animação sutil para chamar atenção para as dicas
+            if (welcomeTip) {
+                welcomeTip.classList.add('animate-pulse');
+                setTimeout(() => welcomeTip.classList.remove('animate-pulse'), 1000);
+            }
+            if (quickTip) {
+                quickTip.classList.add('animate-pulse');
+                setTimeout(() => quickTip.classList.remove('animate-pulse'), 1000);
+            }
+            if (modulesTip) {
+                modulesTip.classList.add('animate-pulse');
+                setTimeout(() => modulesTip.classList.remove('animate-pulse'), 1000);
+            }
+        });
     }
 }
 
-#form-builder-dropzone:empty::after {
-    content: 'Arraste campos aqui';
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 80px;
-    width: 100%;
-    color: #94a3b8;
-    font-size: 0.75rem;
-    font-style: italic;
-}
-
-@media (min-width: 640px) {
-    #form-builder-dropzone:empty::after {
-        content: 'Arraste campos aqui para criar o formulário';
-        height: 100px;
-        font-size: 0.875rem;
+/**
+ * Verifica e atualiza os estados vazios
+ */
+export function checkEmptyStates() {
+    // Verifica se existem módulos
+    const moduleContainer = document.getElementById('module-container');
+    const emptyState = document.getElementById('empty-state');
+    
+    if (moduleContainer && emptyState) {
+        if (moduleContainer.children.length === 0) {
+            emptyState.classList.remove('hidden');
+        } else {
+            emptyState.classList.add('hidden');
+        }
     }
 }
 
-/* Mobile Sidebar Toggle */
-#desktop-sidebar {
-    transition: transform 0.3s ease-in-out;
-}
-
-/* Modal sidebar toggle */
-#modal-sidebar-container {
-    transition: height 0.3s ease-in-out;
-}
-
-#modal-sidebar-container.open #modal-sidebar-content {
-    display: block;
-}
-
-/* Limitação de texto em elementos móveis */
-.module-title, .entity-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    max-width: 150px;
-}
-
-@media (min-width: 640px) {
-    .module-title, .entity-name {
-        max-width: 200px;
+/**
+ * Mostra uma notificação
+ * @param {string} title - Título da notificação 
+ * @param {string} message - Mensagem da notificação
+ * @param {string} type - Tipo da notificação (success, error, warning, info)
+ * @param {number} duration - Duração em ms (default: 3000)
+ */
+export function showNotification(title, message, type = 'info', duration = 3000) {
+    if (typeof Swal !== 'undefined') {
+        const Toast = Swal.mixin({
+            toast: true,
+            position: 'bottom-end',
+            showConfirmButton: false,
+            timer: duration,
+            timerProgressBar: true,
+            customClass: {
+                popup: 'shadow-xl rounded-xl'
+            }
+        });
+        
+        Toast.fire({
+            icon: type,
+            title: title,
+            text: message
+        });
+    } else {
+        // Fallback para alert se SweetAlert não estiver disponível
+        alert(`${title}: ${message}`);
     }
 }
 
-/* Breadcrumb responsivo */
-#modal-breadcrumb {
-    max-width: 180px;
-}
-
-@media (min-width: 640px) {
-    #modal-breadcrumb {
-        max-width: none;
+/**
+ * Mostra uma mensagem de sucesso
+ * @param {string} title - Título da mensagem
+ * @param {string} message - Texto da mensagem
+ */
+export function showSuccess(title, message) {
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            icon: 'success',
+            title: title,
+            text: message,
+            timer: 2000,
+            showConfirmButton: false,
+            customClass: {
+                popup: 'shadow-xl rounded-xl'
+            }
+        });
+    } else {
+        // Fallback para alert se SweetAlert não estiver disponível
+        alert(`${title}: ${message}`);
     }
 }
 
-/* Estilos para a página de login */
-.auth-container {
-    min-height: 100vh;
-    background: linear-gradient(135deg, #f0f4ff 0%, #e5e9ff 100%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 1rem;
+/**
+ * Mostra uma mensagem de erro
+ * @param {string} title - Título do erro
+ * @param {string} message - Mensagem de erro
+ */
+export function showError(title, message) {
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            icon: 'error',
+            title: title,
+            text: message,
+            customClass: {
+                popup: 'shadow-xl rounded-xl'
+            }
+        });
+    } else {
+        // Fallback para alert se SweetAlert não estiver disponível
+        alert(`Erro - ${title}: ${message}`);
+    }
 }
 
-.auth-card {
-    background-color: white;
-    border-radius: 1rem;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-    width: 100%;
-    max-width: 450px;
-    overflow: hidden;
+/**
+ * Mostra uma caixa de diálogo de confirmação
+ * @param {string} title - Título da confirmação
+ * @param {string} message - Mensagem da confirmação
+ * @param {string} confirmText - Texto do botão de confirmação
+ * @param {string} cancelText - Texto do botão de cancelamento
+ * @param {string} type - Tipo da confirmação (warning, danger, info)
+ * @returns {Promise<boolean>} - True se confirmado, False se cancelado
+ */
+export async function showConfirmDialog(title, message, confirmText = 'Confirmar', cancelText = 'Cancelar', type = 'warning') {
+    if (typeof Swal !== 'undefined') {
+        const result = await Swal.fire({
+            title: title,
+            text: message,
+            icon: type,
+            showCancelButton: true,
+            confirmButtonColor: type === 'danger' ? '#d33' : '#6366f1',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: confirmText,
+            cancelButtonText: cancelText,
+            customClass: {
+                popup: 'shadow-xl rounded-xl'
+            }
+        });
+        
+        return result.isConfirmed;
+    } else {
+        // Fallback para confirm se SweetAlert não estiver disponível
+        return confirm(`${title}\n${message}`);
+    }
 }
 
-.auth-header {
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-    padding: 2rem;
-    text-align: center;
-    color: white;
+/**
+ * Mostra um diálogo de entrada de texto
+ * @param {string} title - Título do diálogo
+ * @param {string} inputLabel - Label do campo de entrada
+ * @param {string} placeholder - Texto de placeholder
+ * @param {string} confirmText - Texto do botão de confirmação
+ * @param {string} cancelText - Texto do botão de cancelamento
+ * @returns {Promise<{confirmed: boolean, value: string}>} - Resultado da entrada
+ */
+export async function showInputDialog(title, inputLabel, placeholder = '', confirmText = 'Confirmar', cancelText = 'Cancelar') {
+    if (typeof Swal !== 'undefined') {
+        const result = await Swal.fire({
+            title: title,
+            input: 'text',
+            inputLabel: inputLabel,
+            inputPlaceholder: placeholder,
+            showCancelButton: true,
+            confirmButtonText: confirmText,
+            cancelButtonText: cancelText,
+            inputValidator: (value) => {
+                if (!value) {
+                    return 'Este campo é obrigatório!';
+                }
+            },
+            customClass: {
+                popup: 'shadow-xl rounded-xl',
+                input: 'rounded-lg border-slate-300 focus:border-indigo-500 focus:ring-indigo-500'
+            }
+        });
+        
+        return {
+            confirmed: result.isConfirmed,
+            value: result.value
+        };
+    } else {
+        // Fallback para prompt se SweetAlert não estiver disponível
+        const value = prompt(`${title}\n${inputLabel}`, '');
+        return {
+            confirmed: value !== null,
+            value: value || ''
+        };
+    }
 }
 
-.auth-tabs {
-    display: flex;
-    border-bottom: 1px solid #e2e8f0;
+/**
+ * Mostra um indicador de carregamento
+ * @param {string} message - Mensagem a ser exibida durante o carregamento
+ */
+export function showLoading(message = 'Carregando...') {
+    if (isLoading) return;
+    isLoading = true;
+    
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: message,
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+            didOpen: () => {
+                Swal.showLoading();
+            },
+            customClass: {
+                popup: 'shadow-xl rounded-xl'
+            }
+        });
+    } else {
+        // Fallback para caso SweetAlert não esteja disponível
+        const loadingOverlay = document.createElement('div');
+        loadingOverlay.id = 'loading-overlay-manual';
+        loadingOverlay.style.position = 'fixed';
+        loadingOverlay.style.inset = '0';
+        loadingOverlay.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
+        loadingOverlay.style.display = 'flex';
+        loadingOverlay.style.justifyContent = 'center';
+        loadingOverlay.style.alignItems = 'center';
+        loadingOverlay.style.zIndex = '9999';
+        
+        loadingOverlay.innerHTML = `
+            <div style="text-align: center;">
+                <div class="spinner" style="margin-bottom: 1rem;"></div>
+                <p>${message}</p>
+            </div>
+        `;
+        
+        document.body.appendChild(loadingOverlay);
+    }
 }
 
-.auth-tab {
-    flex: 1;
-    text-align: center;
-    padding: 1rem;
-    font-weight: 500;
-    cursor: pointer;
-    color: #64748b;
-    border-bottom: 2px solid transparent;
-    transition: all 0.2s;
+/**
+ * Esconde o indicador de carregamento
+ */
+export function hideLoading() {
+    if (!isLoading) return;
+    isLoading = false;
+    
+    if (typeof Swal !== 'undefined') {
+        Swal.close();
+    } else {
+        // Remove o overlay manual se ele existir
+        const loadingOverlay = document.getElementById('loading-overlay-manual');
+        if (loadingOverlay) {
+            loadingOverlay.remove();
+        }
+    }
 }
 
-.auth-tab.active {
-    color: #6366f1;
-    border-bottom-color: #6366f1;
+/**
+ * Configura um modal
+ * @param {string} modalId - ID do elemento modal
+ * @param {Function} onOpenCallback - Função a ser chamada quando o modal abrir
+ * @param {Function} onCloseCallback - Função a ser chamada quando o modal fechar
+ */
+export function setupModal(modalId, onOpenCallback = null, onCloseCallback = null) {
+    const modal = document.getElementById(modalId);
+    if (!modal) return;
+    
+    // Botões para abrir o modal
+    document.querySelectorAll(`[data-modal-target="${modalId}"]`).forEach(btn => {
+        btn.addEventListener('click', () => {
+            openModal(modalId);
+            if (onOpenCallback) onOpenCallback();
+        });
+    });
+    
+    // Botões para fechar o modal
+    modal.querySelectorAll('[data-modal-close]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            closeModal(modalId);
+            if (onCloseCallback) onCloseCallback();
+        });
+    });
+    
+    // Fechar ao clicar fora do modal
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            closeModal(modalId);
+            if (onCloseCallback) onCloseCallback();
+        }
+    });
 }
 
-.auth-content {
-    padding: 2rem;
+/**
+ * Abre um modal
+ * @param {string} modalId - ID do elemento modal
+ */
+export function openModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.classList.remove('hidden');
+        
+        // Se houver um elemento interno com transição
+        const innerModal = modal.querySelector('.bg-white, .modal-content');
+        if (innerModal) {
+            setTimeout(() => {
+                innerModal.classList.remove('scale-95', 'opacity-0');
+            }, 10);
+        }
+    }
 }
 
-.auth-form {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-}
-
-.auth-social-btn {
-    width: 100%;
-    padding: 0.75rem;
-    border-radius: 0.5rem;
-    font-weight: 500;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.75rem;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.auth-google-btn {
-    background-color: white;
-    color: #4285f4;
-    border: 1px solid #e2e8f0;
-}
-
-.auth-google-btn:hover {
-    background-color: #f8fafc;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-}
-
-.auth-phone-btn {
-    background-color: white;
-    color: #10b981;
-    border: 1px solid #e2e8f0;
-}
-
-.auth-phone-btn:hover {
-    background-color: #f8fafc;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-}
-
-.auth-input {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-}
-
-.auth-input label {
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: #475569;
-}
-
-.auth-input input {
-    padding: 0.75rem;
-    border: 1px solid #e2e8f0;
-    border-radius: 0.5rem;
-    font-size: 1rem;
-    transition: all 0.2s;
-}
-
-.auth-input input:focus {
-    outline: none;
-    border-color: #6366f1;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-}
-
-.auth-submit-btn {
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-    color: white;
-    padding: 0.75rem;
-    border: none;
-    border-radius: 0.5rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.auth-submit-btn:hover {
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
-}
-
-.auth-submit-btn:active {
-    transform: translateY(1px);
-}
-
-.auth-divider {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin: 1.5rem 0;
-}
-
-.auth-divider-line {
-    flex: 1;
-    height: 1px;
-    background-color: #e2e8f0;
-}
-
-.auth-divider-text {
-    color: #94a3b8;
-    font-size: 0.875rem;
-}
-
-.auth-footer {
-    text-align: center;
-    margin-top: 1.5rem;
-    font-size: 0.875rem;
-    color: #64748b;
-}
-
-.auth-footer a {
-    color: #6366f1;
-    font-weight: 500;
-    text-decoration: none;
-}
-
-.auth-footer a:hover {
-    text-decoration: underline;
-}
-
-/* Estilos para o componente de verificação por telefone */
-.phone-verification {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-}
-
-.verification-code-container {
-    display: flex;
-    gap: 0.5rem;
-    justify-content: center;
-}
-
-.verification-code-input {
-    width: 3rem;
-    height: 3rem;
-    font-size: 1.25rem;
-    text-align: center;
-    border: 1px solid #e2e8f0;
-    border-radius: 0.5rem;
-}
-
-.verification-code-input:focus {
-    outline: none;
-    border-color: #6366f1;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-}
-
-.resend-code {
-    text-align: center;
-    margin-top: 1rem;
-    font-size: 0.875rem;
-    color: #64748b;
-}
-
-.resend-code button {
-    color: #6366f1;
-    font-weight: 500;
-    background: none;
-    border: none;
-    cursor: pointer;
-}
-
-.resend-code button:hover {
-    text-decoration: underline;
-}
-
-/* Estilos para páginas de código */
-pre {
-    margin: 0;
-    padding: 0;
-    overflow-x: auto;
-    font-family: 'Fira Code', monospace;
-    font-size: 14px;
-    line-height: 1.5;
-}
-
-.code-container {
-    max-height: 600px;
-    overflow-y: auto;
-    border-radius: 0.5rem;
-}
-
-.code-container::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
-
-.code-container::-webkit-scrollbar-track {
-    background: #2d333b;
-}
-
-.code-container::-webkit-scrollbar-thumb {
-    background-color: #444c56;
-    border-radius: 4px;
-}
-
-.code-container::-webkit-scrollbar-thumb:hover {
-    background-color: #555f6a;
-}
-
-.tab-button {
-    position: relative;
-    transition: all 0.2s;
-}
-
-.tab-button.active::after {
-    content: "";
-    position: absolute;
-    bottom: -2px;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: #6366f1;
-    border-radius: 2px;
-}
-
-@media (max-width: 640px) {
-    .code-container {
-        max-height: 400px;
+/**
+ * Fecha um modal
+ * @param {string} modalId - ID do elemento modal
+ */
+export function closeModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        // Se houver um elemento interno com transição
+        const innerModal = modal.querySelector('.bg-white, .modal-content');
+        if (innerModal) {
+            innerModal.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        } else {
+            modal.classList.add('hidden');
+        }
     }
 }
