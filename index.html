@@ -16,73 +16,106 @@
         // Configuração aprimorada para garantir que os ícones Lucide sejam registrados corretamente
         document.addEventListener('DOMContentLoaded', function() {
             if (window.lucide) {
-                // Inicialização única do Lucide para evitar loops infinitos
                 let isUpdatingIcons = false;
-                
+                let observerInstance; // Renomeado para clareza e para evitar conflito com 'observer' no escopo global se houver
+
                 function updateLucideIcons() {
-                    if (isUpdatingIcons) return;
+                    if (isUpdatingIcons) {
+                        // console.log('UpdateLucideIcons: Chamada ignorada, atualização já em progresso.');
+                        return;
+                    }
                     isUpdatingIcons = true;
-                    
+                    // console.log('UpdateLucideIcons: Iniciando processo de atualização de ícones.');
+
+                    if (observerInstance) {
+                        // console.log('UpdateLucideIcons: Desconectando observer.');
+                        observerInstance.disconnect();
+                    }
+
                     try {
                         lucide.createIcons();
-                        console.log('Ícones Lucide atualizados com sucesso');
+                        // console.log('UpdateLucideIcons: lucide.createIcons() executado com sucesso.');
                     } catch (error) {
-                        console.warn('Erro ao atualizar ícones:', error);
+                        console.warn('UpdateLucideIcons: Erro durante lucide.createIcons():', error);
                     } finally {
-                        isUpdatingIcons = false;
+                        // console.log('UpdateLucideIcons: Bloco finally - re-conectando observer e resetando flag.');
+                        if (observerInstance && document.body) {
+                            // Re-observar após um pequeno delay para garantir que a pilha de chamadas atual esteja limpa
+                            // e quaisquer manipulações DOM síncronas por createIcons() estejam completas.
+                            setTimeout(() => {
+                                observerInstance.observe(document.body, {
+                                    childList: true,
+                                    subtree: true,
+                                    attributes: true,
+                                    attributeFilter: ['data-lucide'] // Focar em mudanças no atributo data-lucide
+                                });
+                                // console.log('UpdateLucideIcons: Observer reconectado.');
+                                isUpdatingIcons = false; 
+                                // console.log('UpdateLucideIcons: Flag isUpdatingIcons resetada para false.');
+                            }, 0);
+                        } else {
+                           isUpdatingIcons = false; // Se não há observer ou body, apenas reseta o flag
+                           // console.log('UpdateLucideIcons: Observer não encontrado ou body ausente. Flag isUpdatingIcons resetada.');
+                        }
                     }
                 }
                 
-                // Inicialização inicial
-                updateLucideIcons();
+                // Primeira chamada de atualização de ícones quando o DOM está pronto.
+                // console.log("DOMContentLoaded: Chamada inicial para updateLucideIcons.");
+                updateLucideIcons(); 
                 
-                // Garantir que os ícones sejam criados após o carregamento completo
+                // Chamada adicional após o carregamento completo da página (incluindo imagens, etc.)
+                // para capturar quaisquer ícones adicionados tardiamente.
                 window.addEventListener('load', function() {
-                    setTimeout(updateLucideIcons, 300);
+                    // console.log("Window Load: Chamada final e atrasada para updateLucideIcons.");
+                    setTimeout(updateLucideIcons, 350); // Aumentado um pouco o delay para segurança
                 });
                 
-                // Observador otimizado com debounce
-                let timeout;
-                const observer = new MutationObserver(function(mutations) {
-                    clearTimeout(timeout);
-                    timeout = setTimeout(() => {
-                        let hasNewNodes = false;
-                        
-                        // Verificar mutações para novos nós com data-lucide
+                let debounceTimeoutId;
+                observerInstance = new MutationObserver(function(mutations) {
+                    clearTimeout(debounceTimeoutId);
+                    debounceTimeoutId = setTimeout(() => {
+                        // console.log("MutationObserver: Verificação debounced iniciada.");
+                        if (isUpdatingIcons) {
+                            // console.log("MutationObserver: Atualização de ícones já em progresso, chamada debounced ignorada.");
+                            return;
+                        }
+
+                        let needsIconUpdate = false;
                         for (const mutation of mutations) {
-                            if (mutation.addedNodes && mutation.addedNodes.length) {
+                            if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
                                 for (const node of mutation.addedNodes) {
-                                    if (node.nodeType === 1) {  // É um elemento
-                                        if (node.hasAttribute && node.hasAttribute('data-lucide')) {
-                                            hasNewNodes = true;
-                                            break;
-                                        }
-                                        
-                                        // Verifica filhos
-                                        if (node.querySelector && node.querySelector('[data-lucide]')) {
-                                            hasNewNodes = true;
+                                    if (node.nodeType === 1) { // Apenas nós de Elemento
+                                        // Verifica o próprio nó ou seus descendentes por data-lucide não processado
+                                        if ((node.hasAttribute('data-lucide') && !node.querySelector('svg')) || 
+                                            (node.querySelectorAll && node.querySelectorAll('[data-lucide]:not(:has(svg))').length > 0)) {
+                                            needsIconUpdate = true;
                                             break;
                                         }
                                     }
                                 }
-                                if (hasNewNodes) break;
+                            } else if (mutation.type === 'attributes' && mutation.attributeName === 'data-lucide') {
+                                const targetNode = mutation.target;
+                                if (targetNode.nodeType === 1 && targetNode.hasAttribute('data-lucide') && !targetNode.querySelector('svg')) {
+                                    needsIconUpdate = true;
+                                }
                             }
+                            if (needsIconUpdate) break;
                         }
-                        
-                        if (hasNewNodes) {
-                            console.log('Novos nós com data-lucide detectados, atualizando ícones');
+
+                        if (needsIconUpdate) {
+                            // console.log("MutationObserver: Detectados novos placeholders de ícones Lucide não processados. Chamando updateLucideIcons.");
                             updateLucideIcons();
+                        } else {
+                            // console.log("MutationObserver: Nenhum novo placeholder de ícone Lucide não processado detectado.");
                         }
-                    }, 100);
+                    }, 150); // Tempo de debounce de 150ms
                 });
                 
-                observer.observe(document.body, {
-                    childList: true,
-                    subtree: true
-                });
-                
-                // Expõe uma função global para atualizar ícones
-                window.updateLucideIcons = updateLucideIcons;
+                // A conexão inicial do observer agora é feita dentro do bloco finally de updateLucideIcons
+                // após a primeira chamada, garantindo que o document.body esteja disponível.
+
+                window.updateLucideIcons = updateLucideIcons; // Expor globalmente
             }
         });
     </script>
@@ -156,7 +189,10 @@
                     <i class="fa-solid fa-circle-question h-5 w-5"></i>
                     <span class="text-sm font-medium hidden sm:inline">Ajuda</span>
                 </button>
-           
+                <a href="/pages/code-view.html" id="view-code-secure-link" target="_blank" class="bg-gradient-to-r from-green-600 to-teal-600 text-white px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg hover:from-green-700 hover:to-teal-700 transition-all shadow-md flex items-center gap-2 text-sm sm:text-base">
+                    <i class="fa-solid fa-code h-4 w-4 sm:h-5 sm:w-5"></i>
+                    <span class="font-medium">Ver Código</span>
+                </a>
                 <a href="/pages/user-view.html" target="_blank" class="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all shadow-md flex items-center gap-2 text-sm sm:text-base">
                     <i class="fa-solid fa-eye h-4 w-4 sm:h-5 sm:w-5"></i>
                     <span class="font-medium">Ver Página</span>
