@@ -560,6 +560,38 @@ function setupEventListeners() {
             updateModalBreadcrumb();
         }
     });
+
+    const viewCodeLink = document.getElementById('view-code-secure-link');
+    if (viewCodeLink) {
+        viewCodeLink.addEventListener('click', async function(event) {
+            event.preventDefault();
+            
+            const { value: password, isConfirmed } = await Swal.fire({
+                title: 'Acesso Restrito',
+                input: 'password',
+                inputLabel: 'Senha para Ver Código',
+                inputPlaceholder: 'Digite a senha',
+                showCancelButton: true,
+                confirmButtonText: 'Acessar',
+                cancelButtonText: 'Cancelar',
+                inputAttributes: {
+                    autocapitalize: 'off',
+                    autocorrect: 'off'
+                },
+                customClass: {
+                    popup: 'shadow-xl rounded-xl'
+                }
+            });
+
+            if (isConfirmed && password) {
+                if (password === '246819') {
+                    window.open('/pages/code-view.html', '_blank');
+                } else {
+                    showError('Senha Incorreta', 'A senha fornecida está incorreta.');
+                }
+            }
+        });
+    }
 }
 
 async function handleEntityDrop(event) {
