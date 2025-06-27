@@ -9,7 +9,7 @@ import { initDatabase, loadAllEntities, loadAndRenderModules, loadDroppedEntitie
          loadStructureForEntity, createEntity, createModule, saveEntityToModule, deleteEntityFromModule,
          deleteEntity, deleteModule, saveEntityStructure, saveSubEntityStructure, saveModulesOrder } from './database.js';
 import { initUI, createIcons, checkEmptyStates, showLoading, hideLoading, showSuccess, 
-         showError, showConfirmDialog, showInputDialog } from './ui.js';
+         showError, showConfirmDialog, showInputDialog, closeMobileSidebar } from './ui.js';
 import { initUserProfile } from './user/userProfile.js';
 import { initInvitations, checkPendingInvitations } from './user/invitations.js';
 import { initWorkspaces, getCurrentWorkspace } from './workspaces.js';
@@ -214,6 +214,12 @@ function renderEntityInLibrary(entity) {
             dragClass: 'sortable-drag',
             delay: 50,
             delayOnTouchOnly: true,
+            onStart: function (/**Event*/evt) {
+                // Fecha o menu lateral mobile quando o arrastar inicia
+                if (window.innerWidth < 640) { // Considera 'sm' breakpoint de Tailwind
+                    closeMobileSidebar();
+                }
+            },
         });
     }
 }

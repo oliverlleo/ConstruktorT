@@ -41,6 +41,18 @@ export function createIcons() {
 }
 
 /**
+ * Fecha o menu lateral mobile, se estiver aberto.
+ */
+export function closeMobileSidebar() {
+    const desktopSidebar = document.getElementById('desktop-sidebar');
+    if (desktopSidebar && mobileSidebarOpen) { // Apenas fecha se estiver aberto
+        desktopSidebar.classList.add('-translate-x-full');
+        desktopSidebar.classList.remove('translate-x-0');
+        mobileSidebarOpen = false;
+    }
+}
+
+/**
  * Configura interações específicas para dispositivos móveis
  */
 export function setupMobileInteractions() {
@@ -51,23 +63,28 @@ export function setupMobileInteractions() {
     
     if (mobileMenuToggle && desktopSidebar) {
         mobileMenuToggle.addEventListener('click', () => {
-            desktopSidebar.classList.add('open');
-            mobileSidebarOpen = true;
+            desktopSidebar.classList.toggle('-translate-x-full');
+            // Se -translate-x-full foi removido, o menu está abrindo, então garanta translate-x-0
+            if (!desktopSidebar.classList.contains('-translate-x-full')) {
+                desktopSidebar.classList.add('translate-x-0');
+            } else {
+            // Se -translate-x-full foi adicionado, o menu está fechando, remova translate-x-0
+                desktopSidebar.classList.remove('translate-x-0');
+            }
+            mobileSidebarOpen = !mobileSidebarOpen;
         });
     }
     
     if (closeMobileMenu && desktopSidebar) {
-        closeMobileMenu.addEventListener('click', () => {
-            desktopSidebar.classList.remove('open');
-            mobileSidebarOpen = false;
-        });
+        closeMobileMenu.addEventListener('click', closeMobileSidebar);
     }
     
     // Fechar menu ao clicar fora (overlay)
     document.addEventListener('click', (e) => {
-        if (mobileSidebarOpen && desktopSidebar && !desktopSidebar.contains(e.target) && e.target !== mobileMenuToggle) {
-            desktopSidebar.classList.remove('open');
-            mobileSidebarOpen = false;
+        // mobileMenuToggle precisa ser acessado aqui também para a verificação
+        const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
+        if (mobileSidebarOpen && desktopSidebar && !desktopSidebar.contains(e.target) && e.target !== mobileMenuToggle && !mobileMenuToggle.contains(e.target)) {
+            closeMobileSidebar();
         }
     });
     

@@ -343,10 +343,6 @@ button:active {
     transition: transform 0.3s ease-in-out;
 }
 
-#desktop-sidebar.open {
-    transform: translateX(0);
-}
-
 /* Modal sidebar toggle */
 #modal-sidebar-container {
     transition: height 0.3s ease-in-out;
