@@ -7,229 +7,177 @@ import { getUsuarioAtual, getUsuarioId, getUsuarioNome, getUsuarioEmail, getUsua
 import { showSuccess, showError, showLoading, hideLoading } from '../ui.js';
 
 // Variáveis do módulo
-// let db; // db will be passed as a parameter
+let db;
 let storage;
 let auth;
 let userMenuActive = false;
 
 /**
- * Inicializa o módulo de perfil do usuário.
- * Agora espera receber 'db'.
- * @param {string} userId - O ID do usuário logado.
- * @param {Object} dbInstance - A instância do Firebase Realtime Database.
+ * Inicializa o módulo de perfil do usuário
+ * @param {Object} database - Referência ao banco de dados Firebase
  */
-export async function initUserProfile(userId, dbInstance) { 
-    console.log("Módulo de perfil do usuário recebendo 'db'...");
-    // db = dbInstance; // Set the module-level db if other functions not receiving it directly still rely on it.
-                       // For now, we'll pass db explicitly where needed.
-    auth = firebase.auth(); // Assuming global firebase object
-    storage = firebase.storage(); // Assuming global firebase object
-
-    // Setup event listeners and non-data-dependent parts of the modal first
-    setupProfileModalListeners(); // Renamed to avoid confusion, sets up modal open/close/save
-    setupUserMenuListeners();   // Sets up menu open/close, logout, edit profile button actions
-
-    try {
-        // Load data and then populate UI that depends on this data
-        const userData = await loadUserProfileData(userId, dbInstance);
-        if (userData) {
-            populateUserMenu(userData); // New function to populate menu with data
-            populateProfileModal(userData); // New function to populate modal fields with data
-        } else {
-            // Handle case where user data might not be found, e.g., set default display
-            console.warn(`User data not found for ${userId}. UI will use defaults.`);
-            populateUserMenu({ displayName: getUsuarioNome() || 'Usuário', photoURL: getUsuarioFoto() });
-            populateProfileModal({ displayName: getUsuarioNome() || 'Usuário', photoURL: getUsuarioFoto(), email: getUsuarioEmail() });
-        }
-    } catch (error) {
-        console.error("Erro ao carregar e popular dados do perfil do usuário:", error);
-        // Fallback to default display in case of error
-        populateUserMenu({ displayName: getUsuarioNome() || 'Usuário', photoURL: getUsuarioFoto() });
-        populateProfileModal({ displayName: getUsuarioNome() || 'Usuário', photoURL: getUsuarioFoto(), email: getUsuarioEmail() });
-    }
+export function initUserProfile(database) {
+    console.log('Inicializando módulo de perfil do usuário...');
+    db = database;
+    auth = firebase.auth();
+    storage = firebase.storage();
+    
+    setupUserMenu();
+    setupProfileModal();
+    loadUserProfileData();
 }
 
 /**
- * Configura os listeners do menu do usuário (ações como abrir/fechar, logout)
+ * Configura o menu do usuário
  */
-function setupUserMenuListeners() {
+function setupUserMenu() {
     const userMenuButton = document.getElementById('user-menu-button');
     const userMenuDropdown = document.getElementById('user-menu-dropdown');
+    
+    // Mostra/Esconde o menu ao clicar no botão
+    userMenuButton.addEventListener('click', () => {
+        userMenuDropdown.classList.toggle('hidden');
+        userMenuActive = !userMenuActive;
+        
+        // Atualiza o ícone de chevron
+        const chevronIcon = userMenuButton.querySelector('[data-lucide="chevron-down"]');
+        if (chevronIcon) {
+            chevronIcon.setAttribute('data-lucide', userMenuActive ? 'chevron-up' : 'chevron-down');
+            const iconsToUpdate = document.querySelectorAll('[data-lucide]');
+            if (window.lucide && iconsToUpdate) {
+                lucide.createIcons({
+                    icons: iconsToUpdate
+                });
+            }
+        }
+    });
+    
+    // Fecha o menu ao clicar fora dele
+    document.addEventListener('click', (event) => {
+        if (!userMenuButton.contains(event.target) && !userMenuDropdown.contains(event.target)) {
+            if (!userMenuDropdown.classList.contains('hidden')) {
+                userMenuDropdown.classList.add('hidden');
+                userMenuActive = false;
+                
+                // Atualiza o ícone de chevron
+                const chevronIcon = userMenuButton.querySelector('[data-lucide]');
+                if (chevronIcon) {
+                    chevronIcon.setAttribute('data-lucide', 'chevron-down');
+                    const iconsToUpdate = document.querySelectorAll('[data-lucide]');
+                    if (window.lucide && iconsToUpdate) {
+                        lucide.createIcons({
+                            icons: iconsToUpdate
+                        });
+                    }
+                }
+            }
+        }
+    });
+    
+    // Configura o botão de editar perfil
+    document.getElementById('edit-profile-button').addEventListener('click', () => {
+        userMenuDropdown.classList.add('hidden');
+        userMenuActive = false;
+        openProfileModal();
+    });
+    
+    // Configura o botão de logout
+    document.getElementById('logout-button').addEventListener('click', async () => {
+        userMenuDropdown.classList.add('hidden');
+        const result = await logout();
+        if (result.success) {
+            // O redirecionamento será tratado pelo módulo de autenticação
+        } else {
+            showError('Erro ao sair', result.error);
+        }
+    });
+}
+
+/**
+ * Configura o modal de perfil
+ */
+function setupProfileModal() {
     const profileModal = document.getElementById('profile-modal');
-    const closeProfileModalButton = document.getElementById('close-profile-modal');
+    const closeProfileModal = document.getElementById('close-profile-modal');
     const cancelProfileButton = document.getElementById('cancel-profile-button');
     const saveProfileButton = document.getElementById('save-profile-button');
     const changeAvatarButton = document.getElementById('change-avatar-button');
     const avatarUploadInput = document.getElementById('avatar-upload-input');
-
-    if (userMenuButton && userMenuDropdown) {
-        userMenuButton.addEventListener('click', () => {
-            userMenuDropdown.classList.toggle('hidden');
-            userMenuActive = !userMenuDropdown.classList.contains('hidden');
-            const chevronIcon = userMenuButton.querySelector('i[data-lucide^="chevron-"]');
-            if (chevronIcon) {
-                chevronIcon.setAttribute('data-lucide', userMenuActive ? 'chevron-up' : 'chevron-down');
-                if (window.lucide) window.lucide.createIcons();
-            }
-        });
-
-        document.addEventListener('click', (event) => {
-            if (!userMenuButton.contains(event.target) && !userMenuDropdown.contains(event.target)) {
-                if (!userMenuDropdown.classList.contains('hidden')) {
-                    userMenuDropdown.classList.add('hidden');
-                    userMenuActive = false;
-                    const chevronIcon = userMenuButton.querySelector('i[data-lucide^="chevron-"]');
-                    if (chevronIcon) {
-                        chevronIcon.setAttribute('data-lucide', 'chevron-down');
-                        if (window.lucide) window.lucide.createIcons();
-                    }
-                }
-            }
-        });
-    }
-
-    const editProfileButton = document.getElementById('edit-profile-button');
-    if (editProfileButton) {
-        editProfileButton.addEventListener('click', () => {
-            if(userMenuDropdown) userMenuDropdown.classList.add('hidden');
-            userMenuActive = false;
-            openProfileModal(); // openProfileModal will be responsible for populating with current data if needed
-        });
-    }
-
-    const logoutButton = document.getElementById('logout-button');
-    if (logoutButton) {
-        logoutButton.addEventListener('click', async () => {
-            if(userMenuDropdown) userMenuDropdown.classList.add('hidden');
-            const result = await logout(); // Assuming logout is globally available or imported
-            if (!result.success) {
-                showError('Erro ao sair', result.error);
-            }
-            // Redirection is handled by auth listener in main.js or by logout function itself
-        });
-    }
-
-    // Profile Modal Actions
-    const closeModalHandler = () => {
-        if (profileModal) {
-            profileModal.querySelector('.bg-white').classList.add('scale-95', 'opacity-0');
-            setTimeout(() => {
-                profileModal.classList.add('hidden');
-            }, 300);
-        }
+    
+    // Fechar o modal
+    const closeModal = () => {
+        profileModal.querySelector('.bg-white').classList.add('scale-95', 'opacity-0');
+        setTimeout(() => {
+            profileModal.classList.add('hidden');
+        }, 300);
     };
-
-    if (closeProfileModalButton) closeProfileModalButton.addEventListener('click', closeModalHandler);
-    if (cancelProfileButton) cancelProfileButton.addEventListener('click', closeModalHandler);
-
+    
+    // Abrir o modal
     window.openProfileModal = () => {
-        // Data population should happen here or be passed to setupProfileModal if called from main
-        // For now, just opening. Data population will be handled by setupProfileModal(userData)
-        if (profileModal) {
-            profileModal.classList.remove('hidden');
-            setTimeout(() => {
-                profileModal.querySelector('.bg-white').classList.remove('scale-95', 'opacity-0');
-            }, 10);
-        }
+        profileModal.classList.remove('hidden');
+        setTimeout(() => {
+            profileModal.querySelector('.bg-white').classList.remove('scale-95', 'opacity-0');
+        }, 10);
     };
     
-    if (changeAvatarButton && avatarUploadInput) {
-        changeAvatarButton.addEventListener('click', () => avatarUploadInput.click());
-        avatarUploadInput.addEventListener('change', handleAvatarUpload);
-    }
-
-    if (saveProfileButton) saveProfileButton.addEventListener('click', saveUserProfile);
-}
-
-
-/**
- * RESPONSABILIDADE: Apenas buscar dados e retornar. NENHUMA manipulação de DOM aqui.
- * @param {string} userId - O ID do usuário para buscar dados.
- * @returns {Promise<Object|null>} Dados do perfil do usuário ou null se não encontrado.
- */
-export async function loadUserProfileData(userId) {
-    if (!userId) {
-        console.warn("[loadUserProfileData] No userId provided.");
-        return null;
-    }
-    // Ensure db is initialized. This should be guaranteed by main.js before calling this.
-    if (!db) {
-        console.error("Firebase Realtime Database (db) is not initialized in userProfile.js context.");
-        db = firebase.database(); // Attempt re-init, but this is a fallback.
-        if(!db) throw new Error("DB not available in loadUserProfileData");
-    }
-
-    try {
-        const snapshot = await db.ref(`users/${userId}`).once('value');
-        if (snapshot.exists()) {
-            return snapshot.val();
-        } else {
-            console.log(`[loadUserProfileData] No data found for user ${userId}`);
-            return null; // Retorna null se não encontrar
-        }
-    } catch (error) {
-        console.error("Erro na função loadUserProfileData:", error);
-        throw error; // Lança o erro para o 'catch' do main.js pegar.
-    }
-}
-
-/**
- * RESPONSABILIDADE: Apenas configurar o menu. Ela confia que os elementos já existem.
- * @param {Object} userData - Os dados do usuário carregados.
- */
-export function setupUserMenu(userData) {
-    const userMenuButton = document.getElementById('user-menu-button');
-    const userMenuDropdown = document.getElementById('user-menu-dropdown');
-    const userDisplayNameElement = document.getElementById('user-display-name');
-    const userAvatarPreview = document.getElementById('user-avatar-preview');
-
-    if (!userMenuButton || !userMenuDropdown) {
-        console.error("Elementos do menu de usuário não foram encontrados no HTML!");
-        return;
-    }
+    closeProfileModal.addEventListener('click', closeModal);
+    cancelProfileButton.addEventListener('click', closeModal);
     
-    if (userData && userDisplayNameElement) {
-        userDisplayNameElement.textContent = userData.displayName || getUsuarioNome() || 'Usuário';
-    } else if (!userData && userDisplayNameElement){
-        // Fallback if userData is somehow null after login
-        userDisplayNameElement.textContent = getUsuarioNome() || 'Usuário';
-    }
-
-    if (userData && userAvatarPreview) {
-        userAvatarPreview.src = userData.photoURL || getUsuarioFoto() || `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.displayName || getUsuarioNome() || 'Usuário')}&background=random`;
-    } else if (!userData && userAvatarPreview) {
-        // Fallback
-        userAvatarPreview.src = getUsuarioFoto() || `https://ui-avatars.com/api/?name=${encodeURIComponent(getUsuarioNome() || 'Usuário')}&background=random`;
-    }
+    // Tratamento do upload de avatar
+    changeAvatarButton.addEventListener('click', () => {
+        avatarUploadInput.click();
+    });
+    
+    avatarUploadInput.addEventListener('change', handleAvatarUpload);
+    
+    // Salvar alterações no perfil
+    saveProfileButton.addEventListener('click', saveUserProfile);
 }
 
 /**
- * RESPONSABILIDADE: Apenas configurar o modal de perfil.
- * @param {Object} userData - Os dados do usuário carregados.
+ * Carrega os dados do perfil do usuário
  */
-export function setupProfileModal(userData) {
+async function loadUserProfileData() {
+    const currentUser = getUsuarioAtual();
+    if (!currentUser) return;
+    
+    const userId = getUsuarioId();
+    const userDisplayName = document.getElementById('user-display-name');
+    const userAvatarPreview = document.getElementById('user-avatar-preview');
     const modalAvatarPreview = document.getElementById('modal-avatar-preview');
     const nicknameInput = document.getElementById('nickname-input');
     const emailInput = document.getElementById('email-input');
-
-    if (!modalAvatarPreview || !nicknameInput || !emailInput) {
-        console.error("Elementos do modal de perfil não encontrados no HTML!");
-        return;
-    }
-
-    if (userData) {
-        nicknameInput.value = userData.displayName || getUsuarioNome() || '';
-        // Email from auth is likely more reliable, but can be part of userData too.
-        emailInput.value = getUsuarioEmail() || (userData.email || ''); 
-        modalAvatarPreview.src = userData.photoURL || getUsuarioFoto() || `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.displayName || getUsuarioNome() || 'Usuário')}&background=random`;
-    } else {
-        // Fallback if called without userData (e.g. before full load, or error)
-        nicknameInput.value = getUsuarioNome() || '';
+    
+    try {
+        // Tenta buscar os dados do usuário no Firebase
+        const snapshot = await db.ref(`users/${userId}`).once('value');
+        const userData = snapshot.val() || {};
+        
+        // Define os valores nos elementos da UI
+        const displayName = userData.displayName || getUsuarioNome() || 'Usuário';
+        userDisplayName.textContent = displayName;
+        nicknameInput.value = displayName;
         emailInput.value = getUsuarioEmail() || '';
-        modalAvatarPreview.src = getUsuarioFoto() || `https://ui-avatars.com/api/?name=${encodeURIComponent(getUsuarioNome() || 'Usuário')}&background=random`;
+        
+        // Define a imagem do avatar
+        const photoURL = userData.photoURL || getUsuarioFoto() || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`;
+        userAvatarPreview.src = photoURL;
+        modalAvatarPreview.src = photoURL;
+    } catch (error) {
+        console.error('Erro ao carregar dados do usuário:', error);
+        
+        // Valores padrão em caso de erro
+        const displayName = getUsuarioNome() || 'Usuário';
+        userDisplayName.textContent = displayName;
+        nicknameInput.value = displayName;
+        emailInput.value = getUsuarioEmail() || '';
+        
+        // Avatar padrão em caso de erro
+        const photoURL = getUsuarioFoto() || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`;
+        userAvatarPreview.src = photoURL;
+        modalAvatarPreview.src = photoURL;
     }
 }
-
 
 /**
  * Manipula o upload do avatar
