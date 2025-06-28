@@ -5,19 +5,25 @@
 
 import { getUsuarioAtual, getUsuarioId, getUsuarioNome, getUsuarioEmail } from '../autenticacao.js';
 import { showSuccess, showError, showLoading, hideLoading } from '../ui.js';
-import { getUserProfileData } from './userProfile.js';
+// import { getUserProfileData } from './userProfile.js'; // No longer needed
 
 // Variáveis do módulo
 let db;
 let activeTab = 'sent';
+let _currentUserData = null; // To store userData passed from main.js
+let _currentUserId = null; // To store userId passed from main.js
 
 /**
  * Inicializa o módulo de convites
  * @param {Object} database - Referência ao banco de dados Firebase
+ * @param {String} currentUserId - ID do usuário logado
+ * @param {Object} currentUserData - Dados do perfil do usuário logado
  */
-export function initInvitations(database) {
-    console.log('Inicializando módulo de convites...');
+export function initInvitations(database, currentUserId, currentUserData) {
+    console.log('Inicializando módulo de convites com UID:', currentUserId, 'e userData:', currentUserData);
     db = database;
+    _currentUserId = currentUserId;
+    _currentUserData = currentUserData;
     
     setupInviteModal();
     setupManageInvitesModal();
@@ -209,11 +215,17 @@ async function sendInvite() {
     showLoading('Enviando convite...');
 
     try {
-        const currentUserProfile = await getUserProfileData();
-        const senderName = currentUserProfile.displayName || getUsuarioNome() || "Usuário Anônimo";
+        let senderName = "Usuário Anônimo";
+        if (_currentUserData && _currentUserData.displayName) {
+            senderName = _currentUserData.displayName;
+        } else {
+            // Fallback if _currentUserData is not set or lacks displayName, try getUsuarioNome()
+            senderName = getUsuarioNome() || "Usuário Anônimo"; // getUsuarioNome() is from autenticacao.js
+        }
+
         const newInviteRef = db.ref('invitations').push();
         const inviteData = {
-            fromUserId: getUsuarioId(),
+            fromUserId: getUsuarioId(), // Ensures we use the ID from auth, which is reliable
             fromUserName: senderName,
             toEmail: email,
             toUserId: null, // Será preenchido quando o convite for aceite

@@ -13,171 +13,196 @@ let auth;
 let userMenuActive = false;
 
 /**
- * Inicializa o módulo de perfil do usuário
- * @param {Object} database - Referência ao banco de dados Firebase
+ * Inicializa o módulo de perfil do usuário (configura eventos que não dependem de dados carregados)
+ * @param {Object} database - Referência ao banco de dados Firebase (pode ser undefined se auth e storage são configurados globalmente)
  */
-export function initUserProfile(database) {
-    console.log('Inicializando módulo de perfil do usuário...');
-    db = database;
-    auth = firebase.auth();
-    storage = firebase.storage();
-    
-    setupUserMenu();
-    setupProfileModal();
-    loadUserProfileData();
-}
+export function initUserProfileModule(database) {
+    console.log('Inicializando listeners do módulo de perfil do usuário...');
+    // db, auth, storage will be initialized in main.js or through firebase global object
+    // If they are not available globally, they need to be passed and set here.
+    // For now, assuming firebase.auth() and firebase.storage() are available.
+    if (firebase && firebase.database) db = firebase.database(); // Or however you access it
+    if (firebase && firebase.auth) auth = firebase.auth();
+    if (firebase && firebase.storage) storage = firebase.storage();
 
-/**
- * Configura o menu do usuário
- */
-function setupUserMenu() {
+    // Setup parts of the UI that are event-driven and don't need initial userData
     const userMenuButton = document.getElementById('user-menu-button');
     const userMenuDropdown = document.getElementById('user-menu-dropdown');
-    
-    // Mostra/Esconde o menu ao clicar no botão
-    userMenuButton.addEventListener('click', () => {
-        userMenuDropdown.classList.toggle('hidden');
-        userMenuActive = !userMenuActive;
-        
-        // Atualiza o ícone de chevron
-        const chevronIcon = userMenuButton.querySelector('[data-lucide="chevron-down"]');
-        if (chevronIcon) {
-            chevronIcon.setAttribute('data-lucide', userMenuActive ? 'chevron-up' : 'chevron-down');
-            const iconsToUpdate = document.querySelectorAll('[data-lucide]');
-            if (window.lucide && iconsToUpdate) {
-                lucide.createIcons({
-                    icons: iconsToUpdate
-                });
-            }
-        }
-    });
-    
-    // Fecha o menu ao clicar fora dele
-    document.addEventListener('click', (event) => {
-        if (!userMenuButton.contains(event.target) && !userMenuDropdown.contains(event.target)) {
-            if (!userMenuDropdown.classList.contains('hidden')) {
-                userMenuDropdown.classList.add('hidden');
-                userMenuActive = false;
-                
-                // Atualiza o ícone de chevron
-                const chevronIcon = userMenuButton.querySelector('[data-lucide]');
-                if (chevronIcon) {
-                    chevronIcon.setAttribute('data-lucide', 'chevron-down');
-                    const iconsToUpdate = document.querySelectorAll('[data-lucide]');
-                    if (window.lucide && iconsToUpdate) {
-                        lucide.createIcons({
-                            icons: iconsToUpdate
-                        });
-                    }
-                }
-            }
-        }
-    });
-    
-    // Configura o botão de editar perfil
-    document.getElementById('edit-profile-button').addEventListener('click', () => {
-        userMenuDropdown.classList.add('hidden');
-        userMenuActive = false;
-        openProfileModal();
-    });
-    
-    // Configura o botão de logout
-    document.getElementById('logout-button').addEventListener('click', async () => {
-        userMenuDropdown.classList.add('hidden');
-        const result = await logout();
-        if (result.success) {
-            // O redirecionamento será tratado pelo módulo de autenticação
-        } else {
-            showError('Erro ao sair', result.error);
-        }
-    });
-}
-
-/**
- * Configura o modal de perfil
- */
-function setupProfileModal() {
     const profileModal = document.getElementById('profile-modal');
-    const closeProfileModal = document.getElementById('close-profile-modal');
+    const closeProfileModalButton = document.getElementById('close-profile-modal');
     const cancelProfileButton = document.getElementById('cancel-profile-button');
     const saveProfileButton = document.getElementById('save-profile-button');
     const changeAvatarButton = document.getElementById('change-avatar-button');
     const avatarUploadInput = document.getElementById('avatar-upload-input');
-    
-    // Fechar o modal
-    const closeModal = () => {
-        profileModal.querySelector('.bg-white').classList.add('scale-95', 'opacity-0');
-        setTimeout(() => {
-            profileModal.classList.add('hidden');
-        }, 300);
+
+    if (userMenuButton && userMenuDropdown) {
+        userMenuButton.addEventListener('click', () => {
+            userMenuDropdown.classList.toggle('hidden');
+            userMenuActive = !userMenuDropdown.classList.contains('hidden');
+            const chevronIcon = userMenuButton.querySelector('i[data-lucide^="chevron-"]');
+            if (chevronIcon) {
+                chevronIcon.setAttribute('data-lucide', userMenuActive ? 'chevron-up' : 'chevron-down');
+                if (window.lucide) window.lucide.createIcons();
+            }
+        });
+
+        document.addEventListener('click', (event) => {
+            if (!userMenuButton.contains(event.target) && !userMenuDropdown.contains(event.target)) {
+                if (!userMenuDropdown.classList.contains('hidden')) {
+                    userMenuDropdown.classList.add('hidden');
+                    userMenuActive = false;
+                    const chevronIcon = userMenuButton.querySelector('i[data-lucide^="chevron-"]');
+                    if (chevronIcon) {
+                        chevronIcon.setAttribute('data-lucide', 'chevron-down');
+                        if (window.lucide) window.lucide.createIcons();
+                    }
+                }
+            }
+        });
+    }
+
+    const editProfileButton = document.getElementById('edit-profile-button');
+    if (editProfileButton) {
+        editProfileButton.addEventListener('click', () => {
+            if(userMenuDropdown) userMenuDropdown.classList.add('hidden');
+            userMenuActive = false;
+            openProfileModal(); // openProfileModal will be responsible for populating with current data if needed
+        });
+    }
+
+    const logoutButton = document.getElementById('logout-button');
+    if (logoutButton) {
+        logoutButton.addEventListener('click', async () => {
+            if(userMenuDropdown) userMenuDropdown.classList.add('hidden');
+            const result = await logout(); // Assuming logout is globally available or imported
+            if (!result.success) {
+                showError('Erro ao sair', result.error);
+            }
+            // Redirection is handled by auth listener in main.js or by logout function itself
+        });
+    }
+
+    // Profile Modal Actions
+    const closeModalHandler = () => {
+        if (profileModal) {
+            profileModal.querySelector('.bg-white').classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                profileModal.classList.add('hidden');
+            }, 300);
+        }
     };
-    
-    // Abrir o modal
+
+    if (closeProfileModalButton) closeProfileModalButton.addEventListener('click', closeModalHandler);
+    if (cancelProfileButton) cancelProfileButton.addEventListener('click', closeModalHandler);
+
     window.openProfileModal = () => {
-        profileModal.classList.remove('hidden');
-        setTimeout(() => {
-            profileModal.querySelector('.bg-white').classList.remove('scale-95', 'opacity-0');
-        }, 10);
+        // Data population should happen here or be passed to setupProfileModal if called from main
+        // For now, just opening. Data population will be handled by setupProfileModal(userData)
+        if (profileModal) {
+            profileModal.classList.remove('hidden');
+            setTimeout(() => {
+                profileModal.querySelector('.bg-white').classList.remove('scale-95', 'opacity-0');
+            }, 10);
+        }
     };
     
-    closeProfileModal.addEventListener('click', closeModal);
-    cancelProfileButton.addEventListener('click', closeModal);
-    
-    // Tratamento do upload de avatar
-    changeAvatarButton.addEventListener('click', () => {
-        avatarUploadInput.click();
-    });
-    
-    avatarUploadInput.addEventListener('change', handleAvatarUpload);
-    
-    // Salvar alterações no perfil
-    saveProfileButton.addEventListener('click', saveUserProfile);
+    if (changeAvatarButton && avatarUploadInput) {
+        changeAvatarButton.addEventListener('click', () => avatarUploadInput.click());
+        avatarUploadInput.addEventListener('change', handleAvatarUpload);
+    }
+
+    if (saveProfileButton) saveProfileButton.addEventListener('click', saveUserProfile);
+}
+
+
+/**
+ * RESPONSABILIDADE: Apenas buscar dados e retornar. NENHUMA manipulação de DOM aqui.
+ * @param {string} userId - O ID do usuário para buscar dados.
+ * @returns {Promise<Object|null>} Dados do perfil do usuário ou null se não encontrado.
+ */
+export async function loadUserProfileData(userId) {
+    if (!userId) {
+        console.warn("[loadUserProfileData] No userId provided.");
+        return null;
+    }
+    // Ensure db is initialized. This should be guaranteed by main.js before calling this.
+    if (!db) {
+        console.error("Firebase Realtime Database (db) is not initialized in userProfile.js context.");
+        db = firebase.database(); // Attempt re-init, but this is a fallback.
+        if(!db) throw new Error("DB not available in loadUserProfileData");
+    }
+
+    try {
+        const snapshot = await db.ref(`users/${userId}`).once('value');
+        if (snapshot.exists()) {
+            return snapshot.val();
+        } else {
+            console.log(`[loadUserProfileData] No data found for user ${userId}`);
+            return null; // Retorna null se não encontrar
+        }
+    } catch (error) {
+        console.error("Erro na função loadUserProfileData:", error);
+        throw error; // Lança o erro para o 'catch' do main.js pegar.
+    }
 }
 
 /**
- * Carrega os dados do perfil do usuário
+ * RESPONSABILIDADE: Apenas configurar o menu. Ela confia que os elementos já existem.
+ * @param {Object} userData - Os dados do usuário carregados.
  */
-async function loadUserProfileData() {
-    const currentUser = getUsuarioAtual();
-    if (!currentUser) return;
-    
-    const userId = getUsuarioId();
-    const userDisplayName = document.getElementById('user-display-name');
+export function setupUserMenu(userData) {
+    const userMenuButton = document.getElementById('user-menu-button');
+    const userMenuDropdown = document.getElementById('user-menu-dropdown');
+    const userDisplayNameElement = document.getElementById('user-display-name');
     const userAvatarPreview = document.getElementById('user-avatar-preview');
+
+    if (!userMenuButton || !userMenuDropdown) {
+        console.error("Elementos do menu de usuário não foram encontrados no HTML!");
+        return;
+    }
+    
+    if (userData && userDisplayNameElement) {
+        userDisplayNameElement.textContent = userData.displayName || getUsuarioNome() || 'Usuário';
+    } else if (!userData && userDisplayNameElement){
+        // Fallback if userData is somehow null after login
+        userDisplayNameElement.textContent = getUsuarioNome() || 'Usuário';
+    }
+
+    if (userData && userAvatarPreview) {
+        userAvatarPreview.src = userData.photoURL || getUsuarioFoto() || `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.displayName || getUsuarioNome() || 'Usuário')}&background=random`;
+    } else if (!userData && userAvatarPreview) {
+        // Fallback
+        userAvatarPreview.src = getUsuarioFoto() || `https://ui-avatars.com/api/?name=${encodeURIComponent(getUsuarioNome() || 'Usuário')}&background=random`;
+    }
+}
+
+/**
+ * RESPONSABILIDADE: Apenas configurar o modal de perfil.
+ * @param {Object} userData - Os dados do usuário carregados.
+ */
+export function setupProfileModal(userData) {
     const modalAvatarPreview = document.getElementById('modal-avatar-preview');
     const nicknameInput = document.getElementById('nickname-input');
     const emailInput = document.getElementById('email-input');
-    
-    try {
-        // Tenta buscar os dados do usuário no Firebase
-        const snapshot = await db.ref(`users/${userId}`).once('value');
-        const userData = snapshot.val() || {};
-        
-        // Define os valores nos elementos da UI
-        const displayName = userData.displayName || getUsuarioNome() || 'Usuário';
-        userDisplayName.textContent = displayName;
-        nicknameInput.value = displayName;
+
+    if (!modalAvatarPreview || !nicknameInput || !emailInput) {
+        console.error("Elementos do modal de perfil não encontrados no HTML!");
+        return;
+    }
+
+    if (userData) {
+        nicknameInput.value = userData.displayName || getUsuarioNome() || '';
+        // Email from auth is likely more reliable, but can be part of userData too.
+        emailInput.value = getUsuarioEmail() || (userData.email || '');
+        modalAvatarPreview.src = userData.photoURL || getUsuarioFoto() || `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.displayName || getUsuarioNome() || 'Usuário')}&background=random`;
+    } else {
+        // Fallback if called without userData (e.g. before full load, or error)
+        nicknameInput.value = getUsuarioNome() || '';
         emailInput.value = getUsuarioEmail() || '';
-        
-        // Define a imagem do avatar
-        const photoURL = userData.photoURL || getUsuarioFoto() || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`;
-        userAvatarPreview.src = photoURL;
-        modalAvatarPreview.src = photoURL;
-    } catch (error) {
-        console.error('Erro ao carregar dados do usuário:', error);
-        
-        // Valores padrão em caso de erro
-        const displayName = getUsuarioNome() || 'Usuário';
-        userDisplayName.textContent = displayName;
-        nicknameInput.value = displayName;
-        emailInput.value = getUsuarioEmail() || '';
-        
-        // Avatar padrão em caso de erro
-        const photoURL = getUsuarioFoto() || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`;
-        userAvatarPreview.src = photoURL;
-        modalAvatarPreview.src = photoURL;
+        modalAvatarPreview.src = getUsuarioFoto() || `https://ui-avatars.com/api/?name=${encodeURIComponent(getUsuarioNome() || 'Usuário')}&background=random`;
     }
 }
+
 
 /**
  * Manipula o upload do avatar
