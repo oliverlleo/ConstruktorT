@@ -97,9 +97,9 @@ function setupUserMenu() {
                 }
                 openProfileModal();
             });
-        } else {
-            console.error("Elemento 'edit-profile-button' não encontrado.");
         }
+        // Bloco else removido para simplificar e evitar SyntaxError.
+        // A ausência do botão apenas significa que o listener não será adicionado.
 
         // Configura o botão de logout
         const logoutButton = document.getElementById('logout-button');
@@ -120,13 +120,9 @@ function setupUserMenu() {
                     showError('Erro ao sair', result.error);
                 }
             });
-        } else {
-            console.error("Elemento 'logout-button' não encontrado.");
         }
-    // O bloco 'else' abaixo era o causador do SyntaxError e foi removido.
-    // As verificações de nulidade para userMenuButton e userMenuDropdown
-    // no início da função já tratam o caso de elementos não encontrados
-    // com retornos antecipados.
+        // Bloco else removido para simplificar e evitar SyntaxError.
+        // A ausência do botão apenas significa que o listener não será adicionado.
 }
 
 /**
