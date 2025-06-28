@@ -20,54 +20,7 @@ let modalNavigationStack = [];
 
 // ==== PONTO DE ENTRADA DA APLICAÇÃO ====
 async function initApp() {
-    const criticalElements = {
-        app: document.getElementById('app'),
-        loadingOverlay: document.getElementById('loading-overlay'),
-        moduleTemplate: document.getElementById('module-template'),
-        entityCardTemplate: document.getElementById('entity-card-template'),
-        droppedEntityCardTemplate: document.getElementById('dropped-entity-card-template'),
-        toolboxFieldTemplate: document.getElementById('toolbox-field-template'),
-        formFieldTemplate: document.getElementById('form-field-template')
-    };
-
-    console.log("[main.js] Verificando elementos CRUCIAIS no início de initApp:", criticalElements);
-
-    // Verificação crítica para #app e #loading-overlay
-    if (!criticalElements.app || !criticalElements.loadingOverlay) {
-        console.error(
-            "ERRO CRÍTICO DE INICIALIZAÇÃO: Elemento #app ou #loading-overlay não encontrado no DOM. A aplicação não pode continuar de forma confiável.",
-            { appExists: !!criticalElements.app, loadingOverlayExists: !!criticalElements.loadingOverlay }
-        );
-        // Tenta exibir um erro no loading-overlay se ele existir, caso contrário, um alert.
-        if (criticalElements.loadingOverlay) {
-            criticalElements.loadingOverlay.innerHTML = '<div style="color:red; text-align:center; padding:20px; font-family: sans-serif; font-size: 16px;">Erro crítico: Falha ao carregar componentes base da aplicação. Verifique o console.</div>';
-            criticalElements.loadingOverlay.style.display = 'flex'; // Garante que seja visível
-        } else {
-            // Se o loading overlay também estiver ausente, o body pode estar vazio.
-            // Adicionar mensagem diretamente ao body ou usar alert.
-            try {
-                const errorDiv = document.createElement('div');
-                errorDiv.style.cssText = "color:red; text-align:center; padding:20px; font-family: sans-serif; font-size: 16px; position:fixed; top:0; left:0; width:100%; background:white; z-index:99999;";
-                errorDiv.textContent = "Erro crítico: Falha ao carregar componentes base da aplicação. Verifique o console.";
-                document.body.prepend(errorDiv); // Adiciona no topo do body
-            } catch(e) {
-                alert("Erro crítico: Falha grave ao carregar a aplicação. Verifique o console.");
-            }
-        }
-        return; // Interrompe a inicialização para evitar mais erros.
-    }
-    
-    // Verificação para o module-template, essencial para renderModule
-    if (!criticalElements.moduleTemplate) {
-        console.error(
-            "ERRO CRÍTICO DE INICIALIZAÇÃO: O <template id='module-template'> não foi encontrado no DOM. Funcionalidades principais como a renderização de módulos serão afetadas."
-        );
-        // Permite que a app tente continuar para que outros erros (ou a falta deles) possam ser observados,
-        // mas a funcionalidade de módulos estará quebrada. As proteções em renderModule vão pegar isso.
-        // Poderia optar por um `return;` aqui também se a ausência do module-template for considerada fatal para toda a app.
-    }
-
-    showLoading('Inicializando aplicação...'); // showLoading pode depender do loading-overlay
+    showLoading('Inicializando aplicação...');
     
     try {
         // Inicializa o Firebase
@@ -87,14 +40,10 @@ async function initApp() {
         db = firebase.database();
         
         // Inicializa a interface do usuário
-        console.log("[main.js] Antes de initUI, user-menu-button:", document.getElementById('user-menu-button')); 
         initUI();
-        console.log("[main.js] Depois de initUI, user-menu-button:", document.getElementById('user-menu-button'));
         
         // Inicializa o sistema de gerenciamento de usuário
-        console.log("[main.js] Antes de initUserProfile, user-menu-button:", document.getElementById('user-menu-button'));
         initUserProfile(db);
-        console.log("[main.js] Depois de initUserProfile, user-menu-button:", document.getElementById('user-menu-button'));
         
         // Inicializa o sistema de convites
         initInvitations(db);
@@ -222,51 +171,29 @@ function renderEntityInLibrary(entity) {
     
     const list = document.getElementById('entity-list');
     if (!list) {
-        console.error("[main.js] Elemento 'entity-list' não encontrado! Não é possível renderizar entidade na biblioteca.");
+        console.error("Elemento 'entity-list' não encontrado!");
         return;
     }
     
     const template = document.getElementById('entity-card-template');
     if (!template) {
-        console.error("CRÍTICO: O <template id='entity-card-template'> não foi encontrado no DOM. Não é possível renderizar entidade na biblioteca.");
-        return;
-    }
-    if (!template.content) {
-        console.error("CRÍTICO: O <template id='entity-card-template'> não possui 'content'. Verifique se é uma tag <template> válida.");
+        console.error("Template 'entity-card-template' não encontrado!");
         return;
     }
     
     const clone = template.content.cloneNode(true);
     const card = clone.querySelector('.entity-card');
-    if (!card) {
-        console.error("CRÍTICO: Elemento '.entity-card' não encontrado dentro do 'entity-card-template'.");
-        return;
-    }
     card.dataset.entityId = entity.id;
     card.dataset.entityName = entity.name;
     card.dataset.entityIcon = entity.icon; 
     
     const iconEl = clone.querySelector('.entity-icon');
-    if (iconEl) {
-        iconEl.setAttribute('data-lucide', entity.icon || 'box'); 
-    } else {
-        console.warn("[main.js] Elemento '.entity-icon' não encontrado no 'entity-card-template'.");
-    }
+    iconEl.setAttribute('data-lucide', entity.icon || 'box'); 
 
-    const entityNameEl = clone.querySelector('.entity-name');
-    if (entityNameEl) {
-        entityNameEl.textContent = entity.name;
-    } else {
-        console.warn("[main.js] Elemento '.entity-name' não encontrado no 'entity-card-template'.");
-    }
+    clone.querySelector('.entity-name').textContent = entity.name;
     
-    const deleteBtn = clone.querySelector('.delete-custom-entity-btn');
     if (entity.id.startsWith('-')) {
-        if (deleteBtn) {
-            deleteBtn.classList.remove('hidden');
-        } else {
-            console.warn("[main.js] Elemento '.delete-custom-entity-btn' não encontrado no 'entity-card-template'.");
-        }
+        clone.querySelector('.delete-custom-entity-btn').classList.remove('hidden');
     }
     
     list.appendChild(clone);
@@ -293,91 +220,32 @@ function renderEntityInLibrary(entity) {
 
 function renderModule(moduleData) {
     const container = document.getElementById('module-container');
-    if (!container) {
-        console.error("CRÍTICO: Elemento 'module-container' não encontrado. Não é possível renderizar módulos.");
-        return null;
-    }
-
     const template = document.getElementById('module-template');
-    if (!template) {
-        console.error("CRÍTICO: O <template id='module-template'> não foi encontrado no DOM. A renderização de módulos não pode continuar.");
-        // Considerar mostrar um erro ao usuário aqui também, se apropriado, ou deixar que a falha de loadWorkspaceData lide com isso.
-        // showError('Erro Crítico de Interface', 'Um componente essencial da página (module-template) não pôde ser carregado.');
-        return null; 
-    }
-
-    if (!template.content) {
-        console.error("CRÍTICO: O elemento <template id='module-template'> não possui uma propriedade 'content'. Verifique se é uma tag <template> válida.");
-        return null;
-    }
-
     const clone = template.content.cloneNode(true);
     const moduleEl = clone.querySelector('.module-quadro');
-
-    if (!moduleEl) {
-        console.error("CRÍTICO: Elemento '.module-quadro' não encontrado dentro do 'module-template'. Verifique a estrutura do template.");
-        return null;
-    }
     
     moduleEl.dataset.moduleId = moduleData.id;
-    const moduleTitleEl = clone.querySelector('.module-title');
-    if (moduleTitleEl) {
-        moduleTitleEl.textContent = moduleData.name;
-    } else {
-        console.warn("Elemento '.module-title' não encontrado dentro do 'module-template'. O título do módulo não será definido.");
-    }
+    clone.querySelector('.module-title').textContent = moduleData.name;
     
     container.appendChild(clone);
-    // É mais seguro referenciar moduleEl diretamente se ele foi encontrado,
-    // em vez de fazer querySelector novamente no container, especialmente se múltiplos módulos puderem ser adicionados rapidamente.
-    // No entanto, o código original faz querySelector, então vamos manter por enquanto, mas cientes do risco.
-    const newModuleEl = container.querySelector(`[data-module-id="${moduleData.id}"]`); 
+    const newModuleEl = container.querySelector(`[data-module-id="${moduleData.id}"]`);
+    setupDragAndDropForModule(newModuleEl);
+    createIcons();
     
-    if (newModuleEl) {
-        setupDragAndDropForModule(newModuleEl); // Assumindo que esta função é robusta ou será revisada
-        createIcons(); // Assumindo que esta função é robusta
-        
-        newModuleEl.classList.add('animate-pulse');
-        setTimeout(() => newModuleEl.classList.remove('animate-pulse'), 2000);
-    } else {
-        // Isso não deveria acontecer se moduleEl foi encontrado e adicionado corretamente.
-        console.error(`Falha ao encontrar o módulo recém-adicionado com ID ${moduleData.id} no container.`);
-    }
+    newModuleEl.classList.add('animate-pulse');
+    setTimeout(() => newModuleEl.classList.remove('animate-pulse'), 2000);
     
-    return newModuleEl; // Pode ser null se newModuleEl não for encontrado
+    return newModuleEl;
 }
 
 function renderDroppedEntity(moduleId, entityId, entityData, entityInfo) {
     const moduleEl = document.querySelector(`.module-quadro[data-module-id="${moduleId}"]`);
-    if (!moduleEl) {
-        console.warn(`[renderDroppedEntity] Módulo com ID '${moduleId}' não encontrado.`);
-        return;
-    }
+    if (!moduleEl) return;
     
     const dropzone = moduleEl.querySelector('.entities-dropzone');
-    if (!dropzone) {
-        console.warn(`[renderDroppedEntity] Dropzone '.entities-dropzone' não encontrado no módulo '${moduleId}'.`);
-        return;
-    }
-
     const template = document.getElementById('dropped-entity-card-template');
-    if (!template) {
-        console.error("CRÍTICO: O <template id='dropped-entity-card-template'> não foi encontrado no DOM.");
-        return;
-    }
-    if (!template.content) {
-        console.error("CRÍTICO: O <template id='dropped-entity-card-template'> não possui 'content'.");
-        return;
-    }
-
     const clone = template.content.cloneNode(true);
     const card = clone.querySelector('.dropped-entity-card');
-
-    if (!card) {
-        console.error("CRÍTICO: Elemento '.dropped-entity-card' não encontrado dentro do 'dropped-entity-card-template'.");
-        return;
-    }
-
     card.dataset.entityId = entityId;
     card.dataset.entityName = entityData.entityName;
     card.dataset.moduleId = moduleId;
@@ -402,42 +270,16 @@ function renderDroppedEntity(moduleId, entityId, entityData, entityInfo) {
 
 function populateFieldsToolbox() {
     const toolbox = document.getElementById('fields-toolbox');
-    if (!toolbox) {
-        console.warn("[main.js] Elemento 'fields-toolbox' não encontrado. Caixa de ferramentas de campos não será populada.");
-        return;
-    }
+    if (!toolbox) return;
     
-    toolbox.innerHTML = ''; // Limpa o conteúdo existente
-    const template = document.getElementById('toolbox-field-template');
-    if (!template) {
-        console.error("CRÍTICO: O <template id='toolbox-field-template'> não foi encontrado no DOM.");
-        return;
-    }
-    if (!template.content) {
-        console.error("CRÍTICO: O <template id='toolbox-field-template'> não possui 'content'.");
-        return;
-    }
-
+    toolbox.innerHTML = '';
     fieldTypes.forEach(field => {
-        const clone = template.content.cloneNode(true);
+        const clone = document.getElementById('toolbox-field-template').content.cloneNode(true);
         const item = clone.querySelector('.toolbox-item');
-        if (!item) {
-            console.warn("[main.js] Elemento '.toolbox-item' não encontrado no 'toolbox-field-template'. Pulando este tipo de campo.");
-            return; // continue para o próximo fieldType (dentro de forEach, 'return' funciona como 'continue')
-        }
         item.dataset.fieldType = field.type;
         const iconEl = clone.querySelector('.field-icon');
-        if (iconEl) {
-            iconEl.setAttribute('data-lucide', field.icon);
-        } else {
-            console.warn("[main.js] Elemento '.field-icon' não encontrado no 'toolbox-field-template'.");
-        }
-        const fieldNameEl = clone.querySelector('.field-name');
-        if (fieldNameEl) {
-            fieldNameEl.textContent = field.name;
-        } else {
-            console.warn("[main.js] Elemento '.field-name' não encontrado no 'toolbox-field-template'.");
-        }
+        iconEl.setAttribute('data-lucide', field.icon);
+        clone.querySelector('.field-name').textContent = field.name;
         toolbox.appendChild(clone);
     });
     createIcons();
@@ -458,99 +300,48 @@ function populateFieldsToolbox() {
 
 function renderFormField(fieldData) {
     const dropzone = document.getElementById('form-builder-dropzone');
-    if (!dropzone) {
-        console.error("[main.js] Elemento 'form-builder-dropzone' não encontrado. Não é possível renderizar campo de formulário.");
-        return null;
-    }
+    if (!dropzone) return;
     
     const template = document.getElementById('form-field-template');
-    if (!template) {
-        console.error("CRÍTICO: O <template id='form-field-template'> não foi encontrado no DOM.");
-        return null;
-    }
-    if (!template.content) {
-        console.error("CRÍTICO: O <template id='form-field-template'> não possui 'content'.");
-        return null;
-    }
-    
     const clone = template.content.cloneNode(true);
     const card = clone.querySelector('.form-field-card');
-    if (!card) {
-        console.error("CRÍTICO: Elemento '.form-field-card' não encontrado dentro do 'form-field-template'.");
-        return null;
-    }
     
     const domId = `field-card-${fieldData.id}`;
     card.id = domId;
     
     card.dataset.fieldId = fieldData.id;
     card.dataset.fieldData = JSON.stringify(fieldData);
-    const fieldInfo = fieldTypes.find(f => f.type === fieldData.type); // fieldInfo pode ser undefined
+    const fieldInfo = fieldTypes.find(f => f.type === fieldData.type);
     
     const iconEl = clone.querySelector('.field-icon');
-    if (iconEl && fieldInfo) {
-        iconEl.setAttribute('data-lucide', fieldInfo.icon);
-    } else if (!iconEl) {
-        console.warn("[main.js] Elemento '.field-icon' não encontrado no 'form-field-template'.");
-    } else if (!fieldInfo) { // Apenas loga se fieldInfo for o problema, e iconEl existir
-        console.warn(`[main.js] Tipo de campo '${fieldData.type}' desconhecido em renderFormField. Ícone não definido.`);
-    }
+    iconEl.setAttribute('data-lucide', fieldInfo.icon);
     
-    const fieldLabelEl = clone.querySelector('.field-label');
-    if (fieldLabelEl) {
-        fieldLabelEl.textContent = fieldData.label;
+    clone.querySelector('.field-label').textContent = fieldData.label;
+    
+    if (fieldData.type === 'sub-entity') {
+        clone.querySelector('.field-type').textContent = fieldData.subType === 'independent' ? 
+            `Sub-Entidade` : 
+            `Relação → ${fieldData.targetEntityName}`;
+        clone.querySelector('.edit-sub-entity-btn').classList.remove('hidden');
+        clone.querySelector('.edit-field-btn').style.display = 'none';
     } else {
-        console.warn("[main.js] Elemento '.field-label' não encontrado no 'form-field-template'.");
-    }
-    
-    const fieldTypeEl = clone.querySelector('.field-type');
-    const editSubEntityBtn = clone.querySelector('.edit-sub-entity-btn');
-    const editFieldBtn = clone.querySelector('.edit-field-btn');
-
-    if (fieldTypeEl) {
-        if (fieldData.type === 'sub-entity') {
-            fieldTypeEl.textContent = fieldData.subType === 'independent' ? 
-                `Sub-Entidade` : 
-                `Relação → ${fieldData.targetEntityName || 'Entidade Alvo Desconhecida'}`;
-            if (editSubEntityBtn) editSubEntityBtn.classList.remove('hidden');
-            else console.warn("[main.js] '.edit-sub-entity-btn' não encontrado em 'form-field-template'.");
-            
-            if (editFieldBtn) editFieldBtn.style.display = 'none';
-            // Não logar se editFieldBtn não for encontrado aqui, pois seu display:none é uma modificação
-        } else {
-            if(fieldInfo) {
-                fieldTypeEl.textContent = fieldInfo.name;
+        clone.querySelector('.field-type').textContent = fieldInfo.name;
+        
+        if (fieldData.config && Object.keys(fieldData.config).length > 0) {
+            const label = clone.querySelector('.field-label');
+            if (!fieldData.config.required) {
+                label.textContent += ' (Configurado)';
             } else {
-                fieldTypeEl.textContent = fieldData.type; // Fallback para o tipo bruto se fieldInfo não for encontrado
-                console.warn(`[main.js] Informações para tipo de campo '${fieldData.type}' não encontradas. Usando nome bruto.`);
-            }
-            
-            // A lógica para adicionar ' (Configurado)' ou ' *' ao fieldLabelEl precisa que fieldLabelEl exista.
-            if (fieldLabelEl && fieldData.config && Object.keys(fieldData.config).length > 0) {
-                if (!fieldData.config.required) {
-                    // Se fieldLabelEl já tem "(Configurado)" ou "*", evite adicionar de novo.
-                    // Esta lógica pode precisar de mais refinamento para evitar duplicatas se chamada múltiplas vezes.
-                    // Por agora, a proteção é que fieldLabelEl exista.
-                    if (!fieldLabelEl.textContent.includes('*') && !fieldLabelEl.textContent.includes('(Configurado)')) {
-                        fieldLabelEl.textContent += ' (Configurado)';
-                    }
-                } else {
-                     if (!fieldLabelEl.textContent.includes('*')) {
-                        fieldLabelEl.textContent += ' *';
-                     }
-                }
+                label.textContent += ' *';
             }
         }
-    } else {
-        console.warn("[main.js] Elemento '.field-type' não encontrado no 'form-field-template'.");
     }
     
     dropzone.appendChild(clone);
     
-    // O elemento recém-adicionado é o 'card', não necessariamente o último filho se houver concorrência.
-    // Usar 'card' diretamente é mais seguro.
-    card.classList.add('animate-pulse');
-    setTimeout(() => card.classList.remove('animate-pulse'), 2000);
+    const newField = dropzone.lastElementChild;
+    newField.classList.add('animate-pulse');
+    setTimeout(() => newField.classList.remove('animate-pulse'), 2000);
     
     createIcons();
     
@@ -563,7 +354,7 @@ function renderFormField(fieldData) {
         }
     }
     
-    return card; // Retorna o card criado, que é o 'newField'
+    return newField;
 }
 
 function updateModalBreadcrumb() {

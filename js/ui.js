@@ -51,23 +51,21 @@ export function setupMobileInteractions() {
     
     if (mobileMenuToggle && desktopSidebar) {
         mobileMenuToggle.addEventListener('click', () => {
-            desktopSidebar.classList.toggle('open'); // Alterado de add para toggle
-            mobileSidebarOpen = !mobileSidebarOpen; // Alterna o estado
+            desktopSidebar.classList.add('open');
+            mobileSidebarOpen = true;
         });
     }
     
     if (closeMobileMenu && desktopSidebar) {
         closeMobileMenu.addEventListener('click', () => {
-            desktopSidebar.classList.remove('open'); // Mantém remove aqui, pois é uma ação explícita de fechar
+            desktopSidebar.classList.remove('open');
             mobileSidebarOpen = false;
         });
     }
     
     // Fechar menu ao clicar fora (overlay)
     document.addEventListener('click', (e) => {
-        // A condição precisa ser ajustada se mobileMenuToggle agora também fecha
-        if (mobileSidebarOpen && desktopSidebar && !desktopSidebar.contains(e.target) && !mobileMenuToggle.contains(e.target)) { 
-            // Se o clique foi fora da sidebar E fora do botão de toggle (que agora também fecha), então fechar.
+        if (mobileSidebarOpen && desktopSidebar && !desktopSidebar.contains(e.target) && e.target !== mobileMenuToggle) {
             desktopSidebar.classList.remove('open');
             mobileSidebarOpen = false;
         }

@@ -32,85 +32,32 @@ function setupInviteModal() {
     const closeInviteModal = document.getElementById('close-invite-modal');
     const cancelInviteButton = document.getElementById('cancel-invite-button');
     const sendInviteButton = document.getElementById('send-invite-button');
-
-    if (!inviteModal && inviteUserButton) { // Log se o botão de abrir existe mas o modal não
-        console.warn("[invitations.js] Elemento 'invite-modal' não encontrado, mas 'invite-user-button' existe.");
-    }
-    if (!inviteModal && !inviteUserButton){ // Log se ambos faltam
-        console.warn("[invitations.js] Elementos 'invite-modal' e 'invite-user-button' não encontrados.");
-        return; // Não há o que configurar
-    }
-    if (inviteModal && !inviteUserButton){
-         console.warn("[invitations.js] Elemento 'invite-user-button' não encontrado para abrir o 'invite-modal'.");
-    }
-
-
-    if (inviteUserButton) {
-        inviteUserButton.addEventListener('click', () => {
-            const userMenuDropdown = document.getElementById('user-menu-dropdown');
-            if (userMenuDropdown) {
-                userMenuDropdown.classList.add('hidden');
-            } else {
-                console.warn("[invitations.js] Elemento 'user-menu-dropdown' não encontrado ao tentar abrir o modal de convite.");
-            }
-
-            if (inviteModal) {
-                inviteModal.classList.remove('hidden');
-                const modalContent = inviteModal.querySelector('.bg-white');
-                if (modalContent) {
-                    setTimeout(() => {
-                        modalContent.classList.remove('scale-95', 'opacity-0');
-                    }, 10);
-                } else {
-                    console.warn("[invitations.js] Conteúdo interno do 'invite-modal' (.bg-white) não encontrado.");
-                }
-                
-                const inviteEmailInput = document.getElementById('invite-email-input');
-                if (inviteEmailInput) {
-                    inviteEmailInput.value = '';
-                } else {
-                    console.warn("[invitations.js] Elemento 'invite-email-input' não encontrado.");
-                }
-            } else {
-                console.warn("[invitations.js] 'invite-user-button' clicado, mas 'invite-modal' não foi encontrado para ser aberto.");
-            }
-        });
-    }
     
+    // Abrir o modal
+    inviteUserButton.addEventListener('click', () => {
+        document.getElementById('user-menu-dropdown').classList.add('hidden');
+        inviteModal.classList.remove('hidden');
+        setTimeout(() => {
+            inviteModal.querySelector('.bg-white').classList.remove('scale-95', 'opacity-0');
+        }, 10);
+        
+        // Limpa o campo de email
+        document.getElementById('invite-email-input').value = '';
+    });
+    
+    // Fechar o modal
     const closeModal = () => {
-        if (inviteModal) {
-            const modalContent = inviteModal.querySelector('.bg-white');
-            if (modalContent) {
-                modalContent.classList.add('scale-95', 'opacity-0');
-            } else {
-                console.warn("[invitations.js] Conteúdo interno do 'invite-modal' (.bg-white) não encontrado ao tentar fechar.");
-            }
-            setTimeout(() => {
-                inviteModal.classList.add('hidden');
-            }, 300);
-        } else {
-            // Este log é redundante se o modal já foi checado no início da função, mas seguro.
-            // console.warn("[invitations.js] Elemento 'invite-modal' não encontrado na função closeModal.");
-        }
+        inviteModal.querySelector('.bg-white').classList.add('scale-95', 'opacity-0');
+        setTimeout(() => {
+            inviteModal.classList.add('hidden');
+        }, 300);
     };
     
-    if (closeInviteModal) {
-        closeInviteModal.addEventListener('click', closeModal);
-    } else if (inviteModal) { // Só logar se o modal existir, caso contrário o problema é maior
-        console.warn("[invitations.js] Elemento 'close-invite-modal' não encontrado.");
-    }
+    closeInviteModal.addEventListener('click', closeModal);
+    cancelInviteButton.addEventListener('click', closeModal);
     
-    if (cancelInviteButton) {
-        cancelInviteButton.addEventListener('click', closeModal);
-    } else if (inviteModal) {
-        console.warn("[invitations.js] Elemento 'cancel-invite-button' não encontrado.");
-    }
-    
-    if (sendInviteButton) {
-        sendInviteButton.addEventListener('click', sendInvite);
-    } else if (inviteModal) {
-        console.warn("[invitations.js] Elemento 'send-invite-button' não encontrado.");
-    }
+    // Enviar convite
+    sendInviteButton.addEventListener('click', sendInvite);
 }
 
 /**
@@ -123,163 +70,91 @@ function setupManageInvitesModal() {
     const tabInvitesSent = document.getElementById('tab-invites-sent');
     const tabInvitesReceived = document.getElementById('tab-invites-received');
     const tabInvitesAccess = document.getElementById('tab-invites-access');
-
-    if (!manageInvitesButton && !manageInvitesModal) {
-        console.warn("[invitations.js] Elementos 'manage-invites-button' e 'manage-invites-modal' não encontrados.");
-        return; 
-    }
-    if (manageInvitesButton && !manageInvitesModal) {
-        console.warn("[invitations.js] 'manage-invites-button' existe, mas 'manage-invites-modal' não encontrado.");
-        manageInvitesButton.addEventListener('click', () => { 
-             console.warn("[invitations.js] 'manage-invites-button' clicado, mas o modal correspondente não foi encontrado.");
-             showError("Erro de Interface", "O modal de gerenciamento de convites não pôde ser encontrado.");
-        });
-        return;
-    }
-    if (!manageInvitesButton && manageInvitesModal) {
-        console.warn("[invitations.js] 'manage-invites-modal' existe, mas 'manage-invites-button' para abri-lo não foi encontrado.");
-    }
-
-    if (manageInvitesButton && manageInvitesModal) {
-        manageInvitesButton.addEventListener('click', async () => {
-            const userMenuDropdown = document.getElementById('user-menu-dropdown');
-            if (userMenuDropdown) {
-                userMenuDropdown.classList.add('hidden');
-            } else {
-                console.warn("[invitations.js] Elemento 'user-menu-dropdown' não encontrado ao tentar abrir o modal de gerenciar convites.");
-            }
-            
-            manageInvitesModal.classList.remove('hidden');
-            const modalContent = manageInvitesModal.querySelector('.bg-white');
-            if (modalContent) {
-                setTimeout(() => {
-                    modalContent.classList.remove('scale-95', 'opacity-0');
-                }, 10);
-            } else {
-                 console.warn("[invitations.js] Conteúdo interno do 'manage-invites-modal' (.bg-white) não encontrado.");
-            }
-            
-            const pendingCount = await checkPendingInvitations();
-            if (pendingCount > 0 && activeTab !== 'received') {
-                activeTab = 'received';
-                updateInvitesTabUI(); 
-            }
-            
-            if (activeTab === 'access') {
-                loadSharedAccess();
-            } else {
-                loadInvites(activeTab);
-            }
-        });
-    }
     
-    if (closeManageInvitesModal && manageInvitesModal) {
-        closeManageInvitesModal.addEventListener('click', () => {
-            const modalContent = manageInvitesModal.querySelector('.bg-white');
-            if (modalContent) {
-                modalContent.classList.add('scale-95', 'opacity-0');
-            } else {
-                console.warn("[invitations.js] Conteúdo interno do 'manage-invites-modal' (.bg-white) não encontrado ao tentar fechar.");
-            }
-            setTimeout(() => {
-                manageInvitesModal.classList.add('hidden');
-            }, 300);
-        });
-    } else if (manageInvitesModal) { 
-        console.warn("[invitations.js] Elemento 'close-manage-invites-modal' não encontrado.");
-    }
-    
-    if (tabInvitesSent && manageInvitesModal) {
-        tabInvitesSent.addEventListener('click', () => {
-            if (activeTab === 'sent') return;
-            activeTab = 'sent';
-            updateInvitesTabUI();
-            loadInvites('sent');
-        });
-    } else if (manageInvitesModal) {
-        console.warn("[invitations.js] Elemento 'tab-invites-sent' não encontrado.");
-    }
-    
-    if (tabInvitesReceived && manageInvitesModal) {
-        tabInvitesReceived.addEventListener('click', () => {
-            if (activeTab === 'received') return;
+    // Abrir o modal
+    manageInvitesButton.addEventListener('click', async () => {
+        document.getElementById('user-menu-dropdown').classList.add('hidden');
+        manageInvitesModal.classList.remove('hidden');
+        setTimeout(() => {
+            manageInvitesModal.querySelector('.bg-white').classList.remove('scale-95', 'opacity-0');
+        }, 10);
+        
+        // Verifica se há convites pendentes
+        const pendingCount = await checkPendingInvitations();
+        
+        // Se houver convites pendentes e a aba ativa não for "recebidos", muda para essa aba
+        if (pendingCount > 0 && activeTab !== 'received') {
             activeTab = 'received';
             updateInvitesTabUI();
-            loadInvites('received');
-        });
-    } else if (manageInvitesModal) {
-        console.warn("[invitations.js] Elemento 'tab-invites-received' não encontrado.");
-    }
-    
-    if (tabInvitesAccess && manageInvitesModal) {
-        tabInvitesAccess.addEventListener('click', () => {
-            if (activeTab === 'access') return;
-            activeTab = 'access';
-            updateInvitesTabUI();
+        }
+        
+        // Carrega os convites ou acessos compartilhados
+        if (activeTab === 'access') {
             loadSharedAccess();
-        });
-    } else if (manageInvitesModal) {
-        console.warn("[invitations.js] Elemento 'tab-invites-access' não encontrado.");
-    }
+        } else {
+            loadInvites(activeTab);
+        }
+    });
+    
+    // Fechar o modal
+    closeManageInvitesModal.addEventListener('click', () => {
+        manageInvitesModal.querySelector('.bg-white').classList.add('scale-95', 'opacity-0');
+        setTimeout(() => {
+            manageInvitesModal.classList.add('hidden');
+        }, 300);
+    });
+    
+    // Alternar entre as abas
+    tabInvitesSent.addEventListener('click', () => {
+        if (activeTab === 'sent') return;
+        activeTab = 'sent';
+        updateInvitesTabUI();
+        loadInvites('sent');
+    });
+    
+    tabInvitesReceived.addEventListener('click', () => {
+        if (activeTab === 'received') return;
+        activeTab = 'received';
+        updateInvitesTabUI();
+        loadInvites('received');
+    });
+    
+    tabInvitesAccess.addEventListener('click', () => {
+        if (activeTab === 'access') return;
+        activeTab = 'access';
+        updateInvitesTabUI();
+        loadSharedAccess();
+    });
     
     // Delegação de eventos para os convites e acessos
-    if (manageInvitesModal) {
-        manageInvitesModal.addEventListener('click', async (event) => {
-            const target = event.target;
-            const card = target.closest('.invite-card, .shared-access-item');
-            
-            if (!card) return; // Se o clique não foi em um card ou item, sair.
+    manageInvitesModal.addEventListener('click', async (event) => {
+        const target = event.target;
+        const card = target.closest('.invite-card, .shared-access-item');
+        if (!card) return;
 
-            const inviteId = card.dataset.inviteId; // inviteId é comum para a maioria das ações
+        const inviteId = card.dataset.inviteId;
 
-            // Lógica para cada tipo de botão
-            if (target.closest('.cancel-invite-btn')) {
-                await manageInvite(inviteId, 'cancel');
-            }
-            
-            if (target.closest('.accept-invite-btn')) {
-                await manageInvite(inviteId, 'accept');
-            }
-            
-            if (target.closest('.decline-invite-btn')) {
-                await manageInvite(inviteId, 'decline');
-            }
-            
-            if (target.closest('.save-permission-btn')) {
-                const permissionSelect = card.querySelector('.permission-select');
-                if (permissionSelect) {
-                    const newRole = permissionSelect.value;
-                    await updateUserPermission(inviteId, newRole);
-                    const saveBtn = target.closest('.save-permission-btn');
-                    if (saveBtn) { // Verificar se o botão ainda existe/é o correto
-                        saveBtn.classList.add('hidden');
-                    }
-                } else {
-                    console.warn("[invitations.js] Elemento '.permission-select' não encontrado no card de acesso compartilhado ao salvar.");
-                }
-            }
+        if (target.closest('.cancel-invite-btn')) await manageInvite(inviteId, 'cancel');
+        if (target.closest('.accept-invite-btn')) await manageInvite(inviteId, 'accept');
+        if (target.closest('.decline-invite-btn')) await manageInvite(inviteId, 'decline');
+        
+        if (target.closest('.save-permission-btn')) {
+            const newRole = card.querySelector('.permission-select').value;
+            await updateUserPermission(inviteId, newRole);
+            target.closest('.save-permission-btn').classList.add('hidden');
+        }
 
-            if (target.closest('.remove-access-btn')) {
-                const email = card.dataset.email; 
-                if (email) { // Adicionar verificação para email, caso o dataset não exista por algum motivo
-                    const confirmRemove = await Swal.fire({
-                        title: 'Remover acesso?',
-                        text: `Tem a certeza que deseja remover o acesso de ${email}?`,
-                        icon: 'warning', 
-                        showCancelButton: true, 
-                        confirmButtonText: 'Sim, remover',
-                        cancelButtonText: 'Cancelar', 
-                        confirmButtonColor: '#d33'
-                    });
-                    if (confirmRemove.isConfirmed) {
-                        await manageInvite(inviteId, 'revoke');
-                    }
-                } else {
-                    console.warn("[invitations.js] Atributo 'data-email' não encontrado no card ao tentar remover acesso.");
-                }
-            }
-        });
-    }
+        if (target.closest('.remove-access-btn')) {
+            const email = card.dataset.email;
+            const confirmRemove = await Swal.fire({
+                title: 'Remover acesso?',
+                text: `Tem a certeza que deseja remover o acesso de ${email}?`,
+                icon: 'warning', showCancelButton: true, confirmButtonText: 'Sim, remover',
+                cancelButtonText: 'Cancelar', confirmButtonColor: '#d33'
+            });
+            if (confirmRemove.isConfirmed) await manageInvite(inviteId, 'revoke');
+        }
+    });
 }
 
 /**
@@ -297,32 +172,13 @@ function updateInvitesTabUI() {
         access: document.getElementById('access-management-container')
     };
     
-    let allElementsPresent = true;
     for (const key in tabs) {
-        if (!tabs[key]) {
-            console.warn(`[invitations.js] Elemento de aba '${key}' não encontrado em updateInvitesTabUI.`);
-            allElementsPresent = false;
-        }
-        if (!containers[key]) {
-            console.warn(`[invitations.js] Elemento de container '${key}' não encontrado em updateInvitesTabUI.`);
-            allElementsPresent = false;
-        }
-    }
-
-    if (!allElementsPresent) {
-        console.warn("[invitations.js] Elementos cruciais das abas faltando. UI não será totalmente atualizada.");
-        // Não retorna aqui, tenta atualizar o que puder.
-    }
-
-    for (const key in tabs) {
-        if (tabs[key] && containers[key]) { // Verifica novamente antes de usar
-            const isTabActive = key === activeTab;
-            tabs[key].classList.toggle('border-indigo-600', isTabActive);
-            tabs[key].classList.toggle('text-indigo-600', isTabActive);
-            tabs[key].classList.toggle('border-slate-200', !isTabActive);
-            tabs[key].classList.toggle('text-slate-500', !isTabActive);
-            containers[key].classList.toggle('hidden', !isTabActive);
-        }
+        const isTabActive = key === activeTab;
+        tabs[key].classList.toggle('border-indigo-600', isTabActive);
+        tabs[key].classList.toggle('text-indigo-600', isTabActive);
+        tabs[key].classList.toggle('border-slate-200', !isTabActive);
+        tabs[key].classList.toggle('text-slate-500', !isTabActive);
+        containers[key].classList.toggle('hidden', !isTabActive);
     }
     
     if (window.lucide) {
@@ -336,29 +192,17 @@ function updateInvitesTabUI() {
 async function sendInvite() {
     const emailInput = document.getElementById('invite-email-input');
     const permissionSelect = document.getElementById('permission-select');
-
-    if (!emailInput) {
-        console.warn("[invitations.js] Elemento 'invite-email-input' não encontrado em sendInvite.");
-        showError('Erro de Interface', 'Campo de e-mail não encontrado.');
-        return;
-    }
-    if (!permissionSelect) {
-        console.warn("[invitations.js] Elemento 'permission-select' não encontrado em sendInvite.");
-        showError('Erro de Interface', 'Campo de permissão não encontrado.');
-        return;
-    }
-
     const email = emailInput.value.trim().toLowerCase();
     const permission = permissionSelect.value;
 
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email === getUsuarioEmail()?.toLowerCase()) {
-        showError('Dados Inválidos', 'Por favor, insira um e-mail válido e diferente do seu.');
+        showError('Erro', 'Por favor, insira um e-mail válido e diferente do seu.');
         return;
     }
 
     const currentWorkspace = window.getCurrentWorkspace ? window.getCurrentWorkspace() : null;
     if (!currentWorkspace) {
-        showError('Nenhuma Área de Trabalho', 'Nenhuma área de trabalho selecionada para compartilhar.');
+        showError('Erro', 'Nenhuma área de trabalho selecionada para compartilhar.');
         return;
     }
 
@@ -366,13 +210,13 @@ async function sendInvite() {
 
     try {
         const currentUserProfile = await getUserProfileData();
-        const senderName = currentUserProfile?.displayName || getUsuarioNome() || "Usuário Anônimo"; // Adicionado null check
+        const senderName = currentUserProfile.displayName || getUsuarioNome() || "Usuário Anônimo";
         const newInviteRef = db.ref('invitations').push();
         const inviteData = {
             fromUserId: getUsuarioId(),
             fromUserName: senderName,
             toEmail: email,
-            toUserId: null, 
+            toUserId: null, // Será preenchido quando o convite for aceite
             resourceType: 'workspace',
             resourceId: currentWorkspace.id,
             resourceName: currentWorkspace.name,
@@ -382,12 +226,7 @@ async function sendInvite() {
         };
 
         await newInviteRef.set(inviteData);
-        const inviteModal = document.getElementById('invite-modal');
-        if (inviteModal) {
-            inviteModal.classList.add('hidden');
-        } else {
-            console.warn("[invitations.js] Elemento 'invite-modal' não encontrado para fechar após enviar convite.");
-        }
+        document.getElementById('invite-modal').classList.add('hidden');
         hideLoading();
         showSuccess('Convite enviado', `Um convite foi enviado para ${email}.`);
         if (activeTab === 'sent') {
@@ -537,11 +376,6 @@ function renderInvites(invites, type) {
     const emptyId = `no-${type}-invites`;
     const container = document.getElementById(containerId);
     const emptyContainer = document.getElementById(emptyId);
-
-    if (!container || !emptyContainer) {
-        console.warn(`[invitations.js] Container de convites ('${containerId}') ou mensagem de vazio ('${emptyId}') não encontrado.`);
-        return;
-    }
     
     container.innerHTML = '';
     container.classList.toggle('hidden', invites.length === 0);
@@ -550,59 +384,29 @@ function renderInvites(invites, type) {
     if(invites.length > 0) {
         const templateId = type === 'sent' ? 'sent-invite-template' : 'received-invite-template';
         const template = document.getElementById(templateId);
-
-        if (!template) {
-            console.warn(`[invitations.js] Template de convite '${templateId}' não encontrado.`);
-            return;
-        }
-
         invites.forEach(invite => {
             const clone = document.importNode(template.content, true);
             const card = clone.querySelector('.invite-card');
-            if (!card) {
-                console.warn(`[invitations.js] Elemento '.invite-card' não encontrado no template '${templateId}'.`);
-                return; // Pula este convite se o card não puder ser encontrado
-            }
             card.dataset.inviteId = invite.id;
 
             if (type === 'sent') {
-                const emailEl = card.querySelector('.invite-email');
-                if (emailEl) emailEl.textContent = invite.toEmail;
-                else console.warn("[invitations.js] Elemento '.invite-email' não encontrado no template de convite enviado.");
-
+                card.querySelector('.invite-email').textContent = invite.toEmail;
                 const statusBadge = card.querySelector('.invite-status-badge');
-                if (statusBadge) {
-                    const { badgeClass, statusText } = getStatusBadgeInfo(invite.status);
-                    statusBadge.className = `inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${badgeClass}`;
-                    statusBadge.textContent = statusText;
-                } else console.warn("[invitations.js] Elemento '.invite-status-badge' não encontrado no template de convite enviado.");
-                
-                const cancelContainer = card.querySelector('.cancel-invite-container');
-                if (cancelContainer) cancelContainer.style.display = invite.status === 'pending' ? '' : 'none';
-                else console.warn("[invitations.js] Elemento '.cancel-invite-container' não encontrado no template de convite enviado.");
-
-            } else { // received
-                const senderEl = card.querySelector('.invite-sender');
-                if (senderEl) senderEl.textContent = invite.fromUserName || 'Usuário';
-                else console.warn("[invitations.js] Elemento '.invite-sender' não encontrado no template de convite recebido.");
-
-                const permissionEl = card.querySelector('.invite-permission');
-                if (permissionEl) permissionEl.textContent = formatPermission(invite.role);
-                else console.warn("[invitations.js] Elemento '.invite-permission' não encontrado no template de convite recebido.");
-                
+                const { badgeClass, statusText } = getStatusBadgeInfo(invite.status);
+                statusBadge.className = `inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${badgeClass}`;
+                statusBadge.textContent = statusText;
+                card.querySelector('.cancel-invite-container').style.display = invite.status === 'pending' ? '' : 'none';
+            } else {
+                card.querySelector('.invite-sender').textContent = invite.fromUserName || 'Usuário';
+                card.querySelector('.invite-permission').textContent = formatPermission(invite.role);
+                 // Adiciona texto aos botões para melhorar a usabilidade
                 const acceptBtn = clone.querySelector('.accept-invite-btn');
                 const declineBtn = clone.querySelector('.decline-invite-btn');
                 
-                if (acceptBtn) acceptBtn.innerHTML = `<i data-lucide="check" class="h-4 w-4"></i><span class="text-sm font-medium">Aceitar</span>`;
-                else console.warn("[invitations.js] Botão '.accept-invite-btn' não encontrado no template de convite recebido.");
-                
-                if (declineBtn) declineBtn.innerHTML = `<i data-lucide="x" class="h-4 w-4"></i><span class="text-sm font-medium">Recusar</span>`;
-                else console.warn("[invitations.js] Botão '.decline-invite-btn' não encontrado no template de convite recebido.");
+                acceptBtn.innerHTML = `<i data-lucide="check" class="h-4 w-4"></i><span class="text-sm font-medium">Aceitar</span>`;
+                declineBtn.innerHTML = `<i data-lucide="x" class="h-4 w-4"></i><span class="text-sm font-medium">Recusar</span>`;
             }
-            const dateEl = card.querySelector('.invite-date');
-            if (dateEl) dateEl.textContent = formatDate(invite.createdAt);
-            else console.warn("[invitations.js] Elemento '.invite-date' não encontrado no template de convite.");
-            
+            card.querySelector('.invite-date').textContent = formatDate(invite.createdAt);
             container.appendChild(clone);
         });
     }
@@ -637,22 +441,12 @@ export async function checkPendingInvitations() {
  * @param {number} count - Número de convites pendentes
  */
 function updateReceivedInvitesBadge(count) {
-    const receivedBadge = document.getElementById('received-invites-badge');
-    const menuBadge = document.getElementById('menu-invites-badge');
-
-    if (receivedBadge) {
-        receivedBadge.classList.toggle('hidden', count === 0);
-        if (count > 0) receivedBadge.textContent = count > 9 ? '9+' : count.toString();
-    } else {
-        console.warn("[invitations.js] Elemento 'received-invites-badge' não encontrado.");
-    }
-
-    if (menuBadge) {
-        menuBadge.classList.toggle('hidden', count === 0);
-        if (count > 0) menuBadge.textContent = count > 9 ? '9+' : count.toString();
-    } else {
-        console.warn("[invitations.js] Elemento 'menu-invites-badge' não encontrado.");
-    }
+    [document.getElementById('received-invites-badge'), document.getElementById('menu-invites-badge')].forEach(badge => {
+        if (badge) {
+            badge.classList.toggle('hidden', count === 0);
+            if (count > 0) badge.textContent = count > 9 ? '9+' : count.toString();
+        }
+    });
 }
 
 /**
@@ -683,7 +477,6 @@ async function loadSharedAccess() {
     } catch (error) {
         hideLoading();
         showError('Erro', 'Ocorreu um erro ao carregar os usuários com acesso.');
-        console.error("Erro em loadSharedAccess:", error); // Adicionado log de erro
     }
 }
 
@@ -694,11 +487,6 @@ async function loadSharedAccess() {
 function renderSharedAccess(accessList) {
     const container = document.getElementById('shared-access-list');
     const emptyContainer = document.getElementById('no-shared-access');
-
-    if (!container || !emptyContainer) {
-        console.warn("[invitations.js] Container de acesso compartilhado ('shared-access-list') ou mensagem de vazio ('no-shared-access') não encontrado.");
-        return;
-    }
     
     container.innerHTML = '';
     container.classList.toggle('hidden', accessList.length === 0);
@@ -706,35 +494,17 @@ function renderSharedAccess(accessList) {
 
     if (accessList.length > 0) {
         const template = document.getElementById('shared-access-template');
-        if (!template) {
-            console.warn("[invitations.js] Template 'shared-access-template' não encontrado.");
-            return;
-        }
         accessList.forEach(access => {
             const clone = document.importNode(template.content, true);
             const item = clone.querySelector('.shared-access-item');
-
-            if (!item) {
-                console.warn("[invitations.js] Elemento '.shared-access-item' não encontrado no template 'shared-access-template'.");
-                return; // Pula este item
-            }
             item.dataset.inviteId = access.id;
             item.dataset.email = access.toEmail;
             
-            const userEmailEl = item.querySelector('.user-email');
-            if (userEmailEl) userEmailEl.textContent = access.toEmail;
-            else console.warn("[invitations.js] Elemento '.user-email' não encontrado no template de acesso compartilhado.");
+            item.querySelector('.user-email').textContent = access.toEmail;
             
             const permissionSelect = item.querySelector('.permission-select');
-            const saveBtn = item.querySelector('.save-permission-btn');
-
-            if (permissionSelect && saveBtn) {
-                permissionSelect.value = access.role;
-                permissionSelect.addEventListener('change', () => saveBtn.classList.remove('hidden'));
-            } else {
-                if (!permissionSelect) console.warn("[invitations.js] Elemento '.permission-select' não encontrado no template de acesso compartilhado.");
-                if (!saveBtn) console.warn("[invitations.js] Elemento '.save-permission-btn' não encontrado no template de acesso compartilhado.");
-            }
+            permissionSelect.value = access.role;
+            permissionSelect.addEventListener('change', () => item.querySelector('.save-permission-btn').classList.remove('hidden'));
             
             container.appendChild(clone);
         });

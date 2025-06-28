@@ -160,7 +160,7 @@
                     <i class="fa-solid fa-circle-question h-5 w-5"></i>
                     <span class="text-sm font-medium hidden sm:inline">Ajuda</span>
                 </button>
-                <a href="/pages/code-view.html" target="_blank" class="hidden sm:flex bg-gradient-to-r from-green-600 to-teal-600 text-white px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg hover:from-green-700 hover:to-teal-700 transition-all shadow-md items-center gap-2 text-sm sm:text-base">
+                <a href="/pages/code-view.html" target="_blank" class="bg-gradient-to-r from-green-600 to-teal-600 text-white px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg hover:from-green-700 hover:to-teal-700 transition-all shadow-md flex items-center gap-2 text-sm sm:text-base">
                     <i class="fa-solid fa-code h-4 w-4 sm:h-5 sm:w-5"></i>
                     <span class="font-medium">Ver Código</span>
                 </a>
@@ -203,7 +203,7 @@
                         </div>
                         
                         <div class="flex gap-1">
-                            <select id="workspace-select" class="w-full min-w-0 text-sm border border-slate-300 rounded-lg px-2 py-1.5 text-slate-700 bg-white focus:outline-none focus:ring-1 focus:ring-purple-500">
+                            <select id="workspace-select" class="flex-1 text-sm border border-slate-300 rounded-lg px-2 py-1.5 text-slate-700 bg-white focus:outline-none focus:ring-1 focus:ring-purple-500">
                                 <option value="">Carregando...</option>
                             </select>
                             <button id="add-workspace-btn" class="bg-purple-50 text-purple-600 px-2 py-1.5 rounded-lg hover:bg-purple-100 transition-all">
@@ -261,48 +261,6 @@
                             </button>
                         </div>
                         <p class="text-sm text-slate-700">Crie módulos para organizar as funcionalidades do seu sistema. Arraste entidades para os módulos e configure-as conforme necessário.</p>
-                    </div>
-
-                    <div id="quick-tip" class="bg-gradient-to-r from-purple-50 to-indigo-50 p-4 rounded-lg border border-indigo-100 shadow-sm transition-all duration-300">
-                        <div class="flex justify-between items-start">
-                            <h3 class="font-semibold text-indigo-800 flex items-center gap-2 mb-2">
-                                <i class="fa-solid fa-lightbulb h-4 w-4 text-amber-500"></i> Dica Rápida
-                            </h3>
-                            <button class="close-tip-btn text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-white/50" data-tip-id="quick-tip">
-                                <i class="fa-solid fa-xmark h-4 w-4"></i>
-                            </button>
-                        </div>
-                        <p class="text-sm text-slate-700">Crie módulos para organizar as funcionalidades do seu sistema. Arraste entidades para os módulos e configure-as conforme necessário.</p>
-                    </div>
-
-                    <!-- User Account Actions (Mobile Sidebar) - Replicando user-menu-dropdown -->
-                    <div id="sidebar-user-menu-content" class="pt-3 border-t border-slate-200">
-                        <div class="px-3 py-2"> <!-- Similar ao p-2 do dropdown, mas ajustado para contexto de sidebar -->
-                            <p class="text-xs text-slate-500">Logado como</p>
-                            <div class="flex items-center gap-2 mt-1">
-                                <img id="sidebar-user-avatar-preview" src="https://ui-avatars.com/api/?background=random" class="h-8 w-8 rounded-full">
-                                <span id="sidebar-user-display-name" class="font-semibold text-slate-700 truncate">Carregando...</span>
-                            </div>
-                        </div>
-                        <hr class="mx-3 my-2 border-slate-200">
-                        <a href="#" id="edit-profile-button" class="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-slate-100 text-slate-600 text-sm">
-                            <i data-lucide="settings" class="w-4 h-4 text-slate-500"></i>
-                            <span>Configurações do Perfil</span>
-                        </a>
-                        <a href="#" id="invite-user-button" class="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-slate-100 text-slate-600 text-sm">
-                            <i data-lucide="user-plus" class="w-4 h-4 text-slate-500"></i>
-                            <span>Convidar Usuário</span>
-                        </a>
-                        <a href="#" id="manage-invites-button" class="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-slate-100 text-slate-600 relative text-sm">
-                            <i data-lucide="inbox" class="w-4 h-4 text-slate-500"></i>
-                            <span>Gerenciar Convites</span>
-                            <span id="sidebar-menu-invites-badge" class="absolute hidden top-1.5 right-3 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">0</span>
-                        </a>
-                        <hr class="mx-3 my-2 border-slate-200">
-                        <a href="#" id="logout-button" class="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-slate-100 text-slate-600 text-sm">
-                            <i data-lucide="log-out" class="w-4 h-4 text-slate-500"></i>
-                            <span>Sair</span>
-                        </a>
                     </div>
                 </div>
             </aside>

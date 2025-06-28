@@ -31,97 +31,66 @@ export function initUserProfile(database) {
  * Configura o menu do usuário
  */
 function setupUserMenu() {
-    console.log("[userProfile.js] Início de setupUserMenu, user-menu-button:", document.getElementById('user-menu-button'));
     const userMenuButton = document.getElementById('user-menu-button');
     const userMenuDropdown = document.getElementById('user-menu-dropdown');
-    const mobileMenuToggle = document.getElementById('mobile-menu-toggle'); // Get the mobile toggle
-
-    if (userMenuButton && userMenuDropdown) {
-        // Verificar se o mobile-menu-toggle está presente e visível
-        // offsetWidth > 0 é uma forma de checar se o elemento está visível (não display:none, etc.)
-        const isMobileLayout = mobileMenuToggle && mobileMenuToggle.offsetWidth > 0 && mobileMenuToggle.offsetHeight > 0;
-
-        if (!isMobileLayout) { // Só configurar o dropdown do user-menu-button se NÃO estivermos no layout mobile onde o toggle é rei
-            console.log("[userProfile.js] Configurando listeners para user-menu-button (layout não móvel ou mobile-menu-toggle não visível)");
-            userMenuButton.addEventListener('click', () => {
-                userMenuDropdown.classList.toggle('hidden');
-                userMenuActive = !userMenuActive;
-                
-                const chevronIcon = userMenuButton.querySelector('[data-lucide="chevron-down"], [data-lucide="chevron-up"]');
-                if (chevronIcon) {
-                    chevronIcon.setAttribute('data-lucide', userMenuActive ? 'chevron-up' : 'chevron-down');
-                    if (window.lucide) {
-                        lucide.createIcons();
-                    }
-                }
-            });
-
-            // Fecha o menu ao clicar fora dele
-            document.addEventListener('click', (event) => {
-                if (!userMenuButton.contains(event.target) && !userMenuDropdown.contains(event.target)) {
-                    if (!userMenuDropdown.classList.contains('hidden')) {
-                        userMenuDropdown.classList.add('hidden');
-                        userMenuActive = false;
-                        const chevronIcon = userMenuButton.querySelector('[data-lucide="chevron-down"], [data-lucide="chevron-up"]');
-                        if (chevronIcon) {
-                            chevronIcon.setAttribute('data-lucide', 'chevron-down');
-                            if (window.lucide) {
-                                lucide.createIcons();
-                            }
-                        }
-                    }
-                }
-            });
-        } else {
-            console.log("[userProfile.js] Layout móvel detectado (mobile-menu-toggle visível). Listeners do user-menu-button para dropdown não serão anexados.");
-            // No layout móvel, o user-menu-dropdown associado ao user-menu-button principal
-            // provavelmente não deve ser usado, pois mobile-menu-toggle controla a desktop-sidebar.
-            // Podemos até explicitamente garantir que o user-menu-dropdown esteja oculto.
-            if (userMenuDropdown) { // Check if dropdown exists before adding class
-                userMenuDropdown.classList.add('hidden');
+    
+    // Mostra/Esconde o menu ao clicar no botão
+    userMenuButton.addEventListener('click', () => {
+        userMenuDropdown.classList.toggle('hidden');
+        userMenuActive = !userMenuActive;
+        
+        // Atualiza o ícone de chevron
+        const chevronIcon = userMenuButton.querySelector('[data-lucide="chevron-down"]');
+        if (chevronIcon) {
+            chevronIcon.setAttribute('data-lucide', userMenuActive ? 'chevron-up' : 'chevron-down');
+            const iconsToUpdate = document.querySelectorAll('[data-lucide]');
+            if (window.lucide && iconsToUpdate) {
+                lucide.createIcons({
+                    icons: iconsToUpdate
+                });
             }
         }
-
-        // Configurações de perfil e logout ainda podem ser vinculadas aos botões dentro do dropdown,
-        // mas o dropdown em si só abriria no desktop.
-        // No mobile, esses links estariam na desktop-sidebar (se ela for populada com eles).
-        // Esta parte do código original assume que user-menu-dropdown é o container:
-
-        const editProfileButton = document.getElementById('edit-profile-button');
-        if (editProfileButton) { // Não depende mais do userMenuDropdown para ser encontrado
-            editProfileButton.addEventListener('click', () => {
-                if (userMenuDropdown && !userMenuDropdown.classList.contains('hidden')) { // Se o dropdown estiver aberto (desktop)
-                    userMenuDropdown.classList.add('hidden');
-                    userMenuActive = false;
-                }
-                // Em mobile, o openProfileModal pode vir de um botão na sidebar
-                openProfileModal(); 
-            });
-        }
+    });
     
-        const logoutButton = document.getElementById('logout-button');
-        if (logoutButton) { // Não depende mais do userMenuDropdown
-            logoutButton.addEventListener('click', async () => {
-                if (userMenuDropdown && !userMenuDropdown.classList.contains('hidden')) { // Se o dropdown estiver aberto (desktop)
-                    userMenuDropdown.classList.add('hidden');
+    // Fecha o menu ao clicar fora dele
+    document.addEventListener('click', (event) => {
+        if (!userMenuButton.contains(event.target) && !userMenuDropdown.contains(event.target)) {
+            if (!userMenuDropdown.classList.contains('hidden')) {
+                userMenuDropdown.classList.add('hidden');
+                userMenuActive = false;
+                
+                // Atualiza o ícone de chevron
+                const chevronIcon = userMenuButton.querySelector('[data-lucide]');
+                if (chevronIcon) {
+                    chevronIcon.setAttribute('data-lucide', 'chevron-down');
+                    const iconsToUpdate = document.querySelectorAll('[data-lucide]');
+                    if (window.lucide && iconsToUpdate) {
+                        lucide.createIcons({
+                            icons: iconsToUpdate
+                        });
+                    }
                 }
-                const result = await logout();
-                if (result.success) {
-                    // O redirecionamento será tratado pelo módulo de autenticação
-                } else {
-                    showError('Erro ao sair', result.error);
-                }
-            });
+            }
         }
-
-    } else {
-        if (!userMenuButton) {
-            console.warn("[userProfile.js] user-menu-button não encontrado. Menu do usuário não configurado.");
+    });
+    
+    // Configura o botão de editar perfil
+    document.getElementById('edit-profile-button').addEventListener('click', () => {
+        userMenuDropdown.classList.add('hidden');
+        userMenuActive = false;
+        openProfileModal();
+    });
+    
+    // Configura o botão de logout
+    document.getElementById('logout-button').addEventListener('click', async () => {
+        userMenuDropdown.classList.add('hidden');
+        const result = await logout();
+        if (result.success) {
+            // O redirecionamento será tratado pelo módulo de autenticação
+        } else {
+            showError('Erro ao sair', result.error);
         }
-        if (!userMenuDropdown) {
-            console.warn("[userProfile.js] user-menu-dropdown não encontrado. Menu do usuário não configurado.");
-        }
-    }
+    });
 }
 
 /**
@@ -134,21 +103,10 @@ function setupProfileModal() {
     const saveProfileButton = document.getElementById('save-profile-button');
     const changeAvatarButton = document.getElementById('change-avatar-button');
     const avatarUploadInput = document.getElementById('avatar-upload-input');
-
-    if (!profileModal) {
-        console.warn("[userProfile.js] Elemento 'profile-modal' não encontrado. Funcionalidade do modal de perfil pode ser afetada.");
-        return; // Se o próprio modal não existe, não adianta configurar o resto.
-    }
     
     // Fechar o modal
     const closeModal = () => {
-        // Adicionar verificação interna se profileModal.querySelector pode falhar
-        const modalContent = profileModal.querySelector('.bg-white');
-        if (modalContent) {
-            modalContent.classList.add('scale-95', 'opacity-0');
-        } else {
-            console.warn("[userProfile.js] Conteúdo interno do 'profile-modal' (.bg-white) não encontrado ao tentar fechar.");
-        }
+        profileModal.querySelector('.bg-white').classList.add('scale-95', 'opacity-0');
         setTimeout(() => {
             profileModal.classList.add('hidden');
         }, 300);
@@ -157,54 +115,23 @@ function setupProfileModal() {
     // Abrir o modal
     window.openProfileModal = () => {
         profileModal.classList.remove('hidden');
-        // Adicionar verificação interna
-        const modalContent = profileModal.querySelector('.bg-white');
-        if (modalContent) {
-            setTimeout(() => {
-                modalContent.classList.remove('scale-95', 'opacity-0');
-            }, 10);
-        } else {
-            console.warn("[userProfile.js] Conteúdo interno do 'profile-modal' (.bg-white) não encontrado ao tentar abrir.");
-        }
+        setTimeout(() => {
+            profileModal.querySelector('.bg-white').classList.remove('scale-95', 'opacity-0');
+        }, 10);
     };
     
-    if (closeProfileModal) {
-        closeProfileModal.addEventListener('click', closeModal);
-    } else {
-        console.warn("[userProfile.js] Elemento 'close-profile-modal' não encontrado.");
-    }
+    closeProfileModal.addEventListener('click', closeModal);
+    cancelProfileButton.addEventListener('click', closeModal);
     
-    if (cancelProfileButton) {
-        cancelProfileButton.addEventListener('click', closeModal);
-    } else {
-        console.warn("[userProfile.js] Elemento 'cancel-profile-button' não encontrado.");
-    }
+    // Tratamento do upload de avatar
+    changeAvatarButton.addEventListener('click', () => {
+        avatarUploadInput.click();
+    });
     
-    if (changeAvatarButton && avatarUploadInput) {
-        changeAvatarButton.addEventListener('click', () => {
-            avatarUploadInput.click();
-        });
-    } else {
-        if (!changeAvatarButton) console.warn("[userProfile.js] Elemento 'change-avatar-button' não encontrado.");
-        if (!avatarUploadInput) console.warn("[userProfile.js] Elemento 'avatar-upload-input' não encontrado.");
-    }
+    avatarUploadInput.addEventListener('change', handleAvatarUpload);
     
-    if (avatarUploadInput) {
-        avatarUploadInput.addEventListener('change', handleAvatarUpload);
-    } else {
-        // O aviso para avatarUploadInput já foi dado acima se changeAvatarButton também estiver ausente ou se ele for o único ausente.
-        // Se apenas avatarUploadInput estiver faltando mas changeAvatarButton existir, o log acima não cobre.
-        // Para ser explícito se APENAS avatarUploadInput estiver faltando:
-        if (!document.getElementById('avatar-upload-input')) { // Re-checa para log específico se o anterior não pegou
-             console.warn("[userProfile.js] Elemento 'avatar-upload-input' não encontrado (verificação para listener 'change').");
-        }
-    }
-    
-    if (saveProfileButton) {
-        saveProfileButton.addEventListener('click', saveUserProfile);
-    } else {
-        console.warn("[userProfile.js] Elemento 'save-profile-button' não encontrado.");
-    }
+    // Salvar alterações no perfil
+    saveProfileButton.addEventListener('click', saveUserProfile);
 }
 
 /**
@@ -216,80 +143,39 @@ async function loadUserProfileData() {
     
     const userId = getUsuarioId();
     const userDisplayName = document.getElementById('user-display-name');
-    const userAvatarPreview = document.getElementById('user-avatar-preview'); // Dropdown do header
-    const sidebarUserAvatarPreview = document.getElementById('sidebar-user-avatar-preview'); // Sidebar
-    const modalAvatarPreview = document.getElementById('modal-avatar-preview'); // Modal de edição
-    const nicknameInput = document.getElementById('nickname-input'); // Modal de edição
-    const emailInput = document.getElementById('email-input'); // Modal de edição
-    const sidebarUserDisplayName = document.getElementById('sidebar-user-display-name'); // Sidebar
+    const userAvatarPreview = document.getElementById('user-avatar-preview');
+    const modalAvatarPreview = document.getElementById('modal-avatar-preview');
+    const nicknameInput = document.getElementById('nickname-input');
+    const emailInput = document.getElementById('email-input');
     
-    // Log para verificar a existência dos elementos ao carregar dados
-    if (!userDisplayName) console.warn("[userProfile.js] Elemento 'user-display-name' (header) não encontrado em loadUserProfileData.");
-    if (!sidebarUserDisplayName) console.warn("[userProfile.js] Elemento 'sidebar-user-display-name' (sidebar) não encontrado em loadUserProfileData.");
-    if (!userAvatarPreview) console.warn("[userProfile.js] Elemento 'user-avatar-preview' (header) não encontrado em loadUserProfileData.");
-    if (!sidebarUserAvatarPreview) console.warn("[userProfile.js] Elemento 'sidebar-user-avatar-preview' (sidebar) não encontrado em loadUserProfileData.");
-    if (!modalAvatarPreview) console.warn("[userProfile.js] Elemento 'modal-avatar-preview' (modal) não encontrado em loadUserProfileData.");
-    if (!nicknameInput) console.warn("[userProfile.js] Elemento 'nickname-input' (modal) não encontrado em loadUserProfileData.");
-    if (!emailInput) console.warn("[userProfile.js] Elemento 'email-input' (modal) não encontrado em loadUserProfileData.");
-
     try {
+        // Tenta buscar os dados do usuário no Firebase
         const snapshot = await db.ref(`users/${userId}`).once('value');
         const userData = snapshot.val() || {};
         
-        const displayNameValue = userData.displayName || getUsuarioNome() || 'Usuário';
-        const emailValue = getUsuarioEmail() || '';
-        const photoURLValue = userData.photoURL || getUsuarioFoto() || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayNameValue)}&background=random`;
-
-        if (userDisplayName) { // Header dropdown
-            userDisplayName.textContent = displayNameValue;
-        }
-        if (sidebarUserDisplayName) { // Sidebar
-            sidebarUserDisplayName.textContent = displayNameValue;
-        }
-        if (nicknameInput) { // Modal de edição
-            nicknameInput.value = displayNameValue;
-        }
-        if (emailInput) { // Modal de edição
-            emailInput.value = emailValue;
-        }
-        if (userAvatarPreview) { // Header dropdown
-            userAvatarPreview.src = photoURLValue;
-        }
-        if (sidebarUserAvatarPreview) { // Sidebar
-            sidebarUserAvatarPreview.src = photoURLValue;
-        }
-        if (modalAvatarPreview) { // Modal de edição
-            modalAvatarPreview.src = photoURLValue;
-        }
-
+        // Define os valores nos elementos da UI
+        const displayName = userData.displayName || getUsuarioNome() || 'Usuário';
+        userDisplayName.textContent = displayName;
+        nicknameInput.value = displayName;
+        emailInput.value = getUsuarioEmail() || '';
+        
+        // Define a imagem do avatar
+        const photoURL = userData.photoURL || getUsuarioFoto() || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`;
+        userAvatarPreview.src = photoURL;
+        modalAvatarPreview.src = photoURL;
     } catch (error) {
         console.error('Erro ao carregar dados do usuário:', error);
-        // Fallback em caso de erro, também com verificações
-        const displayNameValue = getUsuarioNome() || 'Usuário';
-        const emailValue = getUsuarioEmail() || '';
-        const photoURLValue = getUsuarioFoto() || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayNameValue)}&background=random`;
-
-        if (userDisplayName) { // Header dropdown
-            userDisplayName.textContent = displayNameValue;
-        }
-        if (sidebarUserDisplayName) { // Sidebar
-            sidebarUserDisplayName.textContent = displayNameValue;
-        }
-        if (nicknameInput) { // Modal de edição
-            nicknameInput.value = displayNameValue;
-        }
-        if (emailInput) { // Modal de edição
-            emailInput.value = emailValue;
-        }
-        if (userAvatarPreview) { // Header dropdown
-            userAvatarPreview.src = photoURLValue;
-        }
-        if (sidebarUserAvatarPreview) { // Sidebar
-            sidebarUserAvatarPreview.src = photoURLValue;
-        }
-        if (modalAvatarPreview) { // Modal de edição
-            modalAvatarPreview.src = photoURLValue;
-        }
+        
+        // Valores padrão em caso de erro
+        const displayName = getUsuarioNome() || 'Usuário';
+        userDisplayName.textContent = displayName;
+        nicknameInput.value = displayName;
+        emailInput.value = getUsuarioEmail() || '';
+        
+        // Avatar padrão em caso de erro
+        const photoURL = getUsuarioFoto() || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`;
+        userAvatarPreview.src = photoURL;
+        modalAvatarPreview.src = photoURL;
     }
 }
 
