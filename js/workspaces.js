@@ -492,45 +492,92 @@ async function sendWorkspaceInvitation(email, permission) {
  * Atualiza o seletor de área de trabalho
  */
 function updateWorkspaceSelector() {
-  const workspaceSelect = document.getElementById("workspace-select");
-  if (!workspaceSelect) return;
+    const container = document.getElementById("workspace-selector");
+    if (!container) return;
 
-  workspaceSelect.innerHTML = "";
+    // Limpa o container
+    container.innerHTML = '';
 
-  // Adiciona áreas de trabalho próprias
-  if (userWorkspaces.length > 0) {
-    const ownGroup = document.createElement("optgroup");
-    ownGroup.label = "Minhas Áreas de Trabalho";
+    // Cria e adiciona o título
+    const titleHtml = `
+        <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-semibold text-slate-700 flex items-center gap-1">
+                <i class="fa-solid fa-briefcase h-4 w-4 text-purple-500"></i> Área de Trabalho
+            </h3>
+            <button id="share-workspace-btn" class="text-xs bg-purple-50 text-purple-700 px-2 py-1 rounded-full hover:bg-purple-100 transition-all hidden">
+                <i class="fa-solid fa-share-nodes h-3 w-3 inline-block mr-1"></i>Compartilhar
+            </button>
+        </div>
+    `;
+    container.insertAdjacentHTML('beforeend', titleHtml);
 
-    userWorkspaces.forEach((workspace) => {
-      const option = document.createElement("option");
-      option.value = workspace.id;
-      option.textContent = workspace.name;
-      ownGroup.appendChild(option);
-    });
+    // Cria o container para o select e o botão de adicionar
+    const controlsContainer = document.createElement('div');
+    controlsContainer.className = 'flex gap-1';
 
-    workspaceSelect.appendChild(ownGroup);
-  }
+    // Cria o select
+    const workspaceSelect = document.createElement('select');
+    workspaceSelect.id = 'workspace-select';
+    workspaceSelect.className = 'flex-1 text-sm border border-slate-300 rounded-lg px-2 py-1.5 text-slate-700 bg-white focus:outline-none focus:ring-1 focus:ring-purple-500';
 
-  // Adiciona áreas de trabalho compartilhadas
-  if (sharedWorkspaces.length > 0) {
-    const sharedGroup = document.createElement("optgroup");
-    sharedGroup.label = "Compartilhadas Comigo";
+    // Adiciona as optgroups
+    if (userWorkspaces.length > 0) {
+        const ownGroup = document.createElement("optgroup");
+        ownGroup.label = "Minhas Áreas de Trabalho";
+        userWorkspaces.forEach(workspace => {
+            const option = document.createElement("option");
+            option.value = workspace.id;
+            option.textContent = workspace.name;
+            ownGroup.appendChild(option);
+        });
+        workspaceSelect.appendChild(ownGroup);
+    }
 
-    sharedWorkspaces.forEach((workspace) => {
-      const option = document.createElement("option");
-      option.value = workspace.id;
-      option.textContent = `${workspace.name} (${workspace.ownerName})`;
-      sharedGroup.appendChild(option);
-    });
+    if (sharedWorkspaces.length > 0) {
+        const sharedGroup = document.createElement("optgroup");
+        sharedGroup.label = "Compartilhadas Comigo";
+        sharedWorkspaces.forEach(workspace => {
+            const option = document.createElement("option");
+            option.value = workspace.id;
+            option.textContent = `${workspace.name} (${workspace.ownerName})`;
+            sharedGroup.appendChild(option);
+        });
+        workspaceSelect.appendChild(sharedGroup);
+    }
 
-    workspaceSelect.appendChild(sharedGroup);
-  }
+    controlsContainer.appendChild(workspaceSelect);
 
-  // Seleciona a área de trabalho atual
-  if (currentWorkspace) {
-    workspaceSelect.value = currentWorkspace.id;
-  }
+    // Cria e adiciona o botão de "Criar Novo Workspace"
+    const addWorkspaceBtn = document.createElement('button');
+    addWorkspaceBtn.id = 'add-workspace-btn';
+    addWorkspaceBtn.className = 'bg-purple-50 text-purple-600 px-2 py-1.5 rounded-lg hover:bg-purple-100 transition-all';
+    addWorkspaceBtn.innerHTML = '<i class="fa-solid fa-plus h-4 w-4"></i>';
+    controlsContainer.appendChild(addWorkspaceBtn);
+
+    container.appendChild(controlsContainer);
+
+    // Adiciona o título do workspace atual
+    const currentWorkspaceTitle = document.createElement('div');
+    currentWorkspaceTitle.id = 'current-workspace-title';
+    currentWorkspaceTitle.className = 'mt-1 text-xs text-slate-500 truncate';
+    if (currentWorkspace) {
+        currentWorkspaceTitle.textContent = currentWorkspace.name;
+    }
+    container.appendChild(currentWorkspaceTitle);
+
+    // Reatribui os eventos de clique, pois os elementos foram recriados
+    setupWorkspaceSelector();
+
+    // Seleciona a área de trabalho atual no dropdown
+    if (currentWorkspace) {
+        workspaceSelect.value = currentWorkspace.id;
+    }
+
+    // Atualiza a visibilidade do botão de compartilhar
+    const shareBtn = document.getElementById("share-workspace-btn");
+    if (shareBtn && currentWorkspace && currentWorkspace.isOwner) {
+        shareBtn.classList.remove("hidden");
+    }
 }
 
 /**
