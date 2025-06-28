@@ -502,7 +502,10 @@ function updateWorkspaceSelector() {
         return;
     }
 
-    workspaceSelect.innerHTML = ""; // Apenas limpa as opções
+    // SUBSTITUA A LINHA ACIMA POR ESTE BLOCO:
+    while (workspaceSelect.options.length > 0) {
+        workspaceSelect.remove(0);
+    }
 
     if (userWorkspaces.length > 0) {
         const ownGroup = document.createElement("optgroup");
