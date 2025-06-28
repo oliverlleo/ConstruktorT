@@ -33,11 +33,23 @@ export async function initWorkspaces(database) {
   console.log("Inicializando módulo de áreas de trabalho...");
   db = database;
 
-  setupWorkspaceSelector();
+  // A LINHA ABAIXO É O PROBLEMA. APAGUE-A OU COMENTE-A.
+  // setupWorkspaceSelector(); 
 
   // Carrega as áreas de trabalho próprias e compartilhadas
   await loadUserWorkspaces();
   await _loadSharedWorkspaces(); // CORREÇÃO: Chamada da função que estava em falta
+
+  // ADICIONE A LINHA AQUI, NO FINAL DA FUNÇÃO.
+  setupWorkspaceSelector();
+
+  // Adiciona um listener para o evento de logout
+  document.addEventListener('userLoggedOut', () => {
+      userWorkspaces = [];
+      sharedWorkspaces = [];
+      currentWorkspace = null;
+      updateWorkspaceSelector();
+  });
 
   // Configura listener para mudanças no controle de acesso
   const userId = getUsuarioId();
@@ -481,32 +493,16 @@ async function sendWorkspaceInvitation(email, permission) {
  * Atualiza o seletor de área de trabalho
  */
 function updateWorkspaceSelector() {
-    const container = document.getElementById("workspace-selector");
-    if (!container) return;
+    const workspaceSelect = document.getElementById("workspace-select");
+    if (!workspaceSelect) return;
 
-    // Limpa o container para a renderização inicial
-    container.innerHTML = '';
+    const hasWorkspaces = userWorkspaces.length > 0 || sharedWorkspaces.length > 0;
+    if (!hasWorkspaces) {
+        workspaceSelect.innerHTML = '<option value="">Crie uma área de trabalho</option>';
+        return;
+    }
 
-    // Cria e adiciona o título e o botão de compartilhar
-    const headerHtml = `
-        <div class="flex items-center justify-between mb-2">
-            <h3 class="text-sm font-semibold text-slate-700 flex items-center gap-1">
-                <i class="fa-solid fa-briefcase h-4 w-4 text-purple-500"></i> Área de Trabalho
-            </h3>
-            <button id="share-workspace-btn" class="text-xs bg-purple-50 text-purple-700 px-2 py-1 rounded-full hover:bg-purple-100 transition-all hidden">
-                <i class="fa-solid fa-share-nodes h-3 w-3 inline-block mr-1"></i>Compartilhar
-            </button>
-        </div>
-    `;
-    container.insertAdjacentHTML('beforeend', headerHtml);
-
-    // Cria o container para o select e o botão de adicionar
-    const controlsContainer = document.createElement('div');
-    controlsContainer.className = 'flex gap-1';
-
-    const workspaceSelect = document.createElement('select');
-    workspaceSelect.id = 'workspace-select';
-    workspaceSelect.className = 'flex-1 text-sm border border-slate-300 rounded-lg px-2 py-1.5 text-slate-700 bg-white focus:outline-none focus:ring-1 focus:ring-purple-500';
+    workspaceSelect.innerHTML = ""; // Apenas limpa as opções
 
     if (userWorkspaces.length > 0) {
         const ownGroup = document.createElement("optgroup");
@@ -531,31 +527,9 @@ function updateWorkspaceSelector() {
         });
         workspaceSelect.appendChild(sharedGroup);
     }
-    controlsContainer.appendChild(workspaceSelect);
 
-    const addWorkspaceBtn = document.createElement('button');
-    addWorkspaceBtn.id = 'add-workspace-btn';
-    addWorkspaceBtn.className = 'bg-purple-50 text-purple-600 px-2 py-1.5 rounded-lg hover:bg-purple-100 transition-all';
-    addWorkspaceBtn.innerHTML = '<i class="fa-solid fa-plus h-4 w-4"></i>';
-    controlsContainer.appendChild(addWorkspaceBtn);
-
-    container.appendChild(controlsContainer);
-
-    const currentWorkspaceTitle = document.createElement('div');
-    currentWorkspaceTitle.id = 'current-workspace-title';
-    currentWorkspaceTitle.className = 'mt-1 text-xs text-slate-500 truncate';
-    container.appendChild(currentWorkspaceTitle);
-
-    setupWorkspaceSelector();
-
-    // Atualiza o estado da UI com base no workspace atual
     if (currentWorkspace) {
         workspaceSelect.value = currentWorkspace.id;
-        currentWorkspaceTitle.textContent = currentWorkspace.name;
-        const shareBtn = document.getElementById("share-workspace-btn");
-        if (shareBtn && currentWorkspace.isOwner) {
-            shareBtn.classList.remove("hidden");
-        }
     }
 }
 
