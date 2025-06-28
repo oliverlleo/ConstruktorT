@@ -231,26 +231,58 @@ function setupManageInvitesModal() {
         manageInvitesModal.addEventListener('click', async (event) => {
             const target = event.target;
             const card = target.closest('.invite-card, .shared-access-item');
-        if (!card) return;
+            
+            if (!card) return; // Se o clique não foi em um card ou item, sair.
 
-        const inviteId = card.dataset.inviteId;
+            const inviteId = card.dataset.inviteId; // inviteId é comum para a maioria das ações
 
-            const newRole = card.querySelector('.permission-select').value;
-            await updateUserPermission(inviteId, newRole);
-            target.closest('.save-permission-btn').classList.add('hidden');
-        }
+            // Lógica para cada tipo de botão
+            if (target.closest('.cancel-invite-btn')) {
+                await manageInvite(inviteId, 'cancel');
+            }
+            
+            if (target.closest('.accept-invite-btn')) {
+                await manageInvite(inviteId, 'accept');
+            }
+            
+            if (target.closest('.decline-invite-btn')) {
+                await manageInvite(inviteId, 'decline');
+            }
+            
+            if (target.closest('.save-permission-btn')) {
+                const permissionSelect = card.querySelector('.permission-select');
+                if (permissionSelect) {
+                    const newRole = permissionSelect.value;
+                    await updateUserPermission(inviteId, newRole);
+                    const saveBtn = target.closest('.save-permission-btn');
+                    if (saveBtn) { // Verificar se o botão ainda existe/é o correto
+                        saveBtn.classList.add('hidden');
+                    }
+                } else {
+                    console.warn("[invitations.js] Elemento '.permission-select' não encontrado no card de acesso compartilhado ao salvar.");
+                }
+            }
 
-        if (target.closest('.remove-access-btn')) {
-            const email = card.dataset.email;
-            const confirmRemove = await Swal.fire({
-                title: 'Remover acesso?',
-                text: `Tem a certeza que deseja remover o acesso de ${email}?`,
-                icon: 'warning', showCancelButton: true, confirmButtonText: 'Sim, remover',
-                cancelButtonText: 'Cancelar', confirmButtonColor: '#d33'
-            });
-            if (confirmRemove.isConfirmed) await manageInvite(inviteId, 'revoke');
-        }
-    });
+            if (target.closest('.remove-access-btn')) {
+                const email = card.dataset.email; 
+                if (email) { // Adicionar verificação para email, caso o dataset não exista por algum motivo
+                    const confirmRemove = await Swal.fire({
+                        title: 'Remover acesso?',
+                        text: `Tem a certeza que deseja remover o acesso de ${email}?`,
+                        icon: 'warning', 
+                        showCancelButton: true, 
+                        confirmButtonText: 'Sim, remover',
+                        cancelButtonText: 'Cancelar', 
+                        confirmButtonColor: '#d33'
+                    });
+                    if (confirmRemove.isConfirmed) {
+                        await manageInvite(inviteId, 'revoke');
+                    }
+                } else {
+                    console.warn("[invitations.js] Atributo 'data-email' não encontrado no card ao tentar remover acesso.");
+                }
+            }
+        });
     }
 }
 
