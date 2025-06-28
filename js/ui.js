@@ -49,31 +49,56 @@ export function setupMobileInteractions() {
     const desktopSidebar = document.getElementById('desktop-sidebar');
     const closeMobileMenu = document.getElementById('close-mobile-menu');
     
+    // Variável para controlar o estado da barra lateral no modo móvel
+    let mobileSidebarOpen = false;
+
+    // Função para fechar o menu
+    const closeMenu = () => {
+        if (desktopSidebar) {
+            desktopSidebar.classList.remove('translate-x-0');
+            desktopSidebar.classList.add('-translate-x-full');
+            mobileSidebarOpen = false;
+        }
+    };
+
+    // Função para abrir o menu
+    const openMenu = () => {
+         if (desktopSidebar) {
+            desktopSidebar.classList.remove('-translate-x-full');
+            desktopSidebar.classList.add('translate-x-0');
+            mobileSidebarOpen = true;
+        }
+    };
+
     if (mobileMenuToggle && desktopSidebar) {
         mobileMenuToggle.addEventListener('click', () => {
-            desktopSidebar.classList.add('open');
-            mobileSidebarOpen = true;
+            // Verifica o estado atual e alterna
+            if (mobileSidebarOpen) {
+                closeMenu();
+            } else {
+                openMenu();
+            }
         });
     }
     
     if (closeMobileMenu && desktopSidebar) {
         closeMobileMenu.addEventListener('click', () => {
-            desktopSidebar.classList.remove('open');
-            mobileSidebarOpen = false;
+            closeMenu();
         });
     }
     
     // Fechar menu ao clicar fora (overlay)
     document.addEventListener('click', (e) => {
-        if (mobileSidebarOpen && desktopSidebar && !desktopSidebar.contains(e.target) && e.target !== mobileMenuToggle) {
-            desktopSidebar.classList.remove('open');
-            mobileSidebarOpen = false;
+        // Garante que o menu esteja aberto e o clique foi fora da sidebar e do botão que a abre
+        if (mobileSidebarOpen && desktopSidebar && !desktopSidebar.contains(e.target) && !mobileMenuToggle.contains(e.target)) {
+            closeMenu();
         }
     });
     
     // Toggle para a sidebar do modal em dispositivos móveis
     const toggleModalSidebar = document.getElementById('toggle-modal-sidebar');
     const modalSidebarContent = document.getElementById('modal-sidebar-content');
+    let modalSidebarOpen = false; // Variável local para o estado do modal
     
     if (toggleModalSidebar && modalSidebarContent) {
         toggleModalSidebar.addEventListener('click', () => {
@@ -88,7 +113,10 @@ export function setupMobileInteractions() {
                 } else {
                     icon.setAttribute('data-lucide', 'chevron-down');
                 }
-                createIcons();
+                // Recria os ícones Lucide
+                if (window.lucide) {
+                    window.lucide.createIcons();
+                }
             }
         });
     }
@@ -97,7 +125,7 @@ export function setupMobileInteractions() {
     const mobileAddModuleBtn = document.getElementById('mobile-add-module-btn');
     if (mobileAddModuleBtn) {
         mobileAddModuleBtn.addEventListener('click', () => {
-            // A ação específica será conectada no módulo principal
+            // A ação específica será conectada no módulo principal (main.js)
         });
     }
 }
