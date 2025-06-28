@@ -33,83 +33,64 @@ export function initUserProfile(database) {
 function setupUserMenu() {
     const userMenuButton = document.getElementById('user-menu-button');
     const userMenuDropdown = document.getElementById('user-menu-dropdown');
-    const editProfileButton = document.getElementById('edit-profile-button');
-    const logoutButton = document.getElementById('logout-button');
-
-    if (userMenuButton && userMenuDropdown) {
-        userMenuButton.addEventListener('click', () => {
-            userMenuDropdown.classList.toggle('hidden');
-            userMenuActive = !userMenuActive;
-            
-            const chevronIcon = userMenuButton.querySelector('i.fa-chevron-down, i.fa-chevron-up');
-            if (chevronIcon) {
-                if (userMenuActive) {
-                    chevronIcon.classList.remove('fa-chevron-down');
-                    chevronIcon.classList.add('fa-chevron-up');
-                } else {
-                    chevronIcon.classList.remove('fa-chevron-up');
-                    chevronIcon.classList.add('fa-chevron-down');
-                }
+    
+    // Mostra/Esconde o menu ao clicar no botão
+    userMenuButton.addEventListener('click', () => {
+        userMenuDropdown.classList.toggle('hidden');
+        userMenuActive = !userMenuActive;
+        
+        // Atualiza o ícone de chevron
+        const chevronIcon = userMenuButton.querySelector('[data-lucide="chevron-down"]');
+        if (chevronIcon) {
+            chevronIcon.setAttribute('data-lucide', userMenuActive ? 'chevron-up' : 'chevron-down');
+            const iconsToUpdate = document.querySelectorAll('[data-lucide]');
+            if (window.lucide && iconsToUpdate) {
+                lucide.createIcons({
+                    icons: iconsToUpdate
+                });
             }
-        });
-
-        document.addEventListener('click', (event) => {
-            if (userMenuButton && userMenuDropdown && // Check again in case they become null
-                !userMenuButton.contains(event.target) && 
-                !userMenuDropdown.contains(event.target)) {
-                if (!userMenuDropdown.classList.contains('hidden')) {
-                    userMenuDropdown.classList.add('hidden');
-                    userMenuActive = false;
-                    const chevronIcon = userMenuButton.querySelector('i.fa-chevron-down, i.fa-chevron-up');
-                    if (chevronIcon) {
-                        chevronIcon.classList.remove('fa-chevron-up');
-                        chevronIcon.classList.add('fa-chevron-down');
+        }
+    });
+    
+    // Fecha o menu ao clicar fora dele
+    document.addEventListener('click', (event) => {
+        if (!userMenuButton.contains(event.target) && !userMenuDropdown.contains(event.target)) {
+            if (!userMenuDropdown.classList.contains('hidden')) {
+                userMenuDropdown.classList.add('hidden');
+                userMenuActive = false;
+                
+                // Atualiza o ícone de chevron
+                const chevronIcon = userMenuButton.querySelector('[data-lucide]');
+                if (chevronIcon) {
+                    chevronIcon.setAttribute('data-lucide', 'chevron-down');
+                    const iconsToUpdate = document.querySelectorAll('[data-lucide]');
+                    if (window.lucide && iconsToUpdate) {
+                        lucide.createIcons({
+                            icons: iconsToUpdate
+                        });
                     }
                 }
             }
-        });
-    } else {
-        console.warn("User menu button or dropdown not found. Menu functionality may be affected.");
-    }
-
-    if (editProfileButton && userMenuDropdown) {
-        editProfileButton.addEventListener('click', () => {
-            if (userMenuDropdown) userMenuDropdown.classList.add('hidden');
-            userMenuActive = false;
-            if (userMenuButton) {
-                 const chevronIcon = userMenuButton.querySelector('i.fa-chevron-down, i.fa-chevron-up');
-                 if (chevronIcon) {
-                    chevronIcon.classList.remove('fa-chevron-up');
-                    chevronIcon.classList.add('fa-chevron-down');
-                 }
-            }
-            openProfileModal(); 
-        });
-    } else {
-        console.warn("'edit-profile-button' or userMenuDropdown not found.");
-    }
-
-    if (logoutButton && userMenuDropdown) {
-        logoutButton.addEventListener('click', async () => {
-            if (userMenuDropdown) userMenuDropdown.classList.add('hidden');
-            userMenuActive = false;
-            if (userMenuButton) {
-                 const chevronIcon = userMenuButton.querySelector('i.fa-chevron-down, i.fa-chevron-up');
-                 if (chevronIcon) {
-                    chevronIcon.classList.remove('fa-chevron-up');
-                    chevronIcon.classList.add('fa-chevron-down');
-                 }
-            }
-            const result = await logout();
-            if (result.success) {
-                // O redirecionamento será tratado pelo módulo de autenticação
-            } else {
-                showError('Erro ao sair', result.error);
-            }
-        });
-    } else {
-        console.warn("'logout-button' or userMenuDropdown not found.");
-    }
+        }
+    });
+    
+    // Configura o botão de editar perfil
+    document.getElementById('edit-profile-button').addEventListener('click', () => {
+        userMenuDropdown.classList.add('hidden');
+        userMenuActive = false;
+        openProfileModal();
+    });
+    
+    // Configura o botão de logout
+    document.getElementById('logout-button').addEventListener('click', async () => {
+        userMenuDropdown.classList.add('hidden');
+        const result = await logout();
+        if (result.success) {
+            // O redirecionamento será tratado pelo módulo de autenticação
+        } else {
+            showError('Erro ao sair', result.error);
+        }
+    });
 }
 
 /**
@@ -117,77 +98,40 @@ function setupUserMenu() {
  */
 function setupProfileModal() {
     const profileModal = document.getElementById('profile-modal');
-    const closeProfileModalBtn = document.getElementById('close-profile-modal'); // Renomeado para evitar confusão com a função closeModal
+    const closeProfileModal = document.getElementById('close-profile-modal');
     const cancelProfileButton = document.getElementById('cancel-profile-button');
     const saveProfileButton = document.getElementById('save-profile-button');
     const changeAvatarButton = document.getElementById('change-avatar-button');
     const avatarUploadInput = document.getElementById('avatar-upload-input');
-
-    if (!profileModal) {
-        console.warn("Elemento 'profile-modal' não encontrado. Funcionalidade do modal de perfil desabilitada.");
-        // Define openProfileModal como uma no-op para evitar erros se for chamada
-        window.openProfileModal = () => { 
-            console.warn("Tentativa de abrir modal de perfil, mas o modal não foi encontrado.");
-        };
-        return; // Não podemos prosseguir se o modal principal não existe
-    }
-
+    
+    // Fechar o modal
     const closeModal = () => {
-        const innerModal = profileModal.querySelector('.bg-white');
-        if (innerModal) {
-            innerModal.classList.add('scale-95', 'opacity-0');
-            setTimeout(() => {
-                profileModal.classList.add('hidden');
-            }, 300);
-        } else {
-            profileModal.classList.add('hidden'); // Fallback se .bg-white não for encontrado
-        }
+        profileModal.querySelector('.bg-white').classList.add('scale-95', 'opacity-0');
+        setTimeout(() => {
+            profileModal.classList.add('hidden');
+        }, 300);
     };
     
+    // Abrir o modal
     window.openProfileModal = () => {
         profileModal.classList.remove('hidden');
-        const innerModal = profileModal.querySelector('.bg-white');
-        if (innerModal) {
-            setTimeout(() => {
-                innerModal.classList.remove('scale-95', 'opacity-0');
-            }, 10);
-        }
+        setTimeout(() => {
+            profileModal.querySelector('.bg-white').classList.remove('scale-95', 'opacity-0');
+        }, 10);
     };
     
-    if (closeProfileModalBtn) {
-        closeProfileModalBtn.addEventListener('click', closeModal);
-    } else {
-        console.warn("Botão 'close-profile-modal' não encontrado.");
-    }
-
-    if (cancelProfileButton) {
-        cancelProfileButton.addEventListener('click', closeModal);
-    } else {
-        console.warn("Botão 'cancel-profile-button' não encontrado.");
-    }
+    closeProfileModal.addEventListener('click', closeModal);
+    cancelProfileButton.addEventListener('click', closeModal);
     
-    if (changeAvatarButton && avatarUploadInput) {
-        changeAvatarButton.addEventListener('click', () => {
-            avatarUploadInput.click();
-        });
-    } else {
-        console.warn("'change-avatar-button' ou 'avatar-upload-input' não encontrado.");
-    }
+    // Tratamento do upload de avatar
+    changeAvatarButton.addEventListener('click', () => {
+        avatarUploadInput.click();
+    });
     
-    if (avatarUploadInput) {
-        avatarUploadInput.addEventListener('change', handleAvatarUpload);
-    } else {
-        // O aviso para avatarUploadInput já foi dado acima se changeAvatarButton também estiver faltando.
-        // Se apenas avatarUploadInput estiver faltando, mas changeAvatarButton existir, o clique não fará nada útil.
-        // Pode-se adicionar um aviso específico se changeAvatarButton existir mas avatarUploadInput não.
-        if(changeAvatarButton) console.warn("'avatar-upload-input' não encontrado, botão de alterar avatar não funcionará.");
-    }
+    avatarUploadInput.addEventListener('change', handleAvatarUpload);
     
-    if (saveProfileButton) {
-        saveProfileButton.addEventListener('click', saveUserProfile);
-    } else {
-        console.warn("Botão 'save-profile-button' não encontrado.");
-    }
+    // Salvar alterações no perfil
+    saveProfileButton.addEventListener('click', saveUserProfile);
 }
 
 /**

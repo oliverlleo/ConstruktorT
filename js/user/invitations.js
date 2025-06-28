@@ -29,66 +29,35 @@ export function initInvitations(database) {
 function setupInviteModal() {
     const inviteModal = document.getElementById('invite-modal');
     const inviteUserButton = document.getElementById('invite-user-button');
-    const closeInviteModalBtn = document.getElementById('close-invite-modal'); // Renomeado para clareza
+    const closeInviteModal = document.getElementById('close-invite-modal');
     const cancelInviteButton = document.getElementById('cancel-invite-button');
     const sendInviteButton = document.getElementById('send-invite-button');
-
-    if (!inviteModal) {
-        console.warn("Elemento 'invite-modal' não encontrado. Funcionalidade de convite desabilitada.");
-        return;
-    }
-
-    const openModal = () => {
-        const userMenuDropdown = document.getElementById('user-menu-dropdown');
-        if (userMenuDropdown) userMenuDropdown.classList.add('hidden');
-        
+    
+    // Abrir o modal
+    inviteUserButton.addEventListener('click', () => {
+        document.getElementById('user-menu-dropdown').classList.add('hidden');
         inviteModal.classList.remove('hidden');
-        const innerModal = inviteModal.querySelector('.bg-white');
-        if (innerModal) {
-            setTimeout(() => {
-                innerModal.classList.remove('scale-95', 'opacity-0');
-            }, 10);
-        }
+        setTimeout(() => {
+            inviteModal.querySelector('.bg-white').classList.remove('scale-95', 'opacity-0');
+        }, 10);
         
-        const inviteEmailInput = document.getElementById('invite-email-input');
-        if (inviteEmailInput) inviteEmailInput.value = '';
-    };
-
+        // Limpa o campo de email
+        document.getElementById('invite-email-input').value = '';
+    });
+    
+    // Fechar o modal
     const closeModal = () => {
-        const innerModal = inviteModal.querySelector('.bg-white');
-        if (innerModal) {
-            innerModal.classList.add('scale-95', 'opacity-0');
-            setTimeout(() => {
-                inviteModal.classList.add('hidden');
-            }, 300);
-        } else {
-            inviteModal.classList.add('hidden'); // Fallback
-        }
+        inviteModal.querySelector('.bg-white').classList.add('scale-95', 'opacity-0');
+        setTimeout(() => {
+            inviteModal.classList.add('hidden');
+        }, 300);
     };
-
-    if (inviteUserButton) {
-        inviteUserButton.addEventListener('click', openModal);
-    } else {
-        console.warn("Botão 'invite-user-button' não encontrado.");
-    }
     
-    if (closeInviteModalBtn) {
-        closeInviteModalBtn.addEventListener('click', closeModal);
-    } else {
-        console.warn("Botão 'close-invite-modal' não encontrado.");
-    }
-
-    if (cancelInviteButton) {
-        cancelInviteButton.addEventListener('click', closeModal);
-    } else {
-        console.warn("Botão 'cancel-invite-button' não encontrado.");
-    }
+    closeInviteModal.addEventListener('click', closeModal);
+    cancelInviteButton.addEventListener('click', closeModal);
     
-    if (sendInviteButton) {
-        sendInviteButton.addEventListener('click', sendInvite);
-    } else {
-        console.warn("Botão 'send-invite-button' não encontrado.");
-    }
+    // Enviar convite
+    sendInviteButton.addEventListener('click', sendInvite);
 }
 
 /**

@@ -9,7 +9,7 @@ import { initDatabase, loadAllEntities, loadAndRenderModules, loadDroppedEntitie
          loadStructureForEntity, createEntity, createModule, saveEntityToModule, deleteEntityFromModule,
          deleteEntity, deleteModule, saveEntityStructure, saveSubEntityStructure, saveModulesOrder } from './database.js';
 import { initUI, createIcons, checkEmptyStates, showLoading, hideLoading, showSuccess, 
-         showError, showConfirmDialog, showInputDialog, closeMobileSidebar } from './ui.js';
+         showError, showConfirmDialog, showInputDialog } from './ui.js';
 import { initUserProfile } from './user/userProfile.js';
 import { initInvitations, checkPendingInvitations } from './user/invitations.js';
 import { initWorkspaces, getCurrentWorkspace } from './workspaces.js';
@@ -20,13 +20,8 @@ let modalNavigationStack = [];
 
 // ==== PONTO DE ENTRADA DA APLICAÇÃO ====
 async function initApp() {
-    const loadingOverlayElement = document.getElementById('loading-overlay');
-
-    // O overlay HTML é visível por padrão via CSS.
-    // A função showLoading() de ui.js (que usa Swal ou cria um overlay manual) não é necessária aqui
-    // se o objetivo é usar o #loading-overlay do HTML.
-    // Se loadingOverlayElement for null, um aviso será logado abaixo se um erro ocorrer.
-
+    showLoading('Inicializando aplicação...');
+    
     try {
         // Inicializa o Firebase
         firebase.initializeApp(firebaseConfig);
@@ -107,27 +102,13 @@ async function initApp() {
         // Torna a função disponível globalmente para uso em outros módulos
         window.getCurrentWorkspace = getCurrentWorkspace;
         
-        // hideLoading() de ui.js não é mais necessário aqui se estamos gerenciando o overlay HTML diretamente
-        if (loadingOverlayElement) {
-            loadingOverlayElement.style.display = 'none';
-        }
-        const appElement = document.getElementById('app');
-        if (appElement) {
-            appElement.style.display = 'flex';
-        } else {
-            console.error("Elemento principal 'app' não encontrado! A aplicação não será visível.");
-        }
+        hideLoading();
+        document.getElementById('loading-overlay').style.display = 'none';
+        document.getElementById('app').style.display = 'flex';
     } catch (error) {
         console.error("Erro ao inicializar aplicação:", error);
-        if (loadingOverlayElement) {
-            loadingOverlayElement.innerHTML = '<div class="text-center p-4 sm:p-5 bg-white rounded-lg shadow-md max-w-xs sm:max-w-sm"><div class="text-red-600 text-xl sm:text-2xl mb-3"><i data-lucide="alert-triangle"></i></div><p class="text-base sm:text-lg font-semibold text-red-700">Erro ao iniciar o sistema.</p><p class="text-slate-600 mt-2 text-sm sm:text-base">Verifique sua conexão com a internet e tente novamente.</p></div>';
-            // Garante que o overlay de erro esteja visível caso tenha sido ocultado por engano
-            loadingOverlayElement.style.display = 'flex'; 
-            if (window.lucide) lucide.createIcons(); else createIcons();
-        } else {
-            console.error("Elemento 'loading-overlay' não encontrado para exibir mensagem de erro no catch.");
-            alert("Erro crítico ao iniciar a aplicação. Verifique o console para detalhes.");
-        }
+        document.getElementById('loading-overlay').innerHTML = '<div class="text-center p-4 sm:p-5 bg-white rounded-lg shadow-md max-w-xs sm:max-w-sm"><div class="text-red-600 text-xl sm:text-2xl mb-3"><i data-lucide="alert-triangle"></i></div><p class="text-base sm:text-lg font-semibold text-red-700">Erro ao iniciar o sistema.</p><p class="text-slate-600 mt-2 text-sm sm:text-base">Verifique sua conexão com a internet e tente novamente.</p></div>';
+        createIcons();
     }
 }
 
@@ -233,12 +214,6 @@ function renderEntityInLibrary(entity) {
             dragClass: 'sortable-drag',
             delay: 50,
             delayOnTouchOnly: true,
-            onStart: function (/**Event*/evt) {
-                // Fecha o menu lateral mobile quando o arrastar inicia
-                if (window.innerWidth < 640) { // Considera 'sm' breakpoint de Tailwind
-                    closeMobileSidebar();
-                }
-            },
         });
     }
 }
@@ -900,11 +875,11 @@ async function handleAddNewEntity() {
             html: `
                 <div class="mb-4">
                     <label for="swal-input-name" class="block text-sm font-medium text-slate-700 mb-1 text-left">Nome da Entidade</label>
-                    <input id="swal-input-name" class="swal2-input px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Ex: Fornecedor, Produto, Funcionário..."> {/* w-full removido */}
+                    <input id="swal-input-name" class="swal2-input w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Ex: Fornecedor, Produto, Funcionário...">
                 </div>
                 <div>
                     <p class="text-sm font-medium text-slate-700 mb-2 text-left">Escolha um ícone:</p>
-                    <div class="grid grid-cols-4 sm:grid-cols-6 gap-2 justify-items-center">${iconHtml}</div>
+                    <div class="grid grid-cols-4 sm:grid-cols-6 gap-2">${iconHtml}</div>
                 </div>
             `,
             showCancelButton: true,
@@ -912,8 +887,7 @@ async function handleAddNewEntity() {
             cancelButtonText: 'Cancelar',
             focusConfirm: false,
             customClass: {
-                popup: 'shadow-xl rounded-xl',
-                input: 'swal-input-mobile-adjusted' // Classe adicionada para o input
+                popup: 'shadow-xl rounded-xl'
             },
             didOpen: () => {
                 createIcons();
