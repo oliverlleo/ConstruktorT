@@ -15,45 +15,85 @@ import { initInvitations, checkPendingInvitations } from './user/invitations.js'
 import { initWorkspaces, getCurrentWorkspace } from './workspaces.js';
 
 // Variáveis globais
-let db;
+let db; // db será inicializado após autenticação e inicialização do Firebase
 let modalNavigationStack = [];
 
-// ==== PONTO DE ENTRADA DA APLICAÇÃO ====
-async function initApp() {
-    showLoading('Inicializando aplicação...');
-    
+// ==== NOVO PONTO DE ENTRADA DA APLICAÇÃO ====
+document.addEventListener('DOMContentLoaded', async () => { // Torne o listener assíncrono
+    showLoading('Inicializando aplicação...'); // Pode ser movido para depois do Firebase init se preferir
+    console.log("DOM carregado. Iniciando aplicação...");
+
     try {
         // Inicializa o Firebase
-        firebase.initializeApp(firebaseConfig);
-        
-        // Inicializa os módulos
-        await initAutenticacao();
-        
-        // Verifica se o usuário está autenticado
-        if (!isUsuarioLogado()) {
+        if (!firebase.apps.length) { // Evita re-inicializar o Firebase
+            firebase.initializeApp(firebaseConfig);
+        }
+        db = firebase.database(); // Inicializa db globalmente aqui
+
+        // Passo 1: Autenticação. Obtenha o usuário.
+        const user = await new Promise((resolve, reject) => {
+            const unsubscribe = firebase.auth().onAuthStateChanged(user => {
+                unsubscribe(); // Importante para não ter múltiplos listeners
+                if (user) {
+                    resolve(user);
+                } else {
+                    resolve(null); 
+                }
+            }, error => { // Adicionado error handler para onAuthStateChanged
+                unsubscribe();
+                reject(error);
+            });
+        });
+
+        if (!user) {
+            console.log("Nenhum usuário logado. Redirecionando para login.");
             hideLoading();
+            // Idealmente, ter uma página de login dedicada.
+            // Se /login.html não existir ou for a mesma página, pode causar loop.
+            // Assumindo que /login.html é uma página diferente ou que o app tem rotas.
+            if (window.location.pathname !== '/login.html' && window.location.pathname !== '/pages/login.html') { // Evitar loop de redirecionamento
+                 window.location.href = '/pages/login.html'; // Ajuste o caminho conforme necessário
+            } else {
+                console.warn("Já está na página de login ou caminho de login não configurado para redirecionamento.");
+            }
             return;
         }
         
-        // Inicializa o banco de dados
-        await initDatabase(firebase);
-        db = firebase.database();
+        console.log("Usuário autenticado:", user.uid);
+
+        // Inicializa os módulos principais que não dependem diretamente do usuário UID para sua configuração inicial,
+        // mas podem precisar do 'db' ou 'auth' services.
+        // initAutenticacao() provavelmente configura listeners de auth state, o que já fizemos.
+        // Se initAutenticacao fizer mais (ex: configurar UI de login/logout), pode ser chamado.
+        // Por enquanto, vamos assumir que o onAuthStateChanged acima é suficiente para obter o 'user'.
+        // await initAutenticacao(); // Reavaliar se isso é necessário aqui
+
+        // Inicializa o banco de dados (se initDatabase faz mais do que firebase.database())
+        // Se initDatabase apenas retorna firebase.database(), já temos 'db'.
+        // Se ele configura listeners ou estruturas, deve ser chamado.
+        // Assumindo que initDatabase é mais do que apenas pegar a referência:
+        await initDatabase(firebase); // Passando firebase, como no original
+
+        // Inicializa a interface do usuário geral
+        initUI(); // Geralmente não depende do usuário específico, mas sim do DOM.
+
+        // Passo 2: Agora que temos o usuário, inicialize os módulos que dependem dele.
+        // O 'await' força o código a esperar a conclusão de initUserProfile.
+        // initUserProfile agora espera 'db' e 'userId'
+        await initUserProfile(db, user.uid); 
         
-        // Inicializa a interface do usuário
-        initUI();
-        
-        // Inicializa o sistema de gerenciamento de usuário
-        initUserProfile(db);
-        
-        // Inicializa o sistema de convites
-        initInvitations(db);
-        
-        // Inicializa o sistema de áreas de trabalho
-        initWorkspaces(db);
-        
+        // Faça o mesmo para outros módulos.
+        // initInvitations e initWorkspaces também esperam 'db' e 'userId' (suposição baseada no padrão)
+        // É preciso verificar as definições dessas funções para confirmar os parâmetros.
+        // Assumindo que eles seguem o mesmo padrão:
+        await initInvitations(db, user.uid); // Se initInvitations precisa de userId
+        await initWorkspaces(db, user.uid);  // Se initWorkspaces precisa de userId
+
+
+        // O código abaixo era do initApp original e pode ser adaptado ou chamado por Workspaces
         // Verifica se há convites pendentes
         try {
-            const pendingInvites = await checkPendingInvitations();
+            const pendingInvites = await checkPendingInvitations(); // Assumindo que checkPendingInvitations usa o usuário atual internamente
             console.log('Verificação de convites pendentes:', pendingInvites);
             if (pendingInvites > 0) {
                 setTimeout(() => {
@@ -65,82 +105,61 @@ async function initApp() {
         }
         
         // Aguarda a inicialização das áreas de trabalho antes de carregar dados
+        // Esta lógica pode agora estar dentro de initWorkspaces ou ser chamada após
         await new Promise(resolve => {
             const checkWorkspace = () => {
                 const currentWorkspace = getCurrentWorkspace();
                 if (currentWorkspace) {
-                    resolve();
+                    resolve(currentWorkspace); // Resolve com o workspace para uso
                 } else {
-                    setTimeout(checkWorkspace, 100);
+                    // Adicionar um timeout ou contador para evitar loop infinito se o workspace nunca carregar
+                    console.log("Aguardando workspace...")
+                    setTimeout(checkWorkspace, 200); // Aumentar um pouco o timeout
                 }
             };
             checkWorkspace();
         });
         
-        // Configura listener para mudança de área de trabalho
-        window.addEventListener('workspaceChanged', async (event) => {
-            console.log("[workspaceChanged] Evento recebido. Carregando novo workspace.", event.detail.workspace);
-            await loadWorkspaceData(event.detail.workspace);
-        });
-        
-        // Carrega dados da área de trabalho atual
         const currentWorkspace = getCurrentWorkspace();
         if (currentWorkspace) {
-            console.log("[initApp] Carregando workspace inicial.", currentWorkspace);
-            await loadWorkspaceData(currentWorkspace);
-        }
-        
-        // Configura os event listeners
-        setupEventListeners();
-        
-        // Configura o painel de propriedades dos campos
-        setupFieldPropertiesPanelEvents();
-        
-        // Verifica os estados vazios
-        checkEmptyStates();
-        
-        // Torna a função disponível globalmente para uso em outros módulos
-        window.getCurrentWorkspace = getCurrentWorkspace;
-        
-        hideLoading();
-        
-        // --- IMPLEMENTAÇÃO DA SOLUÇÃO ---
-        // Exemplo: digamos que o código original seja document.getElementById('user-name').innerHTML = '...'
-        // O código original era document.getElementById('loading-overlay').style.display = 'none';
-        // e document.getElementById('app').style.display = 'flex';
-        // Estes não definem innerHTML, mas sim style.display. A lógica de guarda é similar.
-        
-        const loadingOverlayElement = document.getElementById('loading-overlay');
-        if (loadingOverlayElement) {
-            loadingOverlayElement.style.display = 'none';
+            console.log("[DOMContentLoaded] Carregando workspace inicial.", currentWorkspace);
+            await loadWorkspaceData(currentWorkspace); // loadWorkspaceData precisa estar definida e acessível
         } else {
-            console.warn("Elemento 'loading-overlay' para ocultar não foi encontrado em initApp.");
+            console.warn("[DOMContentLoaded] Nenhum workspace atual encontrado após a inicialização.");
+            // Talvez mostrar um estado de "crie seu primeiro workspace"
         }
+        
+        setupEventListeners(); // Configura listeners de UI globais
+        setupFieldPropertiesPanelEvents(); // Configura painel de propriedades
+        checkEmptyStates(); // Verifica estados vazios na UI
+        window.getCurrentWorkspace = getCurrentWorkspace; // Expor globalmente
 
+        hideLoading();
+        const loadingOverlay = document.getElementById('loading-overlay');
+        if (loadingOverlay) loadingOverlay.style.display = 'none';
         const appElement = document.getElementById('app');
-        if (appElement) {
-            appElement.style.display = 'flex';
-        } else {
-            console.warn("Elemento 'app' para exibir não foi encontrado em initApp.");
-        }
-        // --- FIM DA SOLUÇÃO ---
+        if (appElement) appElement.style.display = 'flex';
         
+        console.log("Aplicação inicializada com sucesso!");
+
     } catch (error) {
-        console.error("Erro ao inicializar aplicação:", error);
-        // O elemento que causa o erro de innerHTML na sua mensagem de erro original
-        // também precisa de uma verificação.
-        // O elemento original era 'loading-overlay'
-        const errorDisplayElement = document.getElementById('loading-overlay'); // Exemplo
-        if (errorDisplayElement) {
-            errorDisplayElement.innerHTML = '<div class="text-center p-4 sm:p-5 bg-white rounded-lg shadow-md max-w-xs sm:max-w-sm"><div class="text-red-600 text-xl sm:text-2xl mb-3"><i data-lucide="alert-triangle"></i></div><p class="text-base sm:text-lg font-semibold text-red-700">Erro ao iniciar o sistema.</p><p class="text-slate-600 mt-2 text-sm sm:text-base">Verifique sua conexão com a internet e tente novamente.</p></div>';
-            createIcons(); // Ensure icons are created for the error message
+        console.error('Erro fatal ao inicializar aplicação:', error);
+        hideLoading(); // Garante que o loading seja escondido
+        // Mostre uma mensagem de erro para o usuário em um elemento seguro
+        const errorDisplay = document.getElementById('global-error-message');
+        if (errorDisplay) {
+            errorDisplay.textContent = 'Ocorreu um erro crítico ao carregar a aplicação. Tente recarregar a página.';
+            errorDisplay.style.display = 'block'; // Garante que seja visível
         } else {
-            // Fallback if loading-overlay is somehow not available
-            console.warn("Elemento 'loading-overlay' para exibir mensagem de erro não foi encontrado.");
-            alert("Erro crítico ao iniciar o sistema. Verifique o console para detalhes.");
+            console.warn("'global-error-message' element not found. Displaying alert.");
+            alert('Ocorreu um erro crítico ao carregar a aplicação. Tente recarregar a página.');
         }
     }
-}
+});
+
+// A função initApp original pode ser removida ou comentada se não for mais usada.
+// async function initApp() { ... }
+
 
 /**
  * Carrega dados de uma área de trabalho específica
@@ -187,7 +206,7 @@ async function loadWorkspaceData(workspace) {
     }
 }
 
-document.addEventListener('DOMContentLoaded', initApp);
+// document.addEventListener('DOMContentLoaded', initApp); // Removido/Comentado
 
 // ---- Funções de Renderização ----
 function renderEntityInLibrary(entity) {
