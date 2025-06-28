@@ -126,11 +126,11 @@ function setupManageInvitesModal() {
 
     if (!manageInvitesButton && !manageInvitesModal) {
         console.warn("[invitations.js] Elementos 'manage-invites-button' e 'manage-invites-modal' não encontrados.");
-        return; // Nada a configurar
+        return; 
     }
     if (manageInvitesButton && !manageInvitesModal) {
         console.warn("[invitations.js] 'manage-invites-button' existe, mas 'manage-invites-modal' não encontrado.");
-        manageInvitesButton.addEventListener('click', () => { // Adiciona listener para informar o usuário
+        manageInvitesButton.addEventListener('click', () => { 
              console.warn("[invitations.js] 'manage-invites-button' clicado, mas o modal correspondente não foi encontrado.");
              showError("Erro de Interface", "O modal de gerenciamento de convites não pôde ser encontrado.");
         });
@@ -138,10 +138,8 @@ function setupManageInvitesModal() {
     }
     if (!manageInvitesButton && manageInvitesModal) {
         console.warn("[invitations.js] 'manage-invites-modal' existe, mas 'manage-invites-button' para abri-lo não foi encontrado.");
-        // O modal existe mas não pode ser aberto por este botão. Pode ser aberto de outra forma.
     }
 
-    // Abrir o modal
     if (manageInvitesButton && manageInvitesModal) {
         manageInvitesButton.addEventListener('click', async () => {
             const userMenuDropdown = document.getElementById('user-menu-dropdown');
@@ -175,7 +173,6 @@ function setupManageInvitesModal() {
         });
     }
     
-    // Fechar o modal
     if (closeManageInvitesModal && manageInvitesModal) {
         closeManageInvitesModal.addEventListener('click', () => {
             const modalContent = manageInvitesModal.querySelector('.bg-white');
@@ -188,11 +185,10 @@ function setupManageInvitesModal() {
                 manageInvitesModal.classList.add('hidden');
             }, 300);
         });
-    } else if (manageInvitesModal) { // Só logar se o modal existir
+    } else if (manageInvitesModal) { 
         console.warn("[invitations.js] Elemento 'close-manage-invites-modal' não encontrado.");
     }
     
-    // Alternar entre as abas
     if (tabInvitesSent && manageInvitesModal) {
         tabInvitesSent.addEventListener('click', () => {
             if (activeTab === 'sent') return;
