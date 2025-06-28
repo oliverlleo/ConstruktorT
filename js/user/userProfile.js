@@ -190,46 +190,11 @@ function setupProfileModal() {
         }
     }, intervalDelay);
 }
-    
-    // Fechar o modal
-    const closeModal = () => {
-        // Verifica se profileModal e seu filho existem antes de manipular classes
-        const innerModal = profileModal.querySelector('.bg-white');
-        if (innerModal) {
-            innerModal.classList.add('scale-95', 'opacity-0');
-            setTimeout(() => {
-                profileModal.classList.add('hidden');
-            }, 300);
-        } else {
-            profileModal.classList.add('hidden'); // Fallback se a estrutura interna não for a esperada
-        }
-    };
-    
-    // Abrir o modal
-    window.openProfileModal = () => {
-        profileModal.classList.remove('hidden');
-        // Verifica se profileModal e seu filho existem antes de manipular classes
-        const innerModal = profileModal.querySelector('.bg-white');
-        if (innerModal) {
-            setTimeout(() => {
-                innerModal.classList.remove('scale-95', 'opacity-0');
-            }, 10);
-        }
-    };
-    
-    closeProfileModal.addEventListener('click', closeModal);
-    cancelProfileButton.addEventListener('click', closeModal);
-    
-    // Tratamento do upload de avatar
-    changeAvatarButton.addEventListener('click', () => {
-        avatarUploadInput.click();
-    });
-    
-    avatarUploadInput.addEventListener('change', handleAvatarUpload);
-    
-    // Salvar alterações no perfil
-    saveProfileButton.addEventListener('click', saveUserProfile);
-}
+
+// O código duplicado abaixo foi removido.
+// Ele era uma cópia da lógica de `closeModal`, `window.openProfileModal`,
+// e adição de event listeners que agora está dentro do bloco `if (profileModal && ...)`
+// da função setupProfileModal acima.
 
 /**
  * Carrega os dados do perfil do usuário
