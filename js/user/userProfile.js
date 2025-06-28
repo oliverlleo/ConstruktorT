@@ -123,9 +123,10 @@ function setupUserMenu() {
         } else {
             console.error("Elemento 'logout-button' não encontrado.");
         }
-    } else {
-        console.error("Elementos 'user-menu-button' ou 'user-menu-dropdown' não encontrados.");
-    }
+    // O bloco 'else' abaixo era o causador do SyntaxError e foi removido.
+    // As verificações de nulidade para userMenuButton e userMenuDropdown
+    // no início da função já tratam o caso de elementos não encontrados
+    // com retornos antecipados.
 }
 
 /**
