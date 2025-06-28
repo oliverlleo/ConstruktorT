@@ -4,14 +4,14 @@
  */
 
 import { firebaseConfig, availableEntityIcons, fieldTypes, defaultFieldConfigs } from './config.js';
-import { initAutenticacao, isUsuarioLogado, getUsuarioId, getUsuarioAtual } from './autenticacao.js'; // Added getUsuarioAtual
+import { initAutenticacao, getUsuarioId, getUsuarioAtual } from './autenticacao.js'; // Removed isUsuarioLogado as direct check is now promise-based
 import { initDatabase, loadAllEntities, loadAndRenderModules, loadDroppedEntitiesIntoModules, 
          loadStructureForEntity, createEntity, createModule, saveEntityToModule, deleteEntityFromModule,
          deleteEntity, deleteModule, saveEntityStructure, saveSubEntityStructure, saveModulesOrder } from './database.js';
 import { initUI, createIcons, checkEmptyStates, showLoading, hideLoading, showSuccess, 
          showError, showConfirmDialog, showInputDialog } from './ui.js';
-// Updated imports for userProfile - initUserProfile is now the main entry point
-import { initUserProfile, loadUserProfileData } from './user/userProfile.js';
+// Corrected imports for userProfile as per Correction 2
+import { initUserProfile } from './user/userProfile.js';
 import { initInvitations, checkPendingInvitations } from './user/invitations.js';
 import { initWorkspaces, getCurrentWorkspace } from './workspaces.js';
 
@@ -22,21 +22,18 @@ let modalNavigationStack = [];
 
 
 // ==== PONTO DE ENTRADA DA APLICAÇÃO ====
-// Use o evento DOMContentLoaded, ele é o ponto de partida mais seguro.
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('[DEBUG] 1. O DOM está pronto. Iniciando a aplicação.');
 
     const loadingOverlay = document.getElementById('loading-overlay');
-    const loadingMessageElement = document.getElementById('loading-text'); // Assuming this ID exists for detailed messages
-                                                                        // If not, we'll use loadingOverlay or a generic message div
+    const loadingMessageElement = document.getElementById('loading-text');
 
-    // Helper to update loading message
     const setLoadingMessage = (message) => {
         if (loadingMessageElement) loadingMessageElement.textContent = message;
-        else if (loadingOverlay) { // Fallback to simpler message if loading-text is not defined
+        else if (loadingOverlay) {
             const existingTextElement = loadingOverlay.querySelector('p');
             if(existingTextElement) existingTextElement.textContent = message;
-            else loadingOverlay.innerHTML = `<p>${message}</p>`; // Basic fallback
+            else loadingOverlay.innerHTML = `<p>${message}</p>`;
         }
         console.log(`[LOADING] ${message}`);
     };
@@ -49,24 +46,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!firebase.apps.length) {
             firebaseInstance = firebase.initializeApp(firebaseConfig);
         } else {
-            firebaseInstance = firebase.app(); // if already initialized
+            firebaseInstance = firebase.app();
         }
         
-        // Initialize core Firebase services (Auth, DB)
-        // initAutenticacao now primarily sets up the onAuthStateChanged listener and redirects.
-        // The main auth check for app flow will be done below.
-        await initAutenticacao(firebaseInstance); // Pass instance if needed by initAutenticacao
+        await initAutenticacao(firebaseInstance);
         
         console.log('[DEBUG] Initializing Database module...');
-        await initDatabase(firebaseInstance); // Pass instance if needed by initDatabase
-        db = firebase.database(); // Store db instance globally if needed by other modules
+        await initDatabase(firebaseInstance);
+        db = firebase.database();
+        console.log("Firebase DB initialized in main.js, instance:", db ? "OK" : "Failed");
+
 
         // --- ETAPA A: AUTENTICAÇÃO ---
         setLoadingMessage('Aguardando autenticação...');
         console.log('[DEBUG] 2. Aguardando autenticação do Firebase...');
         const user = await new Promise((resolve, reject) => {
             const unsubscribe = firebase.auth().onAuthStateChanged(currentUser => {
-                unsubscribe(); // Pare de ouvir para evitar chamadas múltiplas
+                unsubscribe();
                 resolve(currentUser);
             }, error => {
                 unsubscribe();
@@ -77,65 +73,47 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!user) {
             console.log('[DEBUG] Nenhum usuário encontrado. Redirecionando para login.');
             setLoadingMessage('Nenhum usuário autenticado. Redirecionando para o login...');
-            // Redirection is likely handled by onAuthStateChanged in initAutenticacao
-            // window.location.href = 'pages/login.html'; // Or your login page
             if (loadingOverlay && loadingMessageElement) loadingMessageElement.textContent = 'Redirecionando para login...';
             else if (loadingOverlay) loadingOverlay.innerHTML = '<p>Redirecionando para login...</p>';
-            // No need to hideLoading() here if page is redirecting.
-            // If not redirecting, then hideLoading() might be needed after showing a "please login" message.
             return;
         }
 
         console.log(`[DEBUG] 3. Usuário ${user.uid} autenticado.`);
-        setLoadingMessage(`Usuário ${user.displayName || user.email} autenticado.`);
+        setLoadingMessage(`Usuário ${getUsuarioAtual().displayName || getUsuarioAtual().email} autenticado.`);
 
-        // --- ETAPA B: CARREGAMENTO DE DADOS CRÍTICOS ---
-        console.log('[DEBUG] 4. Buscando dados essenciais do usuário...');
-        setLoadingMessage('Carregando dados do perfil...');
-        const userData = await loadUserProfileData(user.uid);
-        if (!userData) {
-            // This case might mean the user exists in Auth but not in DB (e.g. first login, incomplete signup)
-            // For now, we'll treat it as an error, but this could be a point for profile creation flow.
-            console.error(`[DEBUG] Falha ao carregar os dados do perfil para o usuário ${user.uid}.`);
-            throw new Error("Falha ao carregar os dados do perfil do usuário.");
-        }
-        
-        console.log('[DEBUG] 5. Dados carregados. Nome de usuário:', userData.displayName);
-        setLoadingMessage('Dados do perfil carregados.');
+        // --- ETAPA B & C: INICIALIZAÇÃO DE DADOS E UI MODULARIZADA ---
+        // initUserProfile will handle its own data loading and UI population
+        console.log('[DEBUG] 4. Inicializando perfil do usuário...');
+        setLoadingMessage('Carregando dados do perfil e configurando UI do usuário...');
+        // Passe a variável 'db' como um argumento para as funções.
+        await initUserProfile(user.uid, db); // initUserProfile now loads data and sets up UI
+        console.log("[DEBUG] initUserProfile completado.");
 
-        // --- ETAPA C: INICIALIZAÇÃO DA INTERFACE (UI) ---
-        console.log('[DEBUG] 6. Inicializando todos os módulos da interface...');
-        setLoadingMessage('Configurando interface...');
+        console.log("Entregando 'db' para os módulos de convites e workspaces...");
+        await initInvitations(user.uid, db); // Pass user.uid and db
+        console.log("[DEBUG] initInvitations completado.");
         
-        // Initialize base UI elements (non-data-dependent parts)
+        initWorkspaces(db, user.uid); // Pass db and user.uid
+        console.log("[DEBUG] initWorkspaces completado.");
+        
+        // Initialize base UI elements (non-data-dependent parts that were not covered by specific modules)
         initUI();
+        console.log("[DEBUG] initUI (geral) completado.");
         
-        // Initialize user-specific UI modules WITH data
-        // initUserProfileModule now only sets up event listeners and general modal structure
-        initUserProfileModule(); // Pass db if it needs it and it's not globally available via firebase.database()
-        setupUserMenu(userData);    // Populate user menu with data
-        setupProfileModal(userData); // Populate profile modal with data
-        
-        // Initialize invitations module (pass user.uid and userData if it needs them for setup or later use)
-        initInvitations(db, user.uid, userData); // Assuming initInvitations is adapted if needed
-        
-        // Initialize workspaces module
-        initWorkspaces(db, user.uid, userData); // Pass user/userData if needed for workspace logic
-        
+        setLoadingMessage('Dados do perfil carregados.'); // General message after profile init
+
         // Verifica se há convites pendentes (can run after main UI setup)
         checkPendingInvitations().then(pendingInvites => {
             console.log('Verificação de convites pendentes (assíncrona):', pendingInvites);
             if (pendingInvites > 0) {
                 setTimeout(() => {
                     showSuccess('Convites Pendentes', `Você tem ${pendingInvites} convite(s) pendente(s). Acesse o menu do usuário para visualizá-los.`);
-                }, 2000); // Delay to ensure main UI is settled
+                }, 2000);
             }
         }).catch(error => {
             console.error('Erro ao verificar convites pendentes (assíncrono):', error);
         });
         
-        // Aguarda a inicialização das áreas de trabalho antes de carregar dados específicos do workspace
-        // This might need adjustment based on how initWorkspaces and getCurrentWorkspace behave now
         setLoadingMessage('Carregando área de trabalho...');
         await new Promise(resolve => {
             const checkInitialWorkspace = () => {
@@ -144,8 +122,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     console.log('[DEBUG] Workspace inicial encontrado:', currentWorkspace);
                     resolve(currentWorkspace);
                 } else {
-                    // This could loop if no workspace is immediately available.
-                    // Consider a timeout or a state where no workspace is selected.
                     console.log('[DEBUG] Aguardando workspace inicial...');
                     setTimeout(checkInitialWorkspace, 200);
                 }
@@ -154,34 +130,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         }).then(currentWorkspace => {
             if (currentWorkspace) {
                 console.log("[initApp] Carregando dados do workspace inicial.", currentWorkspace);
-                return loadWorkspaceData(currentWorkspace); // loadWorkspaceData is async
+                return loadWorkspaceData(currentWorkspace);
             }
         });
         
-        // Configura listener para mudança de área de trabalho
         window.addEventListener('workspaceChanged', async (event) => {
-            console.log("[workspaceChanged] Evento recebido. Carregando novo workspace.", event.detail.workspaceId);
-            // Assuming event.detail contains the workspace object or enough info to load it
-            // The original code used event.detail.workspace (object)
-            // Ensure loadWorkspaceData receives the correct workspace data or ID
+            console.log("[workspaceChanged] Evento recebido. Carregando novo workspace.", event.detail.workspace);
             await loadWorkspaceData(event.detail.workspace);
         });
         
-        // Configura os event listeners gerais da aplicação
         setupEventListeners();
-        
-        // Configura o painel de propriedades dos campos (if part of general UI setup)
         setupFieldPropertiesPanelEvents();
-        
-        // Verifica os estados vazios (e.g., no modules, no entities)
         checkEmptyStates();
-        
-        // Torna a função disponível globalmente para uso em outros módulos, if still necessary
         window.getCurrentWorkspace = getCurrentWorkspace;
         
         console.log('[DEBUG] 7. Aplicação inicializada com SUCESSO.');
-        if (loadingOverlay) loadingOverlay.style.display = 'none'; // Hide the entire overlay
-        document.getElementById('app').style.display = 'flex'; // Show the main app container
+        if (loadingOverlay) loadingOverlay.style.display = 'none';
+        document.getElementById('app').style.display = 'flex';
 
     } catch (error) {
         console.error('ERRO FATAL NA INICIALIZAÇÃO:', error);
@@ -190,10 +155,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             loadingMessageElement.classList.add('text-red-700', 'font-semibold');
         } else if (loadingOverlay) {
             loadingOverlay.innerHTML = `<div class="text-center p-4 sm:p-5 bg-white rounded-lg shadow-md max-w-xs sm:max-w-sm"><div class="text-red-600 text-xl sm:text-2xl mb-3"><i data-lucide="alert-triangle"></i></div><p class="text-base sm:text-lg font-semibold text-red-700">Erro ao iniciar o sistema.</p><p class="text-slate-600 mt-2 text-sm sm:text-base">Verifique sua conexão e tente novamente. Detalhes: ${error.message}</p></div>`;
-            if (window.lucide) lucide.createIcons(); else createIcons(); // Ensure icon is rendered
+            if (window.lucide) lucide.createIcons(); else createIcons();
         }
-        // Potentially show a more user-friendly error message on the page itself
-        // Do not hide loadingOverlay if it's displaying the error.
     }
 });
 
@@ -913,37 +876,8 @@ async function handleAddNewEntity() {
         return;
     }
     
-    // The problem description implies that if it's not the owner, they might still be able to create
-    // if they are an editor/admin. The permission check should ideally happen based on Firebase rules.
-    // For now, adhering to the existing frontend check, but this might need review
-    // if editors/admins *should* be able to create entities directly in the library of a shared workspace.
-    // The current Firebase rules ALLOW entity creation for editors/admins in shared workspaces.
-    // The original instruction was: "um utilizador convidado com permissão de "admin" ou "editor") 
-    // possam efetivamente editar os workspaces partilhados, como criar módulos e ENTIDADES."
-    // This implies the check `!currentWorkspace.isOwner` might be too restrictive here if the user has editor/admin rights.
-    // However, I will stick to the plan of passing ownerId first.
-    // The specific error message "Você não tem permissão para criar entidades nesta área de trabalho."
-    // might be triggered by this frontend check before Firebase rules even get a chance.
-    // For now, I will modify to pass ownerId, but this permission check might need to be revisited.
-
     const workspaceId = currentWorkspace.id;
-    // const ownerId = currentWorkspace.isOwner ? null : currentWorkspace.ownerId; // This was the previous pattern
-    // The problem statement says "const ownerId = currentWorkspace.isOwner ? nulo: currentWorkspace.ownerId;"
-    // Let's assume currentWorkspace.isShared exists and is the opposite of isOwner for shared workspaces.
-    // Or, more directly, if it's NOT isOwner, then pass currentWorkspace.ownerId.
     const ownerId = !currentWorkspace.isOwner ? currentWorkspace.ownerId : null;
-
-
-    // Original check - this might prevent editors on shared workspaces from creating entities
-    // if (ownerId && !currentWorkspace.isOwner) { //Simplified from !currentWorkspace.isOwner
-    // This check seems to contradict the goal of allowing editors to create entities.
-    // Let's assume the Firebase rules will handle permissions.
-    // The original code had:
-    // if (!currentWorkspace.isOwner) {
-    //     showError('Erro', 'Você não tem permissão para criar entidades nesta área de trabalho.');
-    //     return;
-    // }
-    // This check will be re-evaluated after seeing if Firebase correctly denies based on rules for viewers.
 
     const iconHtml = availableEntityIcons.map(icon => 
         `<button class="icon-picker-btn p-2 rounded-md hover:bg-indigo-100 transition-all" data-icon="${icon}">
@@ -1002,13 +936,11 @@ async function handleAddNewEntity() {
             showLoading('Criando entidade...');
             
             try {
-                // workspaceId and ownerId defined earlier in this function
                 const entityId = await createEntity({ 
                     name: formValues.name, 
                     icon: formValues.icon 
                 }, workspaceId, ownerId);
                 
-                // loadAllEntities also needs workspaceId and ownerId
                 const updatedEntities = await loadAllEntities(workspaceId, ownerId);
                 
                 const entityList = document.getElementById('entity-list');
@@ -1037,14 +969,6 @@ async function handleAddNewModule() {
         return;
     }
     
-    // Similar to handleAddNewEntity, this frontend check might be too restrictive
-    // if editors/admins should be allowed to create modules.
-    // Firebase rules are now in place to allow this.
-    // if (!currentWorkspace.isOwner) {
-    //     showError('Erro', 'Você não tem permissão para criar módulos nesta área de trabalho.');
-    //     return;
-    // }
-    
     const workspaceId = currentWorkspace.id;
     const ownerId = !currentWorkspace.isOwner ? currentWorkspace.ownerId : null;
 
@@ -1058,10 +982,9 @@ async function handleAddNewModule() {
         showLoading('Criando módulo...');
         
         try {
-            // workspaceId and ownerId defined earlier
             const moduleId = await createModule(result.value, workspaceId, ownerId);
             
-            const moduleEl = renderModule({ id: moduleId, name: result.value }); // renderModule doesn't interact with DB directly for creation
+            const moduleEl = renderModule({ id: moduleId, name: result.value });
             checkEmptyStates();
             
             hideLoading();
@@ -1094,7 +1017,7 @@ function handleEditSubEntity(button) {
             subSchema: fieldData.subSchema,
         });
     } else if (fieldData.subType === 'relationship') {
-        const allEntities = getEntities();
+        const allEntities = getEntities(); // Assuming getEntities() is available and returns all entities
         const targetEntity = allEntities.find(e => e.id === fieldData.targetEntityId);
         if (!targetEntity) {
             showError('Erro', 'A entidade relacionada já não existe.');
@@ -1105,7 +1028,7 @@ function handleEditSubEntity(button) {
         modalNavigationStack.push(parentContext);
 
         openModal({
-            moduleId: 'system',
+            moduleId: 'system', // Or appropriate moduleId if known
             entityId: targetEntity.id,
             entityName: targetEntity.name,
         });
@@ -1164,11 +1087,7 @@ async function confirmAndRemoveCustomEntity(card) {
             const ownerId = currentWorkspace && !currentWorkspace.isOwner ? currentWorkspace.ownerId : null;
             await deleteEntity(entityId, workspaceId, ownerId);
             
-            // This part removes elements from the UI. If entities from different workspaces are shown
-            // (e.g. an owner's entities and a shared workspace's entities), this querySelectorAll
-            // might need to be more specific, but for now, it should be fine as it's based on entityId.
             document.querySelectorAll(`.dropped-entity-card[data-entity-id="${entityId}"]`).forEach(c => c.remove());
-            
             card.remove();
             
             hideLoading();
@@ -1233,15 +1152,13 @@ async function saveCurrentStructure() {
             const parentContext = modalNavigationStack[modalNavigationStack.length - 1];
             console.log("Salvando sub-entidade para:", parentContext);
             
-            // For sub-entities, the ownerId should correspond to the owner of the main entity's workspace.
-            // We assume parentContext's workspace is the same as currentWorkspace.
             await saveSubEntityStructure(
                 parentContext.moduleId, 
                 parentContext.entityId, 
                 context.parentFieldId, 
                 attributes,
                 workspaceId,
-                ownerId // Pass ownerId here
+                ownerId
             );
             
             hideLoading();
@@ -1262,7 +1179,7 @@ async function saveCurrentStructure() {
                 context.entityName, 
                 attributes, 
                 workspaceId,
-                ownerId // Pass ownerId here
+                ownerId
             );
             
             hideLoading();
@@ -1586,7 +1503,7 @@ async function accessSharedResource(resource) {
     
     try {
         if (resource.type === 'module_constructor') {
-            const sharedModules = await loadSharedUserModules(resource.ownerId);
+            const sharedModules = await loadSharedUserModules(resource.ownerId); // This function might not exist or be correctly scoped
             
             if (sharedModules.length > 0) {
                 showSuccess('Acesso concedido', `Você agora tem acesso aos módulos de ${resource.ownerName}.`);

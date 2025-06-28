@@ -145,36 +145,38 @@ function setupUserMenuListeners() {
 /**
  * RESPONSABILIDADE: Apenas buscar dados e retornar. NENHUMA manipulação de DOM aqui.
  * @param {string} userId - O ID do usuário para buscar dados.
+ * @param {Object} dbParam - A instância do Firebase Realtime Database.
  * @returns {Promise<Object|null>} Dados do perfil do usuário ou null se não encontrado.
  */
-export async function loadUserProfileData(userId) {
+export async function loadUserProfileData(userId, dbParam) {
+    console.log(`[loadUserProfileData] Buscando dados para ${userId}. DB recebido:`, dbParam ? 'Sim' : 'Não');
     if (!userId) {
         console.warn("[loadUserProfileData] No userId provided.");
         return null;
     }
-    // Ensure db is initialized. This should be guaranteed by main.js before calling this.
-    if (!db) {
-        console.error("Firebase Realtime Database (db) is not initialized in userProfile.js context.");
-        db = firebase.database(); // Attempt re-init, but this is a fallback.
-        if(!db) throw new Error("DB not available in loadUserProfileData");
+    if (!dbParam) {
+        console.error("[loadUserProfileData] Erro DENTRO de loadUserProfileData. O 'dbParam' foi recebido? Não. DB instance is null or undefined.");
+        throw new Error("DB instance not provided to loadUserProfileData");
     }
 
     try {
-        const snapshot = await db.ref(`users/${userId}`).once('value');
+        // Use the passed dbParam for the database operation
+        const snapshot = await dbParam.ref(`users/${userId}`).once('value');
         if (snapshot.exists()) {
+            console.log(`[loadUserProfileData] Dados encontrados para ${userId}:`, snapshot.val().displayName);
             return snapshot.val();
         } else {
             console.log(`[loadUserProfileData] No data found for user ${userId}`);
-            return null; // Retorna null se não encontrar
+            return null;
         }
     } catch (error) {
-        console.error("Erro na função loadUserProfileData:", error);
-        throw error; // Lança o erro para o 'catch' do main.js pegar.
+        console.error("[loadUserProfileData] Erro na função loadUserProfileData. O 'dbParam' foi recebido?", dbParam ? 'Sim' : 'Não', error);
+        throw error;
     }
 }
 
 /**
- * RESPONSABILIDADE: Apenas configurar o menu. Ela confia que os elementos já existem.
+ * RESPONSABILIDADE: Popular o menu do usuário com dados.
  * @param {Object} userData - Os dados do usuário carregados.
  */
 export function setupUserMenu(userData) {
