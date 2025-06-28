@@ -120,28 +120,8 @@ function setupUserMenu() {
         }
         if (!userMenuDropdown) {
             console.warn("[userProfile.js] user-menu-dropdown não encontrado. Menu do usuário não configurado.");
-                }
-            }
         }
-    });
-    
-    // Configura o botão de editar perfil
-    document.getElementById('edit-profile-button').addEventListener('click', () => {
-        userMenuDropdown.classList.add('hidden');
-        userMenuActive = false;
-        openProfileModal();
-    });
-    
-    // Configura o botão de logout
-    document.getElementById('logout-button').addEventListener('click', async () => {
-        userMenuDropdown.classList.add('hidden');
-        const result = await logout();
-        if (result.success) {
-            // O redirecionamento será tratado pelo módulo de autenticação
-        } else {
-            showError('Erro ao sair', result.error);
-        }
-    });
+    }
 }
 
 /**
