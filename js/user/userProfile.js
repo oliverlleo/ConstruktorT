@@ -33,64 +33,82 @@ export function initUserProfile(database) {
 function setupUserMenu() {
     const userMenuButton = document.getElementById('user-menu-button');
     const userMenuDropdown = document.getElementById('user-menu-dropdown');
-    
-    // Mostra/Esconde o menu ao clicar no botão
-    userMenuButton.addEventListener('click', () => {
-        userMenuDropdown.classList.toggle('hidden');
-        userMenuActive = !userMenuActive;
-        
-        // Atualiza o ícone de chevron
-        const chevronIcon = userMenuButton.querySelector('[data-lucide="chevron-down"]');
-        if (chevronIcon) {
-            chevronIcon.setAttribute('data-lucide', userMenuActive ? 'chevron-up' : 'chevron-down');
-            const iconsToUpdate = document.querySelectorAll('[data-lucide]');
-            if (window.lucide && iconsToUpdate) {
-                lucide.createIcons({
-                    icons: iconsToUpdate
-                });
+
+    if (userMenuButton && userMenuDropdown) {
+        // Mostra/Esconde o menu ao clicar no botão
+        userMenuButton.addEventListener('click', () => {
+            userMenuDropdown.classList.toggle('hidden');
+            userMenuActive = !userMenuActive;
+
+            // Atualiza o ícone de chevron
+            const chevronIcon = userMenuButton.querySelector('[data-lucide="chevron-down"], [data-lucide="chevron-up"]');
+            if (chevronIcon) {
+                chevronIcon.setAttribute('data-lucide', userMenuActive ? 'chevron-up' : 'chevron-down');
+                // O sistema global de atualização do Lucide deve cuidar da renderização
+                if (window.updateLucideIcons) window.updateLucideIcons();
             }
-        }
-    });
-    
-    // Fecha o menu ao clicar fora dele
-    document.addEventListener('click', (event) => {
-        if (!userMenuButton.contains(event.target) && !userMenuDropdown.contains(event.target)) {
-            if (!userMenuDropdown.classList.contains('hidden')) {
-                userMenuDropdown.classList.add('hidden');
-                userMenuActive = false;
-                
-                // Atualiza o ícone de chevron
-                const chevronIcon = userMenuButton.querySelector('[data-lucide]');
-                if (chevronIcon) {
-                    chevronIcon.setAttribute('data-lucide', 'chevron-down');
-                    const iconsToUpdate = document.querySelectorAll('[data-lucide]');
-                    if (window.lucide && iconsToUpdate) {
-                        lucide.createIcons({
-                            icons: iconsToUpdate
-                        });
+        });
+
+        // Fecha o menu ao clicar fora dele
+        document.addEventListener('click', (event) => {
+            if (!userMenuButton.contains(event.target) && !userMenuDropdown.contains(event.target)) {
+                if (!userMenuDropdown.classList.contains('hidden')) {
+                    userMenuDropdown.classList.add('hidden');
+                    userMenuActive = false;
+
+                    // Atualiza o ícone de chevron
+                    const chevronIcon = userMenuButton.querySelector('[data-lucide="chevron-down"], [data-lucide="chevron-up"]');
+                    if (chevronIcon) {
+                        chevronIcon.setAttribute('data-lucide', 'chevron-down');
+                        if (window.updateLucideIcons) window.updateLucideIcons();
                     }
                 }
             }
-        }
-    });
-    
-    // Configura o botão de editar perfil
-    document.getElementById('edit-profile-button').addEventListener('click', () => {
-        userMenuDropdown.classList.add('hidden');
-        userMenuActive = false;
-        openProfileModal();
-    });
-    
-    // Configura o botão de logout
-    document.getElementById('logout-button').addEventListener('click', async () => {
-        userMenuDropdown.classList.add('hidden');
-        const result = await logout();
-        if (result.success) {
-            // O redirecionamento será tratado pelo módulo de autenticação
+        });
+
+        // Configura o botão de editar perfil
+        const editProfileButton = document.getElementById('edit-profile-button');
+        if (editProfileButton) {
+            editProfileButton.addEventListener('click', () => {
+                userMenuDropdown.classList.add('hidden');
+                userMenuActive = false;
+                // Reset chevron icon
+                const chevronIcon = userMenuButton.querySelector('[data-lucide="chevron-up"]');
+                if (chevronIcon) {
+                    chevronIcon.setAttribute('data-lucide', 'chevron-down');
+                    if (window.updateLucideIcons) window.updateLucideIcons();
+                }
+                openProfileModal();
+            });
         } else {
-            showError('Erro ao sair', result.error);
+            console.error("Elemento 'edit-profile-button' não encontrado.");
         }
-    });
+
+        // Configura o botão de logout
+        const logoutButton = document.getElementById('logout-button');
+        if (logoutButton) {
+            logoutButton.addEventListener('click', async () => {
+                userMenuDropdown.classList.add('hidden');
+                userMenuActive = false;
+                 // Reset chevron icon
+                const chevronIcon = userMenuButton.querySelector('[data-lucide="chevron-up"]');
+                if (chevronIcon) {
+                    chevronIcon.setAttribute('data-lucide', 'chevron-down');
+                    if (window.updateLucideIcons) window.updateLucideIcons();
+                }
+                const result = await logout();
+                if (result.success) {
+                    // O redirecionamento será tratado pelo módulo de autenticação
+                } else {
+                    showError('Erro ao sair', result.error);
+                }
+            });
+        } else {
+            console.error("Elemento 'logout-button' não encontrado.");
+        }
+    } else {
+        console.error("Elementos 'user-menu-button' ou 'user-menu-dropdown' não encontrados.");
+    }
 }
 
 /**
