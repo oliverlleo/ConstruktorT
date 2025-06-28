@@ -20,8 +20,13 @@ let modalNavigationStack = [];
 
 // ==== PONTO DE ENTRADA DA APLICAÇÃO ====
 async function initApp() {
-    showLoading('Inicializando aplicação...');
-    
+    const loadingOverlayElement = document.getElementById('loading-overlay');
+
+    // O overlay HTML é visível por padrão via CSS.
+    // A função showLoading() de ui.js (que usa Swal ou cria um overlay manual) não é necessária aqui
+    // se o objetivo é usar o #loading-overlay do HTML.
+    // Se loadingOverlayElement for null, um aviso será logado abaixo se um erro ocorrer.
+
     try {
         // Inicializa o Firebase
         firebase.initializeApp(firebaseConfig);
@@ -102,17 +107,25 @@ async function initApp() {
         // Torna a função disponível globalmente para uso em outros módulos
         window.getCurrentWorkspace = getCurrentWorkspace;
         
-        hideLoading();
-        document.getElementById('loading-overlay').style.display = 'none';
-        document.getElementById('app').style.display = 'flex';
+        // hideLoading() de ui.js não é mais necessário aqui se estamos gerenciando o overlay HTML diretamente
+        if (loadingOverlayElement) {
+            loadingOverlayElement.style.display = 'none';
+        }
+        const appElement = document.getElementById('app');
+        if (appElement) {
+            appElement.style.display = 'flex';
+        } else {
+            console.error("Elemento principal 'app' não encontrado! A aplicação não será visível.");
+        }
     } catch (error) {
         console.error("Erro ao inicializar aplicação:", error);
-        const loadingOverlayElement = document.getElementById('loading-overlay');
         if (loadingOverlayElement) {
             loadingOverlayElement.innerHTML = '<div class="text-center p-4 sm:p-5 bg-white rounded-lg shadow-md max-w-xs sm:max-w-sm"><div class="text-red-600 text-xl sm:text-2xl mb-3"><i data-lucide="alert-triangle"></i></div><p class="text-base sm:text-lg font-semibold text-red-700">Erro ao iniciar o sistema.</p><p class="text-slate-600 mt-2 text-sm sm:text-base">Verifique sua conexão com a internet e tente novamente.</p></div>';
-            createIcons(); 
+            // Garante que o overlay de erro esteja visível caso tenha sido ocultado por engano
+            loadingOverlayElement.style.display = 'flex'; 
+            if (window.lucide) lucide.createIcons(); else createIcons();
         } else {
-            console.error("Elemento 'loading-overlay' não encontrado para exibir mensagem de erro.");
+            console.error("Elemento 'loading-overlay' não encontrado para exibir mensagem de erro no catch.");
             alert("Erro crítico ao iniciar a aplicação. Verifique o console para detalhes.");
         }
     }
