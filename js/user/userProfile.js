@@ -114,76 +114,10 @@ function setupUserMenu() {
         }
     }, intervalDelay);
 }
-            userMenuDropdown.classList.toggle('hidden');
-            userMenuActive = !userMenuActive;
 
-            // Atualiza o ícone de chevron
-            const chevronIcon = userMenuButton.querySelector('[data-lucide="chevron-down"], [data-lucide="chevron-up"]');
-            if (chevronIcon) {
-                chevronIcon.setAttribute('data-lucide', userMenuActive ? 'chevron-up' : 'chevron-down');
-                // O sistema global de atualização do Lucide deve cuidar da renderização
-                if (window.updateLucideIcons) window.updateLucideIcons();
-            }
-        });
-
-        // Fecha o menu ao clicar fora dele
-        document.addEventListener('click', (event) => {
-            if (!userMenuButton.contains(event.target) && !userMenuDropdown.contains(event.target)) {
-                if (!userMenuDropdown.classList.contains('hidden')) {
-                    userMenuDropdown.classList.add('hidden');
-                    userMenuActive = false;
-
-                    // Atualiza o ícone de chevron
-                    const chevronIcon = userMenuButton.querySelector('[data-lucide="chevron-down"], [data-lucide="chevron-up"]');
-                    if (chevronIcon) {
-                        chevronIcon.setAttribute('data-lucide', 'chevron-down');
-                        if (window.updateLucideIcons) window.updateLucideIcons();
-                    }
-                }
-            }
-        });
-
-        // Configura o botão de editar perfil
-        const editProfileButton = document.getElementById('edit-profile-button');
-        if (editProfileButton) {
-            editProfileButton.addEventListener('click', () => {
-                userMenuDropdown.classList.add('hidden');
-                userMenuActive = false;
-                // Reset chevron icon
-                const chevronIcon = userMenuButton.querySelector('[data-lucide="chevron-up"]');
-                if (chevronIcon) {
-                    chevronIcon.setAttribute('data-lucide', 'chevron-down');
-                    if (window.updateLucideIcons) window.updateLucideIcons();
-                }
-                openProfileModal();
-            });
-        }
-        // Bloco else removido para simplificar e evitar SyntaxError.
-        // A ausência do botão apenas significa que o listener não será adicionado.
-
-        // Configura o botão de logout
-        const logoutButton = document.getElementById('logout-button');
-        if (logoutButton) {
-            logoutButton.addEventListener('click', async () => {
-                userMenuDropdown.classList.add('hidden');
-                userMenuActive = false;
-                 // Reset chevron icon
-                const chevronIcon = userMenuButton.querySelector('[data-lucide="chevron-up"]');
-                if (chevronIcon) {
-                    chevronIcon.setAttribute('data-lucide', 'chevron-down');
-                    if (window.updateLucideIcons) window.updateLucideIcons();
-                }
-                const result = await logout();
-                if (result.success) {
-                    // O redirecionamento será tratado pelo módulo de autenticação
-                } else {
-                    showError('Erro ao sair', result.error);
-                }
-            });
-        }
-        // Bloco else removido para simplificar e evitar SyntaxError.
-        // A ausência do botão apenas significa que o listener não será adicionado.
-}
+// O código duplicado abaixo foi removido.
+// Ele era uma cópia da lógica de event listeners que agora está dentro do
+// bloco `if (userMenuButton && userMenuDropdown)` da função setupUserMenu acima.
 
 /**
  * Configura o modal de perfil
