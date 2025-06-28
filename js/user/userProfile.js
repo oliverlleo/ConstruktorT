@@ -22,9 +22,12 @@ export function initUserProfile(database) {
     auth = firebase.auth();
     storage = firebase.storage();
     
-    setupUserMenu();
-    setupProfileModal();
-    loadUserProfileData();
+    // Adia a execução para garantir que o DOM esteja totalmente pronto
+    setTimeout(() => {
+        setupUserMenu();
+        setupProfileModal();
+        loadUserProfileData(); // loadUserProfileData também acessa elementos do DOM, então é bom adiá-lo também.
+    }, 0);
 }
 
 /**
@@ -135,21 +138,56 @@ function setupProfileModal() {
     const saveProfileButton = document.getElementById('save-profile-button');
     const changeAvatarButton = document.getElementById('change-avatar-button');
     const avatarUploadInput = document.getElementById('avatar-upload-input');
+
+    if (!profileModal) {
+        console.error("Elemento 'profile-modal' não encontrado durante setupProfileModal.");
+        return;
+    }
+    if (!closeProfileModal) {
+        console.error("Elemento 'close-profile-modal' não encontrado durante setupProfileModal.");
+        return;
+    }
+    if (!cancelProfileButton) {
+        console.error("Elemento 'cancel-profile-button' não encontrado durante setupProfileModal.");
+        return;
+    }
+    if (!saveProfileButton) {
+        console.error("Elemento 'save-profile-button' não encontrado durante setupProfileModal.");
+        return;
+    }
+    if (!changeAvatarButton) {
+        console.error("Elemento 'change-avatar-button' não encontrado durante setupProfileModal.");
+        return;
+    }
+    if (!avatarUploadInput) {
+        console.error("Elemento 'avatar-upload-input' não encontrado durante setupProfileModal.");
+        return;
+    }
     
     // Fechar o modal
     const closeModal = () => {
-        profileModal.querySelector('.bg-white').classList.add('scale-95', 'opacity-0');
-        setTimeout(() => {
-            profileModal.classList.add('hidden');
-        }, 300);
+        // Verifica se profileModal e seu filho existem antes de manipular classes
+        const innerModal = profileModal.querySelector('.bg-white');
+        if (innerModal) {
+            innerModal.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                profileModal.classList.add('hidden');
+            }, 300);
+        } else {
+            profileModal.classList.add('hidden'); // Fallback se a estrutura interna não for a esperada
+        }
     };
     
     // Abrir o modal
     window.openProfileModal = () => {
         profileModal.classList.remove('hidden');
-        setTimeout(() => {
-            profileModal.querySelector('.bg-white').classList.remove('scale-95', 'opacity-0');
-        }, 10);
+        // Verifica se profileModal e seu filho existem antes de manipular classes
+        const innerModal = profileModal.querySelector('.bg-white');
+        if (innerModal) {
+            setTimeout(() => {
+                innerModal.classList.remove('scale-95', 'opacity-0');
+            }, 10);
+        }
     };
     
     closeProfileModal.addEventListener('click', closeModal);
