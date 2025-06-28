@@ -216,17 +216,21 @@ async function loadUserProfileData() {
     
     const userId = getUsuarioId();
     const userDisplayName = document.getElementById('user-display-name');
-    const userAvatarPreview = document.getElementById('user-avatar-preview');
-    const modalAvatarPreview = document.getElementById('modal-avatar-preview');
-    const nicknameInput = document.getElementById('nickname-input');
-    const emailInput = document.getElementById('email-input');
+    const userAvatarPreview = document.getElementById('user-avatar-preview'); // Dropdown do header
+    const sidebarUserAvatarPreview = document.getElementById('sidebar-user-avatar-preview'); // Sidebar
+    const modalAvatarPreview = document.getElementById('modal-avatar-preview'); // Modal de edição
+    const nicknameInput = document.getElementById('nickname-input'); // Modal de edição
+    const emailInput = document.getElementById('email-input'); // Modal de edição
+    const sidebarUserDisplayName = document.getElementById('sidebar-user-display-name'); // Sidebar
     
     // Log para verificar a existência dos elementos ao carregar dados
-    if (!userDisplayName) console.warn("[userProfile.js] Elemento 'user-display-name' não encontrado em loadUserProfileData.");
-    if (!userAvatarPreview) console.warn("[userProfile.js] Elemento 'user-avatar-preview' não encontrado em loadUserProfileData.");
-    if (!modalAvatarPreview) console.warn("[userProfile.js] Elemento 'modal-avatar-preview' não encontrado em loadUserProfileData.");
-    if (!nicknameInput) console.warn("[userProfile.js] Elemento 'nickname-input' não encontrado em loadUserProfileData.");
-    if (!emailInput) console.warn("[userProfile.js] Elemento 'email-input' não encontrado em loadUserProfileData.");
+    if (!userDisplayName) console.warn("[userProfile.js] Elemento 'user-display-name' (header) não encontrado em loadUserProfileData.");
+    if (!sidebarUserDisplayName) console.warn("[userProfile.js] Elemento 'sidebar-user-display-name' (sidebar) não encontrado em loadUserProfileData.");
+    if (!userAvatarPreview) console.warn("[userProfile.js] Elemento 'user-avatar-preview' (header) não encontrado em loadUserProfileData.");
+    if (!sidebarUserAvatarPreview) console.warn("[userProfile.js] Elemento 'sidebar-user-avatar-preview' (sidebar) não encontrado em loadUserProfileData.");
+    if (!modalAvatarPreview) console.warn("[userProfile.js] Elemento 'modal-avatar-preview' (modal) não encontrado em loadUserProfileData.");
+    if (!nicknameInput) console.warn("[userProfile.js] Elemento 'nickname-input' (modal) não encontrado em loadUserProfileData.");
+    if (!emailInput) console.warn("[userProfile.js] Elemento 'email-input' (modal) não encontrado em loadUserProfileData.");
 
     try {
         const snapshot = await db.ref(`users/${userId}`).once('value');
@@ -236,19 +240,25 @@ async function loadUserProfileData() {
         const emailValue = getUsuarioEmail() || '';
         const photoURLValue = userData.photoURL || getUsuarioFoto() || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayNameValue)}&background=random`;
 
-        if (userDisplayName) {
+        if (userDisplayName) { // Header dropdown
             userDisplayName.textContent = displayNameValue;
         }
-        if (nicknameInput) {
+        if (sidebarUserDisplayName) { // Sidebar
+            sidebarUserDisplayName.textContent = displayNameValue;
+        }
+        if (nicknameInput) { // Modal de edição
             nicknameInput.value = displayNameValue;
         }
-        if (emailInput) {
+        if (emailInput) { // Modal de edição
             emailInput.value = emailValue;
         }
-        if (userAvatarPreview) {
+        if (userAvatarPreview) { // Header dropdown
             userAvatarPreview.src = photoURLValue;
         }
-        if (modalAvatarPreview) {
+        if (sidebarUserAvatarPreview) { // Sidebar
+            sidebarUserAvatarPreview.src = photoURLValue;
+        }
+        if (modalAvatarPreview) { // Modal de edição
             modalAvatarPreview.src = photoURLValue;
         }
 
@@ -259,19 +269,25 @@ async function loadUserProfileData() {
         const emailValue = getUsuarioEmail() || '';
         const photoURLValue = getUsuarioFoto() || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayNameValue)}&background=random`;
 
-        if (userDisplayName) {
+        if (userDisplayName) { // Header dropdown
             userDisplayName.textContent = displayNameValue;
         }
-        if (nicknameInput) {
+        if (sidebarUserDisplayName) { // Sidebar
+            sidebarUserDisplayName.textContent = displayNameValue;
+        }
+        if (nicknameInput) { // Modal de edição
             nicknameInput.value = displayNameValue;
         }
-        if (emailInput) {
+        if (emailInput) { // Modal de edição
             emailInput.value = emailValue;
         }
-        if (userAvatarPreview) {
+        if (userAvatarPreview) { // Header dropdown
             userAvatarPreview.src = photoURLValue;
         }
-        if (modalAvatarPreview) {
+        if (sidebarUserAvatarPreview) { // Sidebar
+            sidebarUserAvatarPreview.src = photoURLValue;
+        }
+        if (modalAvatarPreview) { // Modal de edição
             modalAvatarPreview.src = photoURLValue;
         }
     }
