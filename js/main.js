@@ -40,14 +40,10 @@ async function initApp() {
         db = firebase.database();
         
         // Inicializa a interface do usuário
-        console.log("[main.js] Antes de initUI, user-menu-button:", document.getElementById('user-menu-button')); 
         initUI();
-        console.log("[main.js] Depois de initUI, user-menu-button:", document.getElementById('user-menu-button'));
         
         // Inicializa o sistema de gerenciamento de usuário
-        console.log("[main.js] Antes de initUserProfile, user-menu-button:", document.getElementById('user-menu-button'));
         initUserProfile(db);
-        console.log("[main.js] Depois de initUserProfile, user-menu-button:", document.getElementById('user-menu-button'));
         
         // Inicializa o sistema de convites
         initInvitations(db);

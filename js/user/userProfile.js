@@ -31,95 +31,44 @@ export function initUserProfile(database) {
  * Configura o menu do usuário
  */
 function setupUserMenu() {
-    console.log("[userProfile.js] Início de setupUserMenu, user-menu-button:", document.getElementById('user-menu-button'));
     const userMenuButton = document.getElementById('user-menu-button');
     const userMenuDropdown = document.getElementById('user-menu-dropdown');
-    const mobileMenuToggle = document.getElementById('mobile-menu-toggle'); // Get the mobile toggle
-
-    if (userMenuButton && userMenuDropdown) {
-        // Verificar se o mobile-menu-toggle está presente e visível
-        // offsetWidth > 0 é uma forma de checar se o elemento está visível (não display:none, etc.)
-        const isMobileLayout = mobileMenuToggle && mobileMenuToggle.offsetWidth > 0 && mobileMenuToggle.offsetHeight > 0;
-
-        if (!isMobileLayout) { // Só configurar o dropdown do user-menu-button se NÃO estivermos no layout mobile onde o toggle é rei
-            console.log("[userProfile.js] Configurando listeners para user-menu-button (layout não móvel ou mobile-menu-toggle não visível)");
-            userMenuButton.addEventListener('click', () => {
-                userMenuDropdown.classList.toggle('hidden');
-                userMenuActive = !userMenuActive;
-                
-                const chevronIcon = userMenuButton.querySelector('[data-lucide="chevron-down"], [data-lucide="chevron-up"]');
-                if (chevronIcon) {
-                    chevronIcon.setAttribute('data-lucide', userMenuActive ? 'chevron-up' : 'chevron-down');
-                    if (window.lucide) {
-                        lucide.createIcons();
-                    }
-                }
-            });
-
-            // Fecha o menu ao clicar fora dele
-            document.addEventListener('click', (event) => {
-                if (!userMenuButton.contains(event.target) && !userMenuDropdown.contains(event.target)) {
-                    if (!userMenuDropdown.classList.contains('hidden')) {
-                        userMenuDropdown.classList.add('hidden');
-                        userMenuActive = false;
-                        const chevronIcon = userMenuButton.querySelector('[data-lucide="chevron-down"], [data-lucide="chevron-up"]');
-                        if (chevronIcon) {
-                            chevronIcon.setAttribute('data-lucide', 'chevron-down');
-                            if (window.lucide) {
-                                lucide.createIcons();
-                            }
-                        }
-                    }
-                }
-            });
-        } else {
-            console.log("[userProfile.js] Layout móvel detectado (mobile-menu-toggle visível). Listeners do user-menu-button para dropdown não serão anexados.");
-            // No layout móvel, o user-menu-dropdown associado ao user-menu-button principal
-            // provavelmente não deve ser usado, pois mobile-menu-toggle controla a desktop-sidebar.
-            // Podemos até explicitamente garantir que o user-menu-dropdown esteja oculto.
-            if (userMenuDropdown) { // Check if dropdown exists before adding class
-                userMenuDropdown.classList.add('hidden');
+    
+    // Mostra/Esconde o menu ao clicar no botão
+    userMenuButton.addEventListener('click', () => {
+        userMenuDropdown.classList.toggle('hidden');
+        userMenuActive = !userMenuActive;
+        
+        // Atualiza o ícone de chevron
+        const chevronIcon = userMenuButton.querySelector('[data-lucide="chevron-down"]');
+        if (chevronIcon) {
+            chevronIcon.setAttribute('data-lucide', userMenuActive ? 'chevron-up' : 'chevron-down');
+            const iconsToUpdate = document.querySelectorAll('[data-lucide]');
+            if (window.lucide && iconsToUpdate) {
+                lucide.createIcons({
+                    icons: iconsToUpdate
+                });
             }
         }
-
-        // Configurações de perfil e logout ainda podem ser vinculadas aos botões dentro do dropdown,
-        // mas o dropdown em si só abriria no desktop.
-        // No mobile, esses links estariam na desktop-sidebar (se ela for populada com eles).
-        // Esta parte do código original assume que user-menu-dropdown é o container:
-
-        const editProfileButton = document.getElementById('edit-profile-button');
-        if (editProfileButton) { // Não depende mais do userMenuDropdown para ser encontrado
-            editProfileButton.addEventListener('click', () => {
-                if (userMenuDropdown && !userMenuDropdown.classList.contains('hidden')) { // Se o dropdown estiver aberto (desktop)
-                    userMenuDropdown.classList.add('hidden');
-                    userMenuActive = false;
-                }
-                // Em mobile, o openProfileModal pode vir de um botão na sidebar
-                openProfileModal(); 
-            });
-        }
+    });
     
-        const logoutButton = document.getElementById('logout-button');
-        if (logoutButton) { // Não depende mais do userMenuDropdown
-            logoutButton.addEventListener('click', async () => {
-                if (userMenuDropdown && !userMenuDropdown.classList.contains('hidden')) { // Se o dropdown estiver aberto (desktop)
-                    userMenuDropdown.classList.add('hidden');
-                }
-                const result = await logout();
-                if (result.success) {
-                    // O redirecionamento será tratado pelo módulo de autenticação
-                } else {
-                    showError('Erro ao sair', result.error);
-                }
-            });
-        }
-
-    } else {
-        if (!userMenuButton) {
-            console.warn("[userProfile.js] user-menu-button não encontrado. Menu do usuário não configurado.");
-        }
-        if (!userMenuDropdown) {
-            console.warn("[userProfile.js] user-menu-dropdown não encontrado. Menu do usuário não configurado.");
+    // Fecha o menu ao clicar fora dele
+    document.addEventListener('click', (event) => {
+        if (!userMenuButton.contains(event.target) && !userMenuDropdown.contains(event.target)) {
+            if (!userMenuDropdown.classList.contains('hidden')) {
+                userMenuDropdown.classList.add('hidden');
+                userMenuActive = false;
+                
+                // Atualiza o ícone de chevron
+                const chevronIcon = userMenuButton.querySelector('[data-lucide]');
+                if (chevronIcon) {
+                    chevronIcon.setAttribute('data-lucide', 'chevron-down');
+                    const iconsToUpdate = document.querySelectorAll('[data-lucide]');
+                    if (window.lucide && iconsToUpdate) {
+                        lucide.createIcons({
+                            icons: iconsToUpdate
+                        });
+                    }
                 }
             }
         }
