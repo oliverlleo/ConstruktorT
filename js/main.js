@@ -109,11 +109,16 @@ async function initApp() {
         console.error("Erro ao inicializar aplicação:", error);
         const loadingOverlay = document.getElementById('loading-overlay');
         if (loadingOverlay) {
+            // Garante que o overlay de loading seja visível se ainda não estiver, para mostrar a mensagem de erro.
+            loadingOverlay.style.display = 'flex'; // Ou 'block', dependendo do CSS original para visibilidade
             loadingOverlay.innerHTML = '<div class="text-center p-4 sm:p-5 bg-white rounded-lg shadow-md max-w-xs sm:max-w-sm"><div class="text-red-600 text-xl sm:text-2xl mb-3"><i data-lucide="alert-triangle"></i></div><p class="text-base sm:text-lg font-semibold text-red-700">Erro ao iniciar o sistema.</p><p class="text-slate-600 mt-2 text-sm sm:text-base">Verifique sua conexão com a internet e tente novamente.</p></div>';
+            createIcons(); // Renderiza o ícone de alerta
         } else {
-            console.error("Elemento 'loading-overlay' não encontrado durante o tratamento de erro.");
+            console.error("Elemento 'loading-overlay' não encontrado durante o tratamento de erro. A mensagem de erro não pôde ser exibida na tela.");
+            // Se o loadingOverlay não existe, talvez alertar o usuário seja uma alternativa,
+            // ou logar de forma mais proeminente, pois a UI pode estar quebrada.
+            alert("Erro crítico ao iniciar a aplicação. Verifique o console para detalhes.");
         }
-        createIcons(); // Manter esta chamada para garantir que ícones (como o de alerta) sejam renderizados
     }
 }
 

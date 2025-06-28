@@ -34,9 +34,23 @@ function setupUserMenu() {
     const userMenuButton = document.getElementById('user-menu-button');
     const userMenuDropdown = document.getElementById('user-menu-dropdown');
 
-    if (userMenuButton && userMenuDropdown) {
-        // Mostra/Esconde o menu ao clicar no botão
-        userMenuButton.addEventListener('click', () => {
+    if (!userMenuButton) {
+        console.error("Elemento 'user-menu-button' não encontrado durante setupUserMenu.");
+        // Se o botão principal não existe, não faz sentido continuar configurando o menu.
+        // Poderia também verificar userMenuDropdown, mas o botão é mais crítico.
+        return;
+    }
+
+    if (!userMenuDropdown) {
+        console.error("Elemento 'user-menu-dropdown' não encontrado durante setupUserMenu.");
+        // Pode optar por retornar aqui também, ou permitir que o botão exista sem um dropdown funcional.
+        // Por segurança, vamos retornar se o dropdown também não for encontrado.
+        return;
+    }
+
+    // Agora podemos prosseguir, sabendo que userMenuButton e userMenuDropdown existem.
+    // Mostra/Esconde o menu ao clicar no botão
+    userMenuButton.addEventListener('click', () => {
             userMenuDropdown.classList.toggle('hidden');
             userMenuActive = !userMenuActive;
 
