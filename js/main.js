@@ -9,7 +9,7 @@ import { initDatabase, loadAllEntities, loadAndRenderModules, loadDroppedEntitie
          loadStructureForEntity, createEntity, createModule, saveEntityToModule, deleteEntityFromModule,
          deleteEntity, deleteModule, saveEntityStructure, saveSubEntityStructure, saveModulesOrder } from './database.js';
 import { initUI, createIcons, checkEmptyStates, showLoading, hideLoading, showSuccess, 
-         showError, showConfirmDialog, showInputDialog, isMobileSidebarCurrentlyOpen, requestCloseMobileSidebar } from './ui.js';
+         showError, showConfirmDialog, showInputDialog } from './ui.js';
 import { initUserProfile } from './user/userProfile.js';
 import { initInvitations, checkPendingInvitations } from './user/invitations.js';
 import { initWorkspaces, getCurrentWorkspace } from './workspaces.js';
@@ -224,11 +224,7 @@ function renderEntityInLibrary(entity) {
             dragClass: 'sortable-drag',
             delay: 50,
             delayOnTouchOnly: true,
-            onStart: function (/**Event*/evt) {
-                if (isMobileSidebarCurrentlyOpen()) {
-                    requestCloseMobileSidebar();
-                }
-            },
+            // onStart callback removido para reverter a feature
         });
     }
 }

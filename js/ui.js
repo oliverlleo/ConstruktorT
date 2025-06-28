@@ -7,7 +7,7 @@ import { TIPS_STATE } from './config.js';
 import { getUserPreference, saveUserPreference } from './database.js';
 
 // Variável para controle do estado da interface
-let moduleMobileSidebarOpen = false; // Renomeada para evitar conflito com a local em setupMobileInteractions se não for removida de lá
+let mobileSidebarOpen = false;
 let modalSidebarOpen = false;
 let isLoading = false;
 
@@ -40,36 +40,6 @@ export function createIcons() {
     }
 }
 
-
-// === Funções Exportadas para Controle da Sidebar Mobile ===
-
-/**
- * Verifica se a sidebar mobile está aberta e se estamos em modo mobile.
- * @returns {boolean} True se a sidebar mobile estiver aberta, false caso contrário.
- */
-export function isMobileSidebarCurrentlyOpen() {
-    const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
-    // Consideramos "modo mobile" se o botão de toggle do menu mobile estiver visível
-    // (Tailwind 'sm:hidden' significa que é hidden em telas 'sm' e maiores, logo visível em menores que 'sm')
-    const isMobileMode = mobileMenuToggle && window.getComputedStyle(mobileMenuToggle).display !== 'none';
-    return isMobileMode && moduleMobileSidebarOpen;
-}
-
-/**
- * Solicita o fechamento da sidebar mobile, se estiver aberta e em modo mobile.
- */
-export function requestCloseMobileSidebar() {
-    if (isMobileSidebarCurrentlyOpen()) { // Só tenta fechar se estiver aberta e em modo mobile
-        const ds = document.getElementById('desktop-sidebar');
-        if (ds) {
-            ds.classList.remove('translate-x-0');
-            ds.classList.add('-translate-x-full');
-            moduleMobileSidebarOpen = false;
-            // console.log("Sidebar mobile fechada programaticamente via requestCloseMobileSidebar.");
-        }
-    }
-}
-
 /**
  * Configura interações específicas para dispositivos móveis
  */
@@ -79,34 +49,31 @@ export function setupMobileInteractions() {
     const desktopSidebar = document.getElementById('desktop-sidebar');
     const closeMobileMenu = document.getElementById('close-mobile-menu');
     
-    // Variável para controlar o estado da barra lateral no modo móvel
-    // Usaremos moduleMobileSidebarOpen do escopo do módulo agora.
-    // let mobileSidebarOpen = false; // Removida variável local
+    // Variável local para controlar o estado da barra lateral no modo móvel (restaurado)
+    let mobileSidebarOpen = false;
 
     // Função para fechar o menu
     const closeMenu = () => {
-        const ds = document.getElementById('desktop-sidebar'); // Re-obter para garantir que temos a referência correta
-        if (ds) {
-            ds.classList.remove('translate-x-0');
-            ds.classList.add('-translate-x-full');
-            moduleMobileSidebarOpen = false;
+        if (desktopSidebar) { // Usa a referência de desktopSidebar do escopo de setupMobileInteractions
+            desktopSidebar.classList.remove('translate-x-0');
+            desktopSidebar.classList.add('-translate-x-full');
+            mobileSidebarOpen = false; // Atualiza a variável local
         }
     };
 
     // Função para abrir o menu
     const openMenu = () => {
-        const ds = document.getElementById('desktop-sidebar'); // Re-obter
-         if (ds) {
-            ds.classList.remove('-translate-x-full');
-            ds.classList.add('translate-x-0');
-            moduleMobileSidebarOpen = true;
+         if (desktopSidebar) { // Usa a referência de desktopSidebar
+            desktopSidebar.classList.remove('-translate-x-full');
+            desktopSidebar.classList.add('translate-x-0');
+            mobileSidebarOpen = true; // Atualiza a variável local
         }
     };
 
-    if (mobileMenuToggle && desktopSidebar) { // desktopSidebar ainda é a referência inicial aqui, o que é ok para o listener
+    if (mobileMenuToggle && desktopSidebar) {
         mobileMenuToggle.addEventListener('click', () => {
             // Verifica o estado atual e alterna
-            if (moduleMobileSidebarOpen) { // Usa a variável do módulo
+            if (mobileSidebarOpen) { // Usa a variável local
                 closeMenu();
             } else {
                 openMenu();
@@ -122,10 +89,12 @@ export function setupMobileInteractions() {
     
     // Fechar menu ao clicar fora (overlay)
     document.addEventListener('click', (e) => {
-        const ds = document.getElementById('desktop-sidebar'); // Re-obter
-        const mmt = document.getElementById('mobile-menu-toggle'); // Re-obter
         // Garante que o menu esteja aberto e o clique foi fora da sidebar e do botão que a abre
-        if (moduleMobileSidebarOpen && ds && !ds.contains(e.target) && mmt && !mmt.contains(e.target)) {
+        // Re-obtém referências aqui por segurança, embora as do escopo da função também possam funcionar
+        // se não forem alteradas por outros scripts, o que é improvável para IDs.
+        const currentDesktopSidebar = document.getElementById('desktop-sidebar');
+        const currentMobileMenuToggle = document.getElementById('mobile-menu-toggle');
+        if (mobileSidebarOpen && currentDesktopSidebar && !currentDesktopSidebar.contains(e.target) && currentMobileMenuToggle && !currentMobileMenuToggle.contains(e.target)) {
             closeMenu();
         }
     });
