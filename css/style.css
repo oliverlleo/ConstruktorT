@@ -3,10 +3,6 @@ body {
     background-color: #f8fafc;
 }
 
-#desktop-sidebar.open {
-  transform: translateX(0);
-}
-
 /* Loading Animation */
 .loading-overlay {
     position: fixed;
