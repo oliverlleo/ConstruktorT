@@ -20,18 +20,54 @@ let modalNavigationStack = [];
 
 // ==== PONTO DE ENTRADA DA APLICAÇÃO ====
 async function initApp() {
-    // Log inicial para verificar a presença dos templates
-    console.log("[main.js] Verificando templates no início de initApp:", {
-        'module-template': document.getElementById('module-template'),
-        'entity-card-template': document.getElementById('entity-card-template'),
-        'dropped-entity-card-template': document.getElementById('dropped-entity-card-template'),
-        'toolbox-field-template': document.getElementById('toolbox-field-template'),
-        'form-field-template': document.getElementById('form-field-template'),
-        'loading-overlay': document.getElementById('loading-overlay'), // Adicionado para verificação
-        'app': document.getElementById('app') // Adicionado para verificação
-    });
+    const criticalElements = {
+        app: document.getElementById('app'),
+        loadingOverlay: document.getElementById('loading-overlay'),
+        moduleTemplate: document.getElementById('module-template'),
+        entityCardTemplate: document.getElementById('entity-card-template'),
+        droppedEntityCardTemplate: document.getElementById('dropped-entity-card-template'),
+        toolboxFieldTemplate: document.getElementById('toolbox-field-template'),
+        formFieldTemplate: document.getElementById('form-field-template')
+    };
 
-    showLoading('Inicializando aplicação...');
+    console.log("[main.js] Verificando elementos CRUCIAIS no início de initApp:", criticalElements);
+
+    // Verificação crítica para #app e #loading-overlay
+    if (!criticalElements.app || !criticalElements.loadingOverlay) {
+        console.error(
+            "ERRO CRÍTICO DE INICIALIZAÇÃO: Elemento #app ou #loading-overlay não encontrado no DOM. A aplicação não pode continuar de forma confiável.",
+            { appExists: !!criticalElements.app, loadingOverlayExists: !!criticalElements.loadingOverlay }
+        );
+        // Tenta exibir um erro no loading-overlay se ele existir, caso contrário, um alert.
+        if (criticalElements.loadingOverlay) {
+            criticalElements.loadingOverlay.innerHTML = '<div style="color:red; text-align:center; padding:20px; font-family: sans-serif; font-size: 16px;">Erro crítico: Falha ao carregar componentes base da aplicação. Verifique o console.</div>';
+            criticalElements.loadingOverlay.style.display = 'flex'; // Garante que seja visível
+        } else {
+            // Se o loading overlay também estiver ausente, o body pode estar vazio.
+            // Adicionar mensagem diretamente ao body ou usar alert.
+            try {
+                const errorDiv = document.createElement('div');
+                errorDiv.style.cssText = "color:red; text-align:center; padding:20px; font-family: sans-serif; font-size: 16px; position:fixed; top:0; left:0; width:100%; background:white; z-index:99999;";
+                errorDiv.textContent = "Erro crítico: Falha ao carregar componentes base da aplicação. Verifique o console.";
+                document.body.prepend(errorDiv); // Adiciona no topo do body
+            } catch(e) {
+                alert("Erro crítico: Falha grave ao carregar a aplicação. Verifique o console.");
+            }
+        }
+        return; // Interrompe a inicialização para evitar mais erros.
+    }
+    
+    // Verificação para o module-template, essencial para renderModule
+    if (!criticalElements.moduleTemplate) {
+        console.error(
+            "ERRO CRÍTICO DE INICIALIZAÇÃO: O <template id='module-template'> não foi encontrado no DOM. Funcionalidades principais como a renderização de módulos serão afetadas."
+        );
+        // Permite que a app tente continuar para que outros erros (ou a falta deles) possam ser observados,
+        // mas a funcionalidade de módulos estará quebrada. As proteções em renderModule vão pegar isso.
+        // Poderia optar por um `return;` aqui também se a ausência do module-template for considerada fatal para toda a app.
+    }
+
+    showLoading('Inicializando aplicação...'); // showLoading pode depender do loading-overlay
     
     try {
         // Inicializa o Firebase
