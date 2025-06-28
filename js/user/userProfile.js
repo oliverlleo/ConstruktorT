@@ -134,10 +134,21 @@ function setupProfileModal() {
     const saveProfileButton = document.getElementById('save-profile-button');
     const changeAvatarButton = document.getElementById('change-avatar-button');
     const avatarUploadInput = document.getElementById('avatar-upload-input');
+
+    if (!profileModal) {
+        console.warn("[userProfile.js] Elemento 'profile-modal' não encontrado. Funcionalidade do modal de perfil pode ser afetada.");
+        return; // Se o próprio modal não existe, não adianta configurar o resto.
+    }
     
     // Fechar o modal
     const closeModal = () => {
-        profileModal.querySelector('.bg-white').classList.add('scale-95', 'opacity-0');
+        // Adicionar verificação interna se profileModal.querySelector pode falhar
+        const modalContent = profileModal.querySelector('.bg-white');
+        if (modalContent) {
+            modalContent.classList.add('scale-95', 'opacity-0');
+        } else {
+            console.warn("[userProfile.js] Conteúdo interno do 'profile-modal' (.bg-white) não encontrado ao tentar fechar.");
+        }
         setTimeout(() => {
             profileModal.classList.add('hidden');
         }, 300);
@@ -146,23 +157,54 @@ function setupProfileModal() {
     // Abrir o modal
     window.openProfileModal = () => {
         profileModal.classList.remove('hidden');
-        setTimeout(() => {
-            profileModal.querySelector('.bg-white').classList.remove('scale-95', 'opacity-0');
-        }, 10);
+        // Adicionar verificação interna
+        const modalContent = profileModal.querySelector('.bg-white');
+        if (modalContent) {
+            setTimeout(() => {
+                modalContent.classList.remove('scale-95', 'opacity-0');
+            }, 10);
+        } else {
+            console.warn("[userProfile.js] Conteúdo interno do 'profile-modal' (.bg-white) não encontrado ao tentar abrir.");
+        }
     };
     
-    closeProfileModal.addEventListener('click', closeModal);
-    cancelProfileButton.addEventListener('click', closeModal);
+    if (closeProfileModal) {
+        closeProfileModal.addEventListener('click', closeModal);
+    } else {
+        console.warn("[userProfile.js] Elemento 'close-profile-modal' não encontrado.");
+    }
     
-    // Tratamento do upload de avatar
-    changeAvatarButton.addEventListener('click', () => {
-        avatarUploadInput.click();
-    });
+    if (cancelProfileButton) {
+        cancelProfileButton.addEventListener('click', closeModal);
+    } else {
+        console.warn("[userProfile.js] Elemento 'cancel-profile-button' não encontrado.");
+    }
     
-    avatarUploadInput.addEventListener('change', handleAvatarUpload);
+    if (changeAvatarButton && avatarUploadInput) {
+        changeAvatarButton.addEventListener('click', () => {
+            avatarUploadInput.click();
+        });
+    } else {
+        if (!changeAvatarButton) console.warn("[userProfile.js] Elemento 'change-avatar-button' não encontrado.");
+        if (!avatarUploadInput) console.warn("[userProfile.js] Elemento 'avatar-upload-input' não encontrado.");
+    }
     
-    // Salvar alterações no perfil
-    saveProfileButton.addEventListener('click', saveUserProfile);
+    if (avatarUploadInput) {
+        avatarUploadInput.addEventListener('change', handleAvatarUpload);
+    } else {
+        // O aviso para avatarUploadInput já foi dado acima se changeAvatarButton também estiver ausente ou se ele for o único ausente.
+        // Se apenas avatarUploadInput estiver faltando mas changeAvatarButton existir, o log acima não cobre.
+        // Para ser explícito se APENAS avatarUploadInput estiver faltando:
+        if (!document.getElementById('avatar-upload-input')) { // Re-checa para log específico se o anterior não pegou
+             console.warn("[userProfile.js] Elemento 'avatar-upload-input' não encontrado (verificação para listener 'change').");
+        }
+    }
+    
+    if (saveProfileButton) {
+        saveProfileButton.addEventListener('click', saveUserProfile);
+    } else {
+        console.warn("[userProfile.js] Elemento 'save-profile-button' não encontrado.");
+    }
 }
 
 /**
