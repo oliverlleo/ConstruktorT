@@ -15,16 +15,29 @@ let userMenuActive = false;
 /**
  * Inicializa o módulo de perfil do usuário
  * @param {Object} database - Referência ao banco de dados Firebase
+ * @param {string} userId - ID do usuário autenticado
  */
-export function initUserProfile(database) {
-    console.log('Inicializando módulo de perfil do usuário...');
-    db = database;
-    auth = firebase.auth();
+export async function initUserProfile(database, userId) { // Adicionado userId, função agora é async
+    console.log('Inicializando módulo de perfil do usuário para:', userId);
+    db = database; // db agora é definido aqui, antes era global não inicializado no escopo de loadUserProfileData se chamado diretamente.
+    auth = firebase.auth(); // auth e storage também precisam ser inicializados se não foram antes.
     storage = firebase.storage();
-    
-    setupUserMenu();
-    setupProfileModal();
-    loadUserProfileData();
+
+    setupUserMenu(); // Pode precisar de dados do usuário, mas geralmente configura listeners
+    setupProfileModal(); // Similar ao setupUserMenu
+
+    // --- MUDANÇA CRÍTICA ---
+    // Aguarde os dados antes de prosseguir
+    try {
+        const userData = await loadUserProfileData(userId);
+        // Agora você pode passar 'userData' para outras funções se necessário
+        // ou simplesmente garantir que tudo foi carregado antes de sair da função.
+        console.log("Dados do perfil do usuário carregados em initUserProfile:", userData);
+    } catch (error) {
+        console.error("Falha ao carregar dados do perfil durante a inicialização do módulo de perfil:", error);
+        // Decidir como lidar com o erro aqui, talvez mostrar uma UI de erro específica.
+    }
+    console.log("Módulo de perfil do usuário inicializado com sucesso.");
 }
 
 /**
@@ -131,11 +144,24 @@ function setupProfileModal() {
     };
     
     // Abrir o modal - make it globally available if needed, or call it from within this module
-    window.openProfileModal = () => { // Keep window.openProfileModal if it's called from elsewhere
-        loadUserProfileData(); // Load data when opening
-        profileModal.classList.remove('hidden');
-        setTimeout(() => {
-            innerModalContent.classList.remove('scale-95', 'opacity-0');
+    window.openProfileModal = async () => { // Keep window.openProfileModal if it's called from elsewhere
+        const currentUserId = getUsuarioId();
+        if (!currentUserId) {
+            showError("Erro", "Usuário não autenticado para abrir perfil.");
+            return;
+        }
+        try {
+            await loadUserProfileData(currentUserId); // Load data when opening
+            profileModal.classList.remove('hidden');
+            setTimeout(() => {
+                innerModalContent.classList.remove('scale-95', 'opacity-0');
+            }, 10);
+        } catch (error) {
+            showError("Erro ao carregar perfil", "Não foi possível carregar os dados do perfil.");
+        }
+    };
+
+    closeProfileModalButton.addEventListener('click', closeModal);
         }, 10);
     };
     
@@ -154,57 +180,78 @@ function setupProfileModal() {
 }
 
 /**
- * Carrega os dados do perfil do usuário nos elementos da UI.
+ * Carrega os dados do perfil do usuário nos elementos da UI e retorna os dados.
  * Chamado ao abrir o modal de perfil e na inicialização.
+ * @param {string} userId - ID do usuário para carregar os dados.
+ * @returns {Promise<Object>} Os dados do usuário carregados.
  */
-async function loadUserProfileData() {
-    const currentUser = getUsuarioAtual();
-    if (!currentUser) {
-        console.warn("Nenhum usuário atual encontrado para carregar dados do perfil.");
-        return;
+async function loadUserProfileData(userId) { // Modificada para aceitar userId
+    if (!userId) {
+        console.warn("userId não fornecido para loadUserProfileData.");
+        throw new Error("User ID is required to load profile data.");
     }
-    
-    const userId = getUsuarioId();
-    const userDisplayNameElement = document.getElementById('user-display-name');
-    const userAvatarPreviewElement = document.getElementById('user-avatar-preview');
-    const modalAvatarPreviewElement = document.getElementById('modal-avatar-preview');
-    const nicknameInputElement = document.getElementById('nickname-input');
-    const emailInputElement = document.getElementById('email-input');
+    // db deve ser inicializado antes desta função ser chamada, o que agora acontece em initUserProfile
+    if (!db) {
+        console.error("Firebase DB não inicializado em loadUserProfileData. Isso não deveria acontecer.");
+        throw new Error("Database not initialized.");
+    }
 
-    // Check if all elements are present before trying to update them
-    if (!userDisplayNameElement || !userAvatarPreviewElement || !modalAvatarPreviewElement || !nicknameInputElement || !emailInputElement) {
-        console.error("Um ou mais elementos da UI para o perfil do usuário não foram encontrados.");
-        return;
-    }
-    
     try {
         // Tenta buscar os dados do usuário no Firebase
         const snapshot = await db.ref(`users/${userId}`).once('value');
-        const userData = snapshot.val() || {};
-        
-        // Define os valores nos elementos da UI
-        const displayName = userData.displayName || getUsuarioNome() || 'Usuário';
-        userDisplayName.textContent = displayName;
-        nicknameInput.value = displayName;
-        emailInput.value = getUsuarioEmail() || '';
-        
-        // Define a imagem do avatar
+        const userData = snapshot.val() || {}; // Garante que userData seja um objeto
+
+        // Verificação dos elementos da UI (ainda é uma boa prática)
+        const userDisplayNameElement = document.getElementById('user-display-name');
+        const userAvatarPreviewElement = document.getElementById('user-avatar-preview');
+        const modalAvatarPreviewElement = document.getElementById('modal-avatar-preview');
+        const nicknameInputElement = document.getElementById('nickname-input');
+        const emailInputElement = document.getElementById('email-input');
+
+        // Define os valores nos elementos da UI, com verificações de existência
+        const displayName = userData.displayName || getUsuarioNome() || 'Usuário'; // getUsuarioNome() pode vir do auth state
+        const userEmail = getUsuarioEmail(); // Email geralmente vem do auth state, não do DB profile userData
         const photoURL = userData.photoURL || getUsuarioFoto() || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`;
-        userAvatarPreview.src = photoURL;
-        modalAvatarPreview.src = photoURL;
+
+        if (userDisplayNameElement) {
+            userDisplayNameElement.textContent = displayName;
+        } else {
+            console.warn("Elemento 'user-display-name' não encontrado durante o carregamento dos dados do perfil.");
+        }
+        if (nicknameInputElement) {
+            nicknameInputElement.value = displayName;
+        } else {
+            console.warn("Elemento 'nickname-input' não encontrado.");
+        }
+        if (emailInputElement) {
+            emailInputElement.value = userEmail || '';
+        } else {
+            console.warn("Elemento 'email-input' não encontrado.");
+        }
+        if (userAvatarPreviewElement) {
+            userAvatarPreviewElement.src = photoURL;
+        } else {
+            console.warn("Elemento 'user-avatar-preview' não encontrado.");
+        }
+        if (modalAvatarPreviewElement) {
+            modalAvatarPreviewElement.src = photoURL;
+        } else {
+            console.warn("Elemento 'modal-avatar-preview' não encontrado.");
+        }
+
+        // --- MUDANÇA CRÍTICA ---
+        // Retorne os dados carregados para quem chamou a função.
+        return userData;
+
     } catch (error) {
         console.error('Erro ao carregar dados do usuário:', error);
-        
-        // Valores padrão em caso de erro
-        const displayName = getUsuarioNome() || 'Usuário';
-        userDisplayName.textContent = displayName;
-        nicknameInput.value = displayName;
-        emailInput.value = getUsuarioEmail() || '';
-        
-        // Avatar padrão em caso de erro
-        const photoURL = getUsuarioFoto() || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`;
-        userAvatarPreview.src = photoURL;
-        modalAvatarPreview.src = photoURL;
+        // Valores padrão em caso de erro (opcional, pois o erro será lançado)
+        const userDisplayNameElement = document.getElementById('user-display-name');
+        if (userDisplayNameElement) userDisplayNameElement.textContent = getUsuarioNome() || 'Usuário';
+        // ... outros fallbacks se desejar antes de lançar ...
+
+        // Lance o erro para que a função que chamou saiba que algo deu errado.
+        throw error;
     }
 }
 
