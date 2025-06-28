@@ -107,8 +107,14 @@ async function initApp() {
         document.getElementById('app').style.display = 'flex';
     } catch (error) {
         console.error("Erro ao inicializar aplicação:", error);
-        document.getElementById('loading-overlay').innerHTML = '<div class="text-center p-4 sm:p-5 bg-white rounded-lg shadow-md max-w-xs sm:max-w-sm"><div class="text-red-600 text-xl sm:text-2xl mb-3"><i data-lucide="alert-triangle"></i></div><p class="text-base sm:text-lg font-semibold text-red-700">Erro ao iniciar o sistema.</p><p class="text-slate-600 mt-2 text-sm sm:text-base">Verifique sua conexão com a internet e tente novamente.</p></div>';
-        createIcons();
+        const loadingOverlayElement = document.getElementById('loading-overlay');
+        if (loadingOverlayElement) {
+            loadingOverlayElement.innerHTML = '<div class="text-center p-4 sm:p-5 bg-white rounded-lg shadow-md max-w-xs sm:max-w-sm"><div class="text-red-600 text-xl sm:text-2xl mb-3"><i data-lucide="alert-triangle"></i></div><p class="text-base sm:text-lg font-semibold text-red-700">Erro ao iniciar o sistema.</p><p class="text-slate-600 mt-2 text-sm sm:text-base">Verifique sua conexão com a internet e tente novamente.</p></div>';
+            createIcons(); 
+        } else {
+            console.error("Elemento 'loading-overlay' não encontrado para exibir mensagem de erro.");
+            alert("Erro crítico ao iniciar a aplicação. Verifique o console para detalhes.");
+        }
     }
 }
 
@@ -879,7 +885,7 @@ async function handleAddNewEntity() {
         const { value: formValues, isConfirmed } = await Swal.fire({
             title: 'Criar Nova Entidade',
             html: `
-                <div class="mb-4">
+                <div class="mb-4 px-4">
                     <label for="swal-input-name" class="block text-sm font-medium text-slate-700 mb-1 text-left">Nome da Entidade</label>
                     <input id="swal-input-name" class="swal2-input w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Ex: Fornecedor, Produto, Funcionário...">
                 </div>
