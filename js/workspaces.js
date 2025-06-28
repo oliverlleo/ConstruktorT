@@ -1,355 +1,497 @@
 /**
- * Módulo de gerenciamento de perfil do usuário
- * Responsável por exibir e atualizar informações do usuário
+ * Conjunto de funções para manipulação da interface do usuário
+ * Gerencia animações, notificações, modais e interações
  */
 
-import { getUsuarioAtual, getUsuarioId, getUsuarioNome, getUsuarioEmail, getUsuarioFoto, logout } from '../autenticacao.js';
-import { showSuccess, showError, showLoading, hideLoading } from '../ui.js';
+import { TIPS_STATE } from './config.js';
+import { getUserPreference, saveUserPreference } from './database.js';
 
-// Variáveis do módulo
-let db;
-let storage;
-let auth;
-let userMenuActive = false;
+// Variável para controle do estado da interface
+let mobileSidebarOpen = false;
+let modalSidebarOpen = false;
+let isLoading = false;
 
 /**
- * Inicializa o módulo de perfil do usuário
- * @param {Object} database - Referência ao banco de dados Firebase
+ * Inicializa elementos e comportamentos da interface do usuário
  */
-export function initUserProfile(database) {
-    console.log('Inicializando módulo de perfil do usuário...');
-    db = database;
-    auth = firebase.auth();
-    storage = firebase.storage();
+export function initUI() {
+    // Font Awesome já é inicializado automaticamente
     
-    setupUserMenu();
-    setupProfileModal();
-    loadUserProfileData();
+    setupMobileInteractions();
+    setupTips();
+    checkEmptyStates();
 }
 
 /**
- * Configura o menu do usuário
+ * Função para inicializar ícones
+ * Agora também inicializa os ícones Lucide, quando disponíveis
  */
-function setupUserMenu() {
-    console.log("[userProfile.js] Início de setupUserMenu, user-menu-button:", document.getElementById('user-menu-button'));
-    const userMenuButton = document.getElementById('user-menu-button');
-    const userMenuDropdown = document.getElementById('user-menu-dropdown');
-    const mobileMenuToggle = document.getElementById('mobile-menu-toggle'); // Get the mobile toggle
-
-    if (userMenuButton && userMenuDropdown) {
-        // Verificar se o mobile-menu-toggle está presente e visível
-        // offsetWidth > 0 é uma forma de checar se o elemento está visível (não display:none, etc.)
-        const isMobileLayout = mobileMenuToggle && mobileMenuToggle.offsetWidth > 0 && mobileMenuToggle.offsetHeight > 0;
-
-        if (!isMobileLayout) { // Só configurar o dropdown do user-menu-button se NÃO estivermos no layout mobile onde o toggle é rei
-            console.log("[userProfile.js] Configurando listeners para user-menu-button (layout não móvel ou mobile-menu-toggle não visível)");
-            userMenuButton.addEventListener('click', () => {
-                userMenuDropdown.classList.toggle('hidden');
-                userMenuActive = !userMenuActive;
-                
-                const chevronIcon = userMenuButton.querySelector('[data-lucide="chevron-down"], [data-lucide="chevron-up"]');
-                if (chevronIcon) {
-                    chevronIcon.setAttribute('data-lucide', userMenuActive ? 'chevron-up' : 'chevron-down');
-                    if (window.lucide) {
-                        lucide.createIcons();
-                    }
-                }
-            });
-
-            // Fecha o menu ao clicar fora dele
-            document.addEventListener('click', (event) => {
-                if (!userMenuButton.contains(event.target) && !userMenuDropdown.contains(event.target)) {
-                    if (!userMenuDropdown.classList.contains('hidden')) {
-                        userMenuDropdown.classList.add('hidden');
-                        userMenuActive = false;
-                        const chevronIcon = userMenuButton.querySelector('[data-lucide="chevron-down"], [data-lucide="chevron-up"]');
-                        if (chevronIcon) {
-                            chevronIcon.setAttribute('data-lucide', 'chevron-down');
-                            if (window.lucide) {
-                                lucide.createIcons();
-                            }
-                        }
-                    }
-                }
-            });
-        } else {
-            console.log("[userProfile.js] Layout móvel detectado (mobile-menu-toggle visível). Listeners do user-menu-button para dropdown não serão anexados.");
-            // No layout móvel, o user-menu-dropdown associado ao user-menu-button principal
-            // provavelmente não deve ser usado, pois mobile-menu-toggle controla a desktop-sidebar.
-            // Podemos até explicitamente garantir que o user-menu-dropdown esteja oculto.
-            if (userMenuDropdown) { // Check if dropdown exists before adding class
-                userMenuDropdown.classList.add('hidden');
-            }
-        }
-
-        // Configurações de perfil e logout ainda podem ser vinculadas aos botões dentro do dropdown,
-        // mas o dropdown em si só abriria no desktop.
-        // No mobile, esses links estariam na desktop-sidebar (se ela for populada com eles).
-        // Esta parte do código original assume que user-menu-dropdown é o container:
-
-        const editProfileButton = document.getElementById('edit-profile-button');
-        if (editProfileButton) { // Não depende mais do userMenuDropdown para ser encontrado
-            editProfileButton.addEventListener('click', () => {
-                if (userMenuDropdown && !userMenuDropdown.classList.contains('hidden')) { // Se o dropdown estiver aberto (desktop)
-                    userMenuDropdown.classList.add('hidden');
-                    userMenuActive = false;
-                }
-                // Em mobile, o openProfileModal pode vir de um botão na sidebar
-                openProfileModal(); 
-            });
-        }
+export function createIcons() {
+    // Font Awesome é inicializado automaticamente
     
-        const logoutButton = document.getElementById('logout-button');
-        if (logoutButton) { // Não depende mais do userMenuDropdown
-            logoutButton.addEventListener('click', async () => {
-                if (userMenuDropdown && !userMenuDropdown.classList.contains('hidden')) { // Se o dropdown estiver aberto (desktop)
-                    userMenuDropdown.classList.add('hidden');
-                }
-                const result = await logout();
-                if (result.success) {
-                    // O redirecionamento será tratado pelo módulo de autenticação
+    // Também inicializa ícones Lucide, se disponíveis
+    if (window.lucide) {
+        try {
+            // Tentativa de criar ícones Lucide
+            lucide.createIcons();
+        } catch (error) {
+            console.warn('Erro ao criar ícones Lucide:', error);
+        }
+    }
+}
+
+/**
+ * Configura interações específicas para dispositivos móveis
+ */
+export function setupMobileInteractions() {
+    // Toggle menu mobile
+    const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
+    const desktopSidebar = document.getElementById('desktop-sidebar');
+    const closeMobileMenu = document.getElementById('close-mobile-menu');
+    
+    if (mobileMenuToggle && desktopSidebar) {
+        mobileMenuToggle.addEventListener('click', () => {
+            desktopSidebar.classList.add('open');
+            mobileSidebarOpen = true;
+        });
+    }
+    
+    if (closeMobileMenu && desktopSidebar) {
+        closeMobileMenu.addEventListener('click', () => {
+            desktopSidebar.classList.remove('open');
+            mobileSidebarOpen = false;
+        });
+    }
+    
+    // Fechar menu ao clicar fora (overlay)
+    document.addEventListener('click', (e) => {
+        if (mobileSidebarOpen && desktopSidebar && !desktopSidebar.contains(e.target) && e.target !== mobileMenuToggle) {
+            desktopSidebar.classList.remove('open');
+            mobileSidebarOpen = false;
+        }
+    });
+    
+    // Toggle para a sidebar do modal em dispositivos móveis
+    const toggleModalSidebar = document.getElementById('toggle-modal-sidebar');
+    const modalSidebarContent = document.getElementById('modal-sidebar-content');
+    
+    if (toggleModalSidebar && modalSidebarContent) {
+        toggleModalSidebar.addEventListener('click', () => {
+            modalSidebarContent.classList.toggle('hidden');
+            modalSidebarOpen = !modalSidebarOpen;
+            
+            // Rotacionar ícone
+            const icon = toggleModalSidebar.querySelector('i');
+            if (icon) {
+                if (modalSidebarOpen) {
+                    icon.setAttribute('data-lucide', 'chevron-up');
                 } else {
-                    showError('Erro ao sair', result.error);
+                    icon.setAttribute('data-lucide', 'chevron-down');
                 }
-            });
-        }
-
-    } else {
-        if (!userMenuButton) {
-            console.warn("[userProfile.js] user-menu-button não encontrado. Menu do usuário não configurado.");
-        }
-        if (!userMenuDropdown) {
-            console.warn("[userProfile.js] user-menu-dropdown não encontrado. Menu do usuário não configurado.");
-                }
+                createIcons();
             }
-        }
-    });
+        });
+    }
     
-    // Configura o botão de editar perfil
-    document.getElementById('edit-profile-button').addEventListener('click', () => {
-        userMenuDropdown.classList.add('hidden');
-        userMenuActive = false;
-        openProfileModal();
-    });
+    // Botão flutuante para adicionar módulo em dispositivos móveis
+    const mobileAddModuleBtn = document.getElementById('mobile-add-module-btn');
+    if (mobileAddModuleBtn) {
+        mobileAddModuleBtn.addEventListener('click', () => {
+            // A ação específica será conectada no módulo principal
+        });
+    }
+}
+
+/**
+ * Configura o sistema de dicas
+ */
+export function setupTips() {
+    // Verifica o estado das dicas (primeiro no Firebase, depois no localStorage como fallback)
+    const welcomeTipClosed = getUserPreference(TIPS_STATE.WELCOME_TIP, false);
+    const quickTipClosed = getUserPreference(TIPS_STATE.QUICK_TIP, false);
+    const modulesTipClosed = getUserPreference(TIPS_STATE.MODULES_TIP, false);
     
-    // Configura o botão de logout
-    document.getElementById('logout-button').addEventListener('click', async () => {
-        userMenuDropdown.classList.add('hidden');
-        const result = await logout();
-        if (result.success) {
-            // O redirecionamento será tratado pelo módulo de autenticação
+    const welcomeTip = document.getElementById('welcome-tip');
+    const quickTip = document.getElementById('quick-tip');
+    const modulesTip = document.getElementById('modules-tip');
+    
+    // Mostra ou esconde as dicas baseado nas preferências do usuário
+    if (welcomeTip) {
+        if (welcomeTipClosed) {
+            welcomeTip.classList.add('hidden');
         } else {
-            showError('Erro ao sair', result.error);
+            welcomeTip.classList.remove('hidden');
         }
-    });
-}
-
-/**
- * Configura o modal de perfil
- */
-function setupProfileModal() {
-    const profileModal = document.getElementById('profile-modal');
-    const closeProfileModal = document.getElementById('close-profile-modal');
-    const cancelProfileButton = document.getElementById('cancel-profile-button');
-    const saveProfileButton = document.getElementById('save-profile-button');
-    const changeAvatarButton = document.getElementById('change-avatar-button');
-    const avatarUploadInput = document.getElementById('avatar-upload-input');
-    
-    // Fechar o modal
-    const closeModal = () => {
-        profileModal.querySelector('.bg-white').classList.add('scale-95', 'opacity-0');
-        setTimeout(() => {
-            profileModal.classList.add('hidden');
-        }, 300);
-    };
-    
-    // Abrir o modal
-    window.openProfileModal = () => {
-        profileModal.classList.remove('hidden');
-        setTimeout(() => {
-            profileModal.querySelector('.bg-white').classList.remove('scale-95', 'opacity-0');
-        }, 10);
-    };
-    
-    closeProfileModal.addEventListener('click', closeModal);
-    cancelProfileButton.addEventListener('click', closeModal);
-    
-    // Tratamento do upload de avatar
-    changeAvatarButton.addEventListener('click', () => {
-        avatarUploadInput.click();
-    });
-    
-    avatarUploadInput.addEventListener('change', handleAvatarUpload);
-    
-    // Salvar alterações no perfil
-    saveProfileButton.addEventListener('click', saveUserProfile);
-}
-
-/**
- * Carrega os dados do perfil do usuário
- */
-async function loadUserProfileData() {
-    const currentUser = getUsuarioAtual();
-    if (!currentUser) return;
-    
-    const userId = getUsuarioId();
-    const userDisplayName = document.getElementById('user-display-name');
-    const userAvatarPreview = document.getElementById('user-avatar-preview');
-    const modalAvatarPreview = document.getElementById('modal-avatar-preview');
-    const nicknameInput = document.getElementById('nickname-input');
-    const emailInput = document.getElementById('email-input');
-    
-    try {
-        // Tenta buscar os dados do usuário no Firebase
-        const snapshot = await db.ref(`users/${userId}`).once('value');
-        const userData = snapshot.val() || {};
-        
-        // Define os valores nos elementos da UI
-        const displayName = userData.displayName || getUsuarioNome() || 'Usuário';
-        userDisplayName.textContent = displayName;
-        nicknameInput.value = displayName;
-        emailInput.value = getUsuarioEmail() || '';
-        
-        // Define a imagem do avatar
-        const photoURL = userData.photoURL || getUsuarioFoto() || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`;
-        userAvatarPreview.src = photoURL;
-        modalAvatarPreview.src = photoURL;
-    } catch (error) {
-        console.error('Erro ao carregar dados do usuário:', error);
-        
-        // Valores padrão em caso de erro
-        const displayName = getUsuarioNome() || 'Usuário';
-        userDisplayName.textContent = displayName;
-        nicknameInput.value = displayName;
-        emailInput.value = getUsuarioEmail() || '';
-        
-        // Avatar padrão em caso de erro
-        const photoURL = getUsuarioFoto() || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`;
-        userAvatarPreview.src = photoURL;
-        modalAvatarPreview.src = photoURL;
-    }
-}
-
-/**
- * Manipula o upload do avatar
- * @param {Event} event - Evento de change do input file
- */
-async function handleAvatarUpload(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    
-    // Verifica se é uma imagem
-    if (!file.type.startsWith('image/')) {
-        showError('Arquivo inválido', 'Por favor, selecione uma imagem.');
-        return;
     }
     
-    // Verifica o tamanho da imagem (máximo 2MB)
-    if (file.size > 2 * 1024 * 1024) {
-        showError('Arquivo muito grande', 'O tamanho máximo permitido é 2MB.');
-        return;
+    if (quickTip) {
+        if (quickTipClosed) {
+            quickTip.classList.add('hidden');
+        } else {
+            quickTip.classList.remove('hidden');
+        }
     }
     
-    try {
-        showLoading('Processando imagem...');
-        
-        // Exibe uma prévia da imagem
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            document.getElementById('modal-avatar-preview').src = e.target.result;
-        };
-        reader.readAsDataURL(file);
-        
-        hideLoading();
-    } catch (error) {
-        hideLoading();
-        showError('Erro', 'Ocorreu um erro ao processar a imagem.');
-    }
-}
-
-/**
- * Salva as alterações no perfil do usuário
- */
-async function saveUserProfile() {
-    const userId = getUsuarioId();
-    if (!userId) {
-        showError('Erro', 'Usuário não está autenticado.');
-        return;
+    if (modulesTip) {
+        if (modulesTipClosed) {
+            modulesTip.classList.add('hidden');
+        } else {
+            modulesTip.classList.remove('hidden');
+        }
     }
     
-    const newNickname = document.getElementById('nickname-input').value.trim();
-    const avatarFile = document.getElementById('avatar-upload-input').files[0];
-    
-    if (!newNickname) {
-        showError('Erro', 'O apelido não pode estar vazio.');
-        return;
-    }
-    
-    showLoading('Salvando perfil...');
-    
-    try {
-        // Dados a serem atualizados
-        const updateData = {
-            displayName: newNickname,
-            updatedAt: firebase.database.ServerValue.TIMESTAMP
-        };
-        
-        // Se houver um arquivo de avatar, faz o upload
-        if (avatarFile) {
-            try {
-                // Cria uma referência no storage para o avatar
-                const storageRef = storage.ref(`user-avatars/${userId}`);
-                const fileRef = storageRef.child(`avatar-${Date.now()}`);
+    // Configura os botões de fechar
+    document.querySelectorAll('.close-tip-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const tipId = btn.dataset.tipId;
+            const tipElement = document.getElementById(tipId);
+            
+            if (tipElement) {
+                tipElement.classList.add('hidden');
                 
-                // Faz o upload do arquivo
-                await fileRef.put(avatarFile);
-                
-                // Obtém a URL do arquivo
-                const downloadURL = await fileRef.getDownloadURL();
-                updateData.photoURL = downloadURL;
-            } catch (uploadError) {
-                console.error('Erro no upload do avatar:', uploadError);
-                showError('Erro no upload', 'Não foi possível fazer o upload da imagem.');
-                hideLoading();
-                return;
+                // Salva a preferência do usuário no Firebase
+                if (tipId === 'welcome-tip') {
+                    saveUserPreference(TIPS_STATE.WELCOME_TIP, true);
+                } else if (tipId === 'quick-tip') {
+                    saveUserPreference(TIPS_STATE.QUICK_TIP, true);
+                } else if (tipId === 'modules-tip') {
+                    saveUserPreference(TIPS_STATE.MODULES_TIP, true);
+                }
             }
-        }
-        
-        // Atualiza os dados no banco
-        await db.ref(`users/${userId}`).update(updateData);
-        
-        // Atualiza a interface
-        document.getElementById('user-display-name').textContent = newNickname;
-        if (updateData.photoURL) {
-            document.getElementById('user-avatar-preview').src = updateData.photoURL;
-        }
-        
-        // Fecha o modal e exibe mensagem de sucesso
-        document.getElementById('profile-modal').classList.add('hidden');
-        hideLoading();
-        showSuccess('Perfil atualizado', 'Suas informações foram atualizadas com sucesso.');
-    } catch (error) {
-        console.error('Erro ao atualizar perfil:', error);
-        hideLoading();
-        showError('Erro', 'Ocorreu um erro ao salvar seu perfil.');
+        });
+    });
+    
+    // Configura o botão de ajuda para mostrar as dicas novamente
+    const helpButton = document.getElementById('help-button');
+    if (helpButton) {
+        helpButton.addEventListener('click', () => {
+            // Limpa as preferências para mostrar as dicas novamente
+            saveUserPreference(TIPS_STATE.WELCOME_TIP, false);
+            saveUserPreference(TIPS_STATE.QUICK_TIP, false);
+            saveUserPreference(TIPS_STATE.MODULES_TIP, false);
+            
+            // Mostra as dicas quando o botão de ajuda é clicado
+            if (welcomeTip) welcomeTip.classList.remove('hidden');
+            if (quickTip) quickTip.classList.remove('hidden');
+            if (modulesTip) modulesTip.classList.remove('hidden');
+            
+            // Exibe uma animação sutil para chamar atenção para as dicas
+            if (welcomeTip) {
+                welcomeTip.classList.add('animate-pulse');
+                setTimeout(() => welcomeTip.classList.remove('animate-pulse'), 1000);
+            }
+            if (quickTip) {
+                quickTip.classList.add('animate-pulse');
+                setTimeout(() => quickTip.classList.remove('animate-pulse'), 1000);
+            }
+            if (modulesTip) {
+                modulesTip.classList.add('animate-pulse');
+                setTimeout(() => modulesTip.classList.remove('animate-pulse'), 1000);
+            }
+        });
     }
 }
 
 /**
- * Retorna os dados do perfil do usuário atual
- * @returns {Promise<Object>} Dados do perfil do usuário
+ * Verifica e atualiza os estados vazios
  */
-export async function getUserProfileData() {
-    const userId = getUsuarioId();
-    if (!userId) {
-        return null;
-    }
+export function checkEmptyStates() {
+    // Verifica se existem módulos
+    const moduleContainer = document.getElementById('module-container');
+    const emptyState = document.getElementById('empty-state');
     
-    try {
-        const snapshot = await db.ref(`users/${userId}`).once('value');
-        return snapshot.val() || {};
-    } catch (error) {
-        console.error('Erro ao obter dados do perfil:', error);
-        return null;
+    if (moduleContainer && emptyState) {
+        if (moduleContainer.children.length === 0) {
+            emptyState.classList.remove('hidden');
+        } else {
+            emptyState.classList.add('hidden');
+        }
+    }
+}
+
+/**
+ * Mostra uma notificação
+ * @param {string} title - Título da notificação 
+ * @param {string} message - Mensagem da notificação
+ * @param {string} type - Tipo da notificação (success, error, warning, info)
+ * @param {number} duration - Duração em ms (default: 3000)
+ */
+export function showNotification(title, message, type = 'info', duration = 3000) {
+    if (typeof Swal !== 'undefined') {
+        const Toast = Swal.mixin({
+            toast: true,
+            position: 'bottom-end',
+            showConfirmButton: false,
+            timer: duration,
+            timerProgressBar: true,
+            customClass: {
+                popup: 'shadow-xl rounded-xl'
+            }
+        });
+        
+        Toast.fire({
+            icon: type,
+            title: title,
+            text: message
+        });
+    } else {
+        // Fallback para alert se SweetAlert não estiver disponível
+        alert(`${title}: ${message}`);
+    }
+}
+
+/**
+ * Mostra uma mensagem de sucesso
+ * @param {string} title - Título da mensagem
+ * @param {string} message - Texto da mensagem
+ */
+export function showSuccess(title, message) {
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            icon: 'success',
+            title: title,
+            text: message,
+            timer: 2000,
+            showConfirmButton: false,
+            customClass: {
+                popup: 'shadow-xl rounded-xl'
+            }
+        });
+    } else {
+        // Fallback para alert se SweetAlert não estiver disponível
+        alert(`${title}: ${message}`);
+    }
+}
+
+/**
+ * Mostra uma mensagem de erro
+ * @param {string} title - Título do erro
+ * @param {string} message - Mensagem de erro
+ */
+export function showError(title, message) {
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            icon: 'error',
+            title: title,
+            text: message,
+            customClass: {
+                popup: 'shadow-xl rounded-xl'
+            }
+        });
+    } else {
+        // Fallback para alert se SweetAlert não estiver disponível
+        alert(`Erro - ${title}: ${message}`);
+    }
+}
+
+/**
+ * Mostra uma caixa de diálogo de confirmação
+ * @param {string} title - Título da confirmação
+ * @param {string} message - Mensagem da confirmação
+ * @param {string} confirmText - Texto do botão de confirmação
+ * @param {string} cancelText - Texto do botão de cancelamento
+ * @param {string} type - Tipo da confirmação (warning, danger, info)
+ * @returns {Promise<boolean>} - True se confirmado, False se cancelado
+ */
+export async function showConfirmDialog(title, message, confirmText = 'Confirmar', cancelText = 'Cancelar', type = 'warning') {
+    if (typeof Swal !== 'undefined') {
+        const result = await Swal.fire({
+            title: title,
+            text: message,
+            icon: type,
+            showCancelButton: true,
+            confirmButtonColor: type === 'danger' ? '#d33' : '#6366f1',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: confirmText,
+            cancelButtonText: cancelText,
+            customClass: {
+                popup: 'shadow-xl rounded-xl'
+            }
+        });
+        
+        return result.isConfirmed;
+    } else {
+        // Fallback para confirm se SweetAlert não estiver disponível
+        return confirm(`${title}\n${message}`);
+    }
+}
+
+/**
+ * Mostra um diálogo de entrada de texto
+ * @param {string} title - Título do diálogo
+ * @param {string} inputLabel - Label do campo de entrada
+ * @param {string} placeholder - Texto de placeholder
+ * @param {string} confirmText - Texto do botão de confirmação
+ * @param {string} cancelText - Texto do botão de cancelamento
+ * @returns {Promise<{confirmed: boolean, value: string}>} - Resultado da entrada
+ */
+export async function showInputDialog(title, inputLabel, placeholder = '', confirmText = 'Confirmar', cancelText = 'Cancelar') {
+    if (typeof Swal !== 'undefined') {
+        const result = await Swal.fire({
+            title: title,
+            input: 'text',
+            inputLabel: inputLabel,
+            inputPlaceholder: placeholder,
+            showCancelButton: true,
+            confirmButtonText: confirmText,
+            cancelButtonText: cancelText,
+            inputValidator: (value) => {
+                if (!value) {
+                    return 'Este campo é obrigatório!';
+                }
+            },
+            customClass: {
+                popup: 'shadow-xl rounded-xl',
+                input: 'rounded-lg border-slate-300 focus:border-indigo-500 focus:ring-indigo-500'
+            }
+        });
+        
+        return {
+            confirmed: result.isConfirmed,
+            value: result.value
+        };
+    } else {
+        // Fallback para prompt se SweetAlert não estiver disponível
+        const value = prompt(`${title}\n${inputLabel}`, '');
+        return {
+            confirmed: value !== null,
+            value: value || ''
+        };
+    }
+}
+
+/**
+ * Mostra um indicador de carregamento
+ * @param {string} message - Mensagem a ser exibida durante o carregamento
+ */
+export function showLoading(message = 'Carregando...') {
+    if (isLoading) return;
+    isLoading = true;
+    
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: message,
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+            didOpen: () => {
+                Swal.showLoading();
+            },
+            customClass: {
+                popup: 'shadow-xl rounded-xl'
+            }
+        });
+    } else {
+        // Fallback para caso SweetAlert não esteja disponível
+        const loadingOverlay = document.createElement('div');
+        loadingOverlay.id = 'loading-overlay-manual';
+        loadingOverlay.style.position = 'fixed';
+        loadingOverlay.style.inset = '0';
+        loadingOverlay.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
+        loadingOverlay.style.display = 'flex';
+        loadingOverlay.style.justifyContent = 'center';
+        loadingOverlay.style.alignItems = 'center';
+        loadingOverlay.style.zIndex = '9999';
+        
+        loadingOverlay.innerHTML = `
+            <div style="text-align: center;">
+                <div class="spinner" style="margin-bottom: 1rem;"></div>
+                <p>${message}</p>
+            </div>
+        `;
+        
+        document.body.appendChild(loadingOverlay);
+    }
+}
+
+/**
+ * Esconde o indicador de carregamento
+ */
+export function hideLoading() {
+    if (!isLoading) return;
+    isLoading = false;
+    
+    if (typeof Swal !== 'undefined') {
+        Swal.close();
+    } else {
+        // Remove o overlay manual se ele existir
+        const loadingOverlay = document.getElementById('loading-overlay-manual');
+        if (loadingOverlay) {
+            loadingOverlay.remove();
+        }
+    }
+}
+
+/**
+ * Configura um modal
+ * @param {string} modalId - ID do elemento modal
+ * @param {Function} onOpenCallback - Função a ser chamada quando o modal abrir
+ * @param {Function} onCloseCallback - Função a ser chamada quando o modal fechar
+ */
+export function setupModal(modalId, onOpenCallback = null, onCloseCallback = null) {
+    const modal = document.getElementById(modalId);
+    if (!modal) return;
+    
+    // Botões para abrir o modal
+    document.querySelectorAll(`[data-modal-target="${modalId}"]`).forEach(btn => {
+        btn.addEventListener('click', () => {
+            openModal(modalId);
+            if (onOpenCallback) onOpenCallback();
+        });
+    });
+    
+    // Botões para fechar o modal
+    modal.querySelectorAll('[data-modal-close]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            closeModal(modalId);
+            if (onCloseCallback) onCloseCallback();
+        });
+    });
+    
+    // Fechar ao clicar fora do modal
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            closeModal(modalId);
+            if (onCloseCallback) onCloseCallback();
+        }
+    });
+}
+
+/**
+ * Abre um modal
+ * @param {string} modalId - ID do elemento modal
+ */
+export function openModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.classList.remove('hidden');
+        
+        // Se houver um elemento interno com transição
+        const innerModal = modal.querySelector('.bg-white, .modal-content');
+        if (innerModal) {
+            setTimeout(() => {
+                innerModal.classList.remove('scale-95', 'opacity-0');
+            }, 10);
+        }
+    }
+}
+
+/**
+ * Fecha um modal
+ * @param {string} modalId - ID do elemento modal
+ */
+export function closeModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        // Se houver um elemento interno com transição
+        const innerModal = modal.querySelector('.bg-white, .modal-content');
+        if (innerModal) {
+            innerModal.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        } else {
+            modal.classList.add('hidden');
+        }
     }
 }
