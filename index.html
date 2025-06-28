@@ -193,6 +193,23 @@
                 <div class="flex-1 overflow-y-auto p-4 sm:p-5 space-y-5">
                     <!-- Seletor de Área de Trabalho -->
                     <div id="workspace-selector" class="mb-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="text-sm font-semibold text-slate-700 flex items-center gap-1">
+                                <i class="fa-solid fa-briefcase h-4 w-4 text-purple-500"></i> Área de Trabalho
+                            </h3>
+                            <button id="share-workspace-btn" class="text-xs bg-purple-50 text-purple-700 px-2 py-1 rounded-full hover:bg-purple-100 transition-all">
+                                <i class="fa-solid fa-share-nodes h-3 w-3 inline-block mr-1"></i>Compartilhar
+                            </button>
+                        </div>
+                        <div class="flex gap-1">
+                            <select id="workspace-select" class="flex-1 text-sm border border-slate-300 rounded-lg px-2 py-1.5 text-slate-700 bg-white focus:outline-none focus:ring-1 focus:ring-purple-500">
+                                <option value="">Carregando...</option>
+                            </select>
+                            <button id="add-workspace-btn" class="bg-purple-50 text-purple-600 px-2 py-1.5 rounded-lg hover:bg-purple-100 transition-all">
+                                <i class="fa-solid fa-plus h-4 w-4"></i>
+                            </button>
+                        </div>
+                        <div id="current-workspace-title" class="mt-1 text-xs text-slate-500 truncate"></div>
                     </div>
 
                     <div id="entity-library">
