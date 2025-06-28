@@ -5,21 +5,25 @@
 
 import { getUsuarioAtual, getUsuarioId, getUsuarioNome, getUsuarioEmail } from '../autenticacao.js';
 import { showSuccess, showError, showLoading, hideLoading } from '../ui.js';
-import { getUserProfileData } from './userProfile.js';
+// import { getUserProfileData } from './userProfile.js'; // No longer needed
 
 // Variáveis do módulo
-let db;
+let db; // Will be set by initInvitations
 let activeTab = 'sent';
+// _currentUserData and _currentUserId are removed as userData is no longer passed to initInvitations directly.
+// userId will be passed to initInvitations and can be stored if needed, or functions can rely on getUsuarioId().
 
 /**
  * Inicializa o módulo de convites
- * @param {Object} database - Referência ao banco de dados Firebase
+ * @param {string} userId - ID do usuário logado.
+ * @param {Object} dbInstance - Referência ao banco de dados Firebase.
  */
-export function initInvitations(database) {
-    console.log('Inicializando módulo de convites...');
-    db = database;
+export function initInvitations(userId, dbInstance) { // Signature changed
+    console.log('Inicializando módulo de convites para UID:', userId);
+    db = dbInstance; // Set the module-level db instance
+    // _currentUserId = userId; // Store if needed by other functions not getting it directly
     
-    setupInviteModal();
+    setupInviteModal(); // These setup functions use the module-level 'db'
     setupManageInvitesModal();
 }
 
@@ -209,11 +213,17 @@ async function sendInvite() {
     showLoading('Enviando convite...');
 
     try {
-        const currentUserProfile = await getUserProfileData();
-        const senderName = currentUserProfile.displayName || getUsuarioNome() || "Usuário Anônimo";
+        let senderName = "Usuário Anônimo";
+        if (_currentUserData && _currentUserData.displayName) {
+            senderName = _currentUserData.displayName;
+        } else {
+            // Fallback if _currentUserData is not set or lacks displayName, try getUsuarioNome()
+            senderName = getUsuarioNome() || "Usuário Anônimo"; // getUsuarioNome() is from autenticacao.js
+        }
+
         const newInviteRef = db.ref('invitations').push();
         const inviteData = {
-            fromUserId: getUsuarioId(),
+            fromUserId: getUsuarioId(), // Ensures we use the ID from auth, which is reliable
             fromUserName: senderName,
             toEmail: email,
             toUserId: null, // Será preenchido quando o convite for aceite
