@@ -103,12 +103,42 @@ async function initApp() {
         window.getCurrentWorkspace = getCurrentWorkspace;
         
         hideLoading();
-        document.getElementById('loading-overlay').style.display = 'none';
-        document.getElementById('app').style.display = 'flex';
+        
+        // --- IMPLEMENTAÇÃO DA SOLUÇÃO ---
+        // Exemplo: digamos que o código original seja document.getElementById('user-name').innerHTML = '...'
+        // O código original era document.getElementById('loading-overlay').style.display = 'none';
+        // e document.getElementById('app').style.display = 'flex';
+        // Estes não definem innerHTML, mas sim style.display. A lógica de guarda é similar.
+        
+        const loadingOverlayElement = document.getElementById('loading-overlay');
+        if (loadingOverlayElement) {
+            loadingOverlayElement.style.display = 'none';
+        } else {
+            console.warn("Elemento 'loading-overlay' para ocultar não foi encontrado em initApp.");
+        }
+
+        const appElement = document.getElementById('app');
+        if (appElement) {
+            appElement.style.display = 'flex';
+        } else {
+            console.warn("Elemento 'app' para exibir não foi encontrado em initApp.");
+        }
+        // --- FIM DA SOLUÇÃO ---
+        
     } catch (error) {
         console.error("Erro ao inicializar aplicação:", error);
-        document.getElementById('loading-overlay').innerHTML = '<div class="text-center p-4 sm:p-5 bg-white rounded-lg shadow-md max-w-xs sm:max-w-sm"><div class="text-red-600 text-xl sm:text-2xl mb-3"><i data-lucide="alert-triangle"></i></div><p class="text-base sm:text-lg font-semibold text-red-700">Erro ao iniciar o sistema.</p><p class="text-slate-600 mt-2 text-sm sm:text-base">Verifique sua conexão com a internet e tente novamente.</p></div>';
-        createIcons();
+        // O elemento que causa o erro de innerHTML na sua mensagem de erro original
+        // também precisa de uma verificação.
+        // O elemento original era 'loading-overlay'
+        const errorDisplayElement = document.getElementById('loading-overlay'); // Exemplo
+        if (errorDisplayElement) {
+            errorDisplayElement.innerHTML = '<div class="text-center p-4 sm:p-5 bg-white rounded-lg shadow-md max-w-xs sm:max-w-sm"><div class="text-red-600 text-xl sm:text-2xl mb-3"><i data-lucide="alert-triangle"></i></div><p class="text-base sm:text-lg font-semibold text-red-700">Erro ao iniciar o sistema.</p><p class="text-slate-600 mt-2 text-sm sm:text-base">Verifique sua conexão com a internet e tente novamente.</p></div>';
+            createIcons(); // Ensure icons are created for the error message
+        } else {
+            // Fallback if loading-overlay is somehow not available
+            console.warn("Elemento 'loading-overlay' para exibir mensagem de erro não foi encontrado.");
+            alert("Erro crítico ao iniciar o sistema. Verifique o console para detalhes.");
+        }
     }
 }
 
