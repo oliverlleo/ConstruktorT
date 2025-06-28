@@ -33,64 +33,83 @@ export function initUserProfile(database) {
 function setupUserMenu() {
     const userMenuButton = document.getElementById('user-menu-button');
     const userMenuDropdown = document.getElementById('user-menu-dropdown');
-    
-    // Mostra/Esconde o menu ao clicar no botão
-    userMenuButton.addEventListener('click', () => {
-        userMenuDropdown.classList.toggle('hidden');
-        userMenuActive = !userMenuActive;
-        
-        // Atualiza o ícone de chevron
-        const chevronIcon = userMenuButton.querySelector('[data-lucide="chevron-down"]');
-        if (chevronIcon) {
-            chevronIcon.setAttribute('data-lucide', userMenuActive ? 'chevron-up' : 'chevron-down');
-            const iconsToUpdate = document.querySelectorAll('[data-lucide]');
-            if (window.lucide && iconsToUpdate) {
-                lucide.createIcons({
-                    icons: iconsToUpdate
-                });
+    const editProfileButton = document.getElementById('edit-profile-button');
+    const logoutButton = document.getElementById('logout-button');
+
+    if (userMenuButton && userMenuDropdown) {
+        userMenuButton.addEventListener('click', () => {
+            userMenuDropdown.classList.toggle('hidden');
+            userMenuActive = !userMenuActive;
+            
+            const chevronIcon = userMenuButton.querySelector('i.fa-chevron-down, i.fa-chevron-up');
+            if (chevronIcon) {
+                if (userMenuActive) {
+                    chevronIcon.classList.remove('fa-chevron-down');
+                    chevronIcon.classList.add('fa-chevron-up');
+                } else {
+                    chevronIcon.classList.remove('fa-chevron-up');
+                    chevronIcon.classList.add('fa-chevron-down');
+                }
             }
-        }
-    });
-    
-    // Fecha o menu ao clicar fora dele
-    document.addEventListener('click', (event) => {
-        if (!userMenuButton.contains(event.target) && !userMenuDropdown.contains(event.target)) {
-            if (!userMenuDropdown.classList.contains('hidden')) {
-                userMenuDropdown.classList.add('hidden');
-                userMenuActive = false;
-                
-                // Atualiza o ícone de chevron
-                const chevronIcon = userMenuButton.querySelector('[data-lucide]');
-                if (chevronIcon) {
-                    chevronIcon.setAttribute('data-lucide', 'chevron-down');
-                    const iconsToUpdate = document.querySelectorAll('[data-lucide]');
-                    if (window.lucide && iconsToUpdate) {
-                        lucide.createIcons({
-                            icons: iconsToUpdate
-                        });
+        });
+
+        document.addEventListener('click', (event) => {
+            if (userMenuButton && userMenuDropdown && // Check again in case they become null
+                !userMenuButton.contains(event.target) && 
+                !userMenuDropdown.contains(event.target)) {
+                if (!userMenuDropdown.classList.contains('hidden')) {
+                    userMenuDropdown.classList.add('hidden');
+                    userMenuActive = false;
+                    const chevronIcon = userMenuButton.querySelector('i.fa-chevron-down, i.fa-chevron-up');
+                    if (chevronIcon) {
+                        chevronIcon.classList.remove('fa-chevron-up');
+                        chevronIcon.classList.add('fa-chevron-down');
                     }
                 }
             }
-        }
-    });
-    
-    // Configura o botão de editar perfil
-    document.getElementById('edit-profile-button').addEventListener('click', () => {
-        userMenuDropdown.classList.add('hidden');
-        userMenuActive = false;
-        openProfileModal();
-    });
-    
-    // Configura o botão de logout
-    document.getElementById('logout-button').addEventListener('click', async () => {
-        userMenuDropdown.classList.add('hidden');
-        const result = await logout();
-        if (result.success) {
-            // O redirecionamento será tratado pelo módulo de autenticação
-        } else {
-            showError('Erro ao sair', result.error);
-        }
-    });
+        });
+    } else {
+        console.warn("User menu button or dropdown not found. Menu functionality may be affected.");
+    }
+
+    if (editProfileButton && userMenuDropdown) {
+        editProfileButton.addEventListener('click', () => {
+            if (userMenuDropdown) userMenuDropdown.classList.add('hidden');
+            userMenuActive = false;
+            if (userMenuButton) {
+                 const chevronIcon = userMenuButton.querySelector('i.fa-chevron-down, i.fa-chevron-up');
+                 if (chevronIcon) {
+                    chevronIcon.classList.remove('fa-chevron-up');
+                    chevronIcon.classList.add('fa-chevron-down');
+                 }
+            }
+            openProfileModal(); 
+        });
+    } else {
+        console.warn("'edit-profile-button' or userMenuDropdown not found.");
+    }
+
+    if (logoutButton && userMenuDropdown) {
+        logoutButton.addEventListener('click', async () => {
+            if (userMenuDropdown) userMenuDropdown.classList.add('hidden');
+            userMenuActive = false;
+            if (userMenuButton) {
+                 const chevronIcon = userMenuButton.querySelector('i.fa-chevron-down, i.fa-chevron-up');
+                 if (chevronIcon) {
+                    chevronIcon.classList.remove('fa-chevron-up');
+                    chevronIcon.classList.add('fa-chevron-down');
+                 }
+            }
+            const result = await logout();
+            if (result.success) {
+                // O redirecionamento será tratado pelo módulo de autenticação
+            } else {
+                showError('Erro ao sair', result.error);
+            }
+        });
+    } else {
+        console.warn("'logout-button' or userMenuDropdown not found.");
+    }
 }
 
 /**
