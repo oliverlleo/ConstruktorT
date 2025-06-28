@@ -4,113 +4,199 @@
  */
 
 import { firebaseConfig, availableEntityIcons, fieldTypes, defaultFieldConfigs } from './config.js';
-import { initAutenticacao, isUsuarioLogado, getUsuarioId } from './autenticacao.js';
+import { initAutenticacao, isUsuarioLogado, getUsuarioId, getUsuarioAtual } from './autenticacao.js'; // Added getUsuarioAtual
 import { initDatabase, loadAllEntities, loadAndRenderModules, loadDroppedEntitiesIntoModules, 
          loadStructureForEntity, createEntity, createModule, saveEntityToModule, deleteEntityFromModule,
          deleteEntity, deleteModule, saveEntityStructure, saveSubEntityStructure, saveModulesOrder } from './database.js';
 import { initUI, createIcons, checkEmptyStates, showLoading, hideLoading, showSuccess, 
          showError, showConfirmDialog, showInputDialog } from './ui.js';
-import { initUserProfile } from './user/userProfile.js';
+// Updated imports for userProfile - initUserProfile is now the main entry point
+import { initUserProfile, loadUserProfileData } from './user/userProfile.js'; 
 import { initInvitations, checkPendingInvitations } from './user/invitations.js';
 import { initWorkspaces, getCurrentWorkspace } from './workspaces.js';
 
 // Variáveis globais
-let db;
+let db; // Firebase Realtime Database instance
+let firebaseInstance; // Firebase app instance
 let modalNavigationStack = [];
 
+
 // ==== PONTO DE ENTRADA DA APLICAÇÃO ====
-async function initApp() {
-    showLoading('Inicializando aplicação...');
+// Use o evento DOMContentLoaded, ele é o ponto de partida mais seguro.
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('[DEBUG] 1. O DOM está pronto. Iniciando a aplicação.');
     
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const loadingMessageElement = document.getElementById('loading-text'); // Assuming this ID exists for detailed messages
+                                                                        // If not, we'll use loadingOverlay or a generic message div
+
+    // Helper to update loading message
+    const setLoadingMessage = (message) => {
+        if (loadingMessageElement) loadingMessageElement.textContent = message;
+        else if (loadingOverlay) { // Fallback to simpler message if loading-text is not defined
+            const existingTextElement = loadingOverlay.querySelector('p');
+            if(existingTextElement) existingTextElement.textContent = message;
+            else loadingOverlay.innerHTML = `<p>${message}</p>`; // Basic fallback
+        }
+        console.log(`[LOADING] ${message}`);
+    };
+    
+    setLoadingMessage('Inicializando aplicação...');
+
     try {
-        // Inicializa o Firebase
-        firebase.initializeApp(firebaseConfig);
-        
-        // Inicializa os módulos
-        await initAutenticacao();
-        
-        // Verifica se o usuário está autenticado
-        if (!isUsuarioLogado()) {
-            hideLoading();
-            return;
+        // --- ETAPA 0: INICIALIZAÇÃO DO FIREBASE ---
+        console.log('[DEBUG] Initializing Firebase app...');
+        if (!firebase.apps.length) {
+            firebaseInstance = firebase.initializeApp(firebaseConfig);
+        } else {
+            firebaseInstance = firebase.app(); // if already initialized
         }
         
-        // Inicializa o banco de dados
-        await initDatabase(firebase);
-        db = firebase.database();
+        // Initialize core Firebase services (Auth, DB)
+        // initAutenticacao now primarily sets up the onAuthStateChanged listener and redirects.
+        // The main auth check for app flow will be done below.
+        await initAutenticacao(firebaseInstance); // Pass instance if needed by initAutenticacao
         
-        // Inicializa a interface do usuário
-        initUI();
+        console.log('[DEBUG] Initializing Database module...');
+        await initDatabase(firebaseInstance); // Pass instance if needed by initDatabase
+        db = firebase.database(); // Store db instance globally if needed by other modules
+
+        // --- ETAPA A: AUTENTICAÇÃO ---
+        setLoadingMessage('Aguardando autenticação...');
+        console.log('[DEBUG] 2. Aguardando autenticação do Firebase...');
+        const user = await new Promise((resolve, reject) => {
+            const unsubscribe = firebase.auth().onAuthStateChanged(currentUser => {
+                unsubscribe(); // Pare de ouvir para evitar chamadas múltiplas
+                resolve(currentUser);
+            }, error => {
+                unsubscribe();
+                reject(error);
+            });
+        });
+
+        if (!user) {
+            console.log('[DEBUG] Nenhum usuário encontrado. Redirecionando para login.');
+            setLoadingMessage('Nenhum usuário autenticado. Redirecionando para o login...');
+            // Redirection is likely handled by onAuthStateChanged in initAutenticacao
+            // window.location.href = 'pages/login.html'; // Or your login page
+            if (loadingOverlay && loadingMessageElement) loadingMessageElement.textContent = 'Redirecionando para login...';
+            else if (loadingOverlay) loadingOverlay.innerHTML = '<p>Redirecionando para login...</p>';
+            // No need to hideLoading() here if page is redirecting.
+            // If not redirecting, then hideLoading() might be needed after showing a "please login" message.
+            return; 
+        }
+
+        console.log(`[DEBUG] 3. Usuário ${user.uid} autenticado.`);
+        setLoadingMessage(`Usuário ${user.displayName || user.email} autenticado.`);
+
+        // --- ETAPA B: CARREGAMENTO DE DADOS CRÍTICOS ---
+        console.log('[DEBUG] 4. Buscando dados essenciais do usuário...');
+        setLoadingMessage('Carregando dados do perfil...');
+        const userData = await loadUserProfileData(user.uid); 
+        if (!userData) {
+            // This case might mean the user exists in Auth but not in DB (e.g. first login, incomplete signup)
+            // For now, we'll treat it as an error, but this could be a point for profile creation flow.
+            console.error(`[DEBUG] Falha ao carregar os dados do perfil para o usuário ${user.uid}.`);
+            throw new Error("Falha ao carregar os dados do perfil do usuário.");
+        }
         
-        // Inicializa o sistema de gerenciamento de usuário
-        initUserProfile(db);
+        console.log('[DEBUG] 5. Dados carregados. Nome de usuário:', userData.displayName);
+        setLoadingMessage('Dados do perfil carregados.');
+
+        // --- ETAPA C: INICIALIZAÇÃO DA INTERFACE (UI) ---
+        console.log('[DEBUG] 6. Inicializando todos os módulos da interface...');
+        setLoadingMessage('Configurando interface...');
         
-        // Inicializa o sistema de convites
-        initInvitations(db);
+        // Initialize base UI elements (non-data-dependent parts)
+        initUI(); 
         
-        // Inicializa o sistema de áreas de trabalho
-        initWorkspaces(db);
+        // Initialize user-specific UI modules WITH data
+        // initUserProfileModule now only sets up event listeners and general modal structure
+        initUserProfileModule(); // Pass db if it needs it and it's not globally available via firebase.database()
+        setupUserMenu(userData);    // Populate user menu with data
+        setupProfileModal(userData); // Populate profile modal with data
         
-        // Verifica se há convites pendentes
-        try {
-            const pendingInvites = await checkPendingInvitations();
-            console.log('Verificação de convites pendentes:', pendingInvites);
+        // Initialize invitations module (pass user.uid and userData if it needs them for setup or later use)
+        initInvitations(db, user.uid, userData); // Assuming initInvitations is adapted if needed
+        
+        // Initialize workspaces module
+        initWorkspaces(db, user.uid, userData); // Pass user/userData if needed for workspace logic
+        
+        // Verifica se há convites pendentes (can run after main UI setup)
+        checkPendingInvitations().then(pendingInvites => {
+            console.log('Verificação de convites pendentes (assíncrona):', pendingInvites);
             if (pendingInvites > 0) {
                 setTimeout(() => {
                     showSuccess('Convites Pendentes', `Você tem ${pendingInvites} convite(s) pendente(s). Acesse o menu do usuário para visualizá-los.`);
-                }, 2000);
+                }, 2000); // Delay to ensure main UI is settled
             }
-        } catch (error) {
-            console.error('Erro ao verificar convites pendentes:', error);
-        }
+        }).catch(error => {
+            console.error('Erro ao verificar convites pendentes (assíncrono):', error);
+        });
         
-        // Aguarda a inicialização das áreas de trabalho antes de carregar dados
+        // Aguarda a inicialização das áreas de trabalho antes de carregar dados específicos do workspace
+        // This might need adjustment based on how initWorkspaces and getCurrentWorkspace behave now
+        setLoadingMessage('Carregando área de trabalho...');
         await new Promise(resolve => {
-            const checkWorkspace = () => {
+            const checkInitialWorkspace = () => {
                 const currentWorkspace = getCurrentWorkspace();
                 if (currentWorkspace) {
-                    resolve();
+                    console.log('[DEBUG] Workspace inicial encontrado:', currentWorkspace);
+                    resolve(currentWorkspace);
                 } else {
-                    setTimeout(checkWorkspace, 100);
+                    // This could loop if no workspace is immediately available.
+                    // Consider a timeout or a state where no workspace is selected.
+                    console.log('[DEBUG] Aguardando workspace inicial...');
+                    setTimeout(checkInitialWorkspace, 200); 
                 }
             };
-            checkWorkspace();
+            checkInitialWorkspace();
+        }).then(currentWorkspace => {
+            if (currentWorkspace) {
+                console.log("[initApp] Carregando dados do workspace inicial.", currentWorkspace);
+                return loadWorkspaceData(currentWorkspace); // loadWorkspaceData is async
+            }
         });
         
         // Configura listener para mudança de área de trabalho
         window.addEventListener('workspaceChanged', async (event) => {
-            console.log("[workspaceChanged] Evento recebido. Carregando novo workspace.", event.detail.workspace);
-            await loadWorkspaceData(event.detail.workspace);
+            console.log("[workspaceChanged] Evento recebido. Carregando novo workspace.", event.detail.workspaceId);
+            // Assuming event.detail contains the workspace object or enough info to load it
+            // The original code used event.detail.workspace (object)
+            // Ensure loadWorkspaceData receives the correct workspace data or ID
+            await loadWorkspaceData(event.detail.workspace); 
         });
         
-        // Carrega dados da área de trabalho atual
-        const currentWorkspace = getCurrentWorkspace();
-        if (currentWorkspace) {
-            console.log("[initApp] Carregando workspace inicial.", currentWorkspace);
-            await loadWorkspaceData(currentWorkspace);
-        }
-        
-        // Configura os event listeners
+        // Configura os event listeners gerais da aplicação
         setupEventListeners();
         
-        // Configura o painel de propriedades dos campos
+        // Configura o painel de propriedades dos campos (if part of general UI setup)
         setupFieldPropertiesPanelEvents();
         
-        // Verifica os estados vazios
+        // Verifica os estados vazios (e.g., no modules, no entities)
         checkEmptyStates();
         
-        // Torna a função disponível globalmente para uso em outros módulos
-        window.getCurrentWorkspace = getCurrentWorkspace;
+        // Torna a função disponível globalmente para uso em outros módulos, if still necessary
+        window.getCurrentWorkspace = getCurrentWorkspace; 
         
-        hideLoading();
-        document.getElementById('loading-overlay').style.display = 'none';
-        document.getElementById('app').style.display = 'flex';
+        console.log('[DEBUG] 7. Aplicação inicializada com SUCESSO.');
+        if (loadingOverlay) loadingOverlay.style.display = 'none'; // Hide the entire overlay
+        document.getElementById('app').style.display = 'flex'; // Show the main app container
+
     } catch (error) {
-        console.error("Erro ao inicializar aplicação:", error);
-        document.getElementById('loading-overlay').innerHTML = '<div class="text-center p-4 sm:p-5 bg-white rounded-lg shadow-md max-w-xs sm:max-w-sm"><div class="text-red-600 text-xl sm:text-2xl mb-3"><i data-lucide="alert-triangle"></i></div><p class="text-base sm:text-lg font-semibold text-red-700">Erro ao iniciar o sistema.</p><p class="text-slate-600 mt-2 text-sm sm:text-base">Verifique sua conexão com a internet e tente novamente.</p></div>';
-        createIcons();
+        console.error('ERRO FATAL NA INICIALIZAÇÃO:', error);
+        if (loadingMessageElement) {
+            loadingMessageElement.innerHTML = `Ocorreu um erro ao carregar a aplicação: ${error.message}. Por favor, recarregue a página.`;
+            loadingMessageElement.classList.add('text-red-700', 'font-semibold');
+        } else if (loadingOverlay) {
+            loadingOverlay.innerHTML = `<div class="text-center p-4 sm:p-5 bg-white rounded-lg shadow-md max-w-xs sm:max-w-sm"><div class="text-red-600 text-xl sm:text-2xl mb-3"><i data-lucide="alert-triangle"></i></div><p class="text-base sm:text-lg font-semibold text-red-700">Erro ao iniciar o sistema.</p><p class="text-slate-600 mt-2 text-sm sm:text-base">Verifique sua conexão e tente novamente. Detalhes: ${error.message}</p></div>`;
+            if (window.lucide) lucide.createIcons(); else createIcons(); // Ensure icon is rendered
+        }
+        // Potentially show a more user-friendly error message on the page itself
+        // Do not hide loadingOverlay if it's displaying the error.
     }
-}
+});
+
 
 /**
  * Carrega dados de uma área de trabalho específica
@@ -156,8 +242,6 @@ async function loadWorkspaceData(workspace) {
         showError('Erro de Carregamento', 'Ocorreu um erro ao carregar a área de trabalho. Verifique a consola para mais detalhes.');
     }
 }
-
-document.addEventListener('DOMContentLoaded', initApp);
 
 // ---- Funções de Renderização ----
 function renderEntityInLibrary(entity) {
@@ -1549,3 +1633,4 @@ export {
     setupFieldPropertiesPanelEvents,
     loadAndRenderSharedResources
 };
+// document.addEventListener('DOMContentLoaded', initApp); // This line is removed
