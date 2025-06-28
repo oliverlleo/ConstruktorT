@@ -1,993 +1,1470 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Construktor - Construtor Visual de ERP/CRM</title>
+/**
+ * Arquivo principal do Construktor
+ * Coordena a inicialização dos módulos e a interação entre eles
+ */
+
+import { firebaseConfig, availableEntityIcons, fieldTypes, defaultFieldConfigs } from './config.js';
+import { initAutenticacao, isUsuarioLogado, getUsuarioId } from './autenticacao.js';
+import { initDatabase, loadAllEntities, loadAndRenderModules, loadDroppedEntitiesIntoModules, 
+         loadStructureForEntity, createEntity, createModule, saveEntityToModule, deleteEntityFromModule,
+         deleteEntity, deleteModule, saveEntityStructure, saveSubEntityStructure, saveModulesOrder } from './database.js';
+import { initUI, createIcons, checkEmptyStates, showLoading, hideLoading, showSuccess, 
+         showError, showConfirmDialog, showInputDialog } from './ui.js';
+import { initUserProfile } from './user/userProfile.js';
+import { initInvitations, checkPendingInvitations } from './user/invitations.js';
+import { initWorkspaces, getCurrentWorkspace } from './workspaces.js';
+
+// Variáveis globais
+let db;
+let modalNavigationStack = [];
+
+// ==== PONTO DE ENTRADA DA APLICAÇÃO ====
+async function initApp() {
+    showLoading('Inicializando aplicação...');
     
-    <!-- Dependências Externas -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/js/all.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/lucide@0.395.0/dist/umd/lucide.min.js"></script>
-    <script>
-        // Configuração aprimorada para garantir que os ícones Lucide sejam registrados corretamente
-        document.addEventListener('DOMContentLoaded', function() {
-            if (window.lucide) {
-                // Inicialização única do Lucide para evitar loops infinitos
-                let isUpdatingIcons = false;
-                
-                function updateLucideIcons() {
-                    if (isUpdatingIcons) return;
-                    isUpdatingIcons = true;
-                    
-                    try {
-                        lucide.createIcons();
-                        console.log('Ícones Lucide atualizados com sucesso');
-                    } catch (error) {
-                        console.warn('Erro ao atualizar ícones:', error);
-                    } finally {
-                        isUpdatingIcons = false;
-                    }
+    try {
+        // Inicializa o Firebase
+        firebase.initializeApp(firebaseConfig);
+        
+        // Inicializa os módulos
+        await initAutenticacao();
+        
+        // Verifica se o usuário está autenticado
+        if (!isUsuarioLogado()) {
+            hideLoading();
+            return;
+        }
+        
+        // Inicializa o banco de dados
+        await initDatabase(firebase);
+        db = firebase.database();
+        
+        // Inicializa a interface do usuário
+        initUI();
+        
+        // Inicializa o sistema de gerenciamento de usuário
+        initUserProfile(db);
+        
+        // Inicializa o sistema de convites
+        initInvitations(db);
+        
+        // Inicializa o sistema de áreas de trabalho
+        initWorkspaces(db);
+        
+        // Verifica se há convites pendentes
+        try {
+            const pendingInvites = await checkPendingInvitations();
+            console.log('Verificação de convites pendentes:', pendingInvites);
+            if (pendingInvites > 0) {
+                setTimeout(() => {
+                    showSuccess('Convites Pendentes', `Você tem ${pendingInvites} convite(s) pendente(s). Acesse o menu do usuário para visualizá-los.`);
+                }, 2000);
+            }
+        } catch (error) {
+            console.error('Erro ao verificar convites pendentes:', error);
+        }
+        
+        // Aguarda a inicialização das áreas de trabalho antes de carregar dados
+        await new Promise(resolve => {
+            const checkWorkspace = () => {
+                const currentWorkspace = getCurrentWorkspace();
+                if (currentWorkspace) {
+                    resolve();
+                } else {
+                    setTimeout(checkWorkspace, 100);
                 }
+            };
+            checkWorkspace();
+        });
+        
+        // Configura listener para mudança de área de trabalho
+        window.addEventListener('workspaceChanged', async (event) => {
+            console.log("[workspaceChanged] Evento recebido. Carregando novo workspace.", event.detail.workspace);
+            await loadWorkspaceData(event.detail.workspace);
+        });
+        
+        // Carrega dados da área de trabalho atual
+        const currentWorkspace = getCurrentWorkspace();
+        if (currentWorkspace) {
+            console.log("[initApp] Carregando workspace inicial.", currentWorkspace);
+            await loadWorkspaceData(currentWorkspace);
+        }
+        
+        // Configura os event listeners
+        setupEventListeners();
+        
+        // Configura o painel de propriedades dos campos
+        setupFieldPropertiesPanelEvents();
+        
+        // Verifica os estados vazios
+        checkEmptyStates();
+        
+        // Torna a função disponível globalmente para uso em outros módulos
+        window.getCurrentWorkspace = getCurrentWorkspace;
+        
+        hideLoading();
+        document.getElementById('loading-overlay').style.display = 'none';
+        document.getElementById('app').style.display = 'flex';
+    } catch (error) {
+        console.error("Erro ao inicializar aplicação:", error);
+        document.getElementById('loading-overlay').innerHTML = '<div class="text-center p-4 sm:p-5 bg-white rounded-lg shadow-md max-w-xs sm:max-w-sm"><div class="text-red-600 text-xl sm:text-2xl mb-3"><i data-lucide="alert-triangle"></i></div><p class="text-base sm:text-lg font-semibold text-red-700">Erro ao iniciar o sistema.</p><p class="text-slate-600 mt-2 text-sm sm:text-base">Verifique sua conexão com a internet e tente novamente.</p></div>';
+        createIcons();
+    }
+}
+
+/**
+ * Carrega dados de uma área de trabalho específica
+ * @param {Object} workspace - Área de trabalho a ser carregada
+ */
+async function loadWorkspaceData(workspace) {
+    showLoading('Carregando área de trabalho...');
+    console.log('[loadWorkspaceData] Iniciando carregamento para:', workspace);
+
+    try {
+        const entityList = document.getElementById('entity-list');
+        const moduleContainer = document.getElementById('module-container');
+        
+        if (entityList) entityList.innerHTML = '';
+        if (moduleContainer) moduleContainer.innerHTML = '';
+        
+        const workspaceId = workspace.id;
+        const ownerId = workspace.isOwner ? null : workspace.ownerId;
+
+        console.log(`[loadWorkspaceData] Detalhes: workspaceId=${workspaceId}, ownerId=${ownerId}, isShared=${workspace.isShared}`);
+        
+        const entities = await loadAllEntities(workspaceId, ownerId);
+        
+        if (entityList) {
+            entities.forEach(entity => renderEntityInLibrary(entity));
+        }
+        
+        populateFieldsToolbox();
+        
+        await loadAndRenderModules(renderModule, workspaceId, ownerId);
+        await loadDroppedEntitiesIntoModules(renderDroppedEntity, workspaceId, ownerId);
+        
+        checkEmptyStates();
+        
+        if (window.lucide) {
+            setTimeout(() => lucide.createIcons(), 200);
+        }
+        
+        hideLoading();
+    } catch (error) {
+        hideLoading();
+        console.error('[loadWorkspaceData] Erro crítico ao carregar a área de trabalho:', error);
+        showError('Erro de Carregamento', 'Ocorreu um erro ao carregar a área de trabalho. Verifique a consola para mais detalhes.');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', initApp);
+
+// ---- Funções de Renderização ----
+function renderEntityInLibrary(entity) {
+    const existingCard = document.querySelector(`.entity-card[data-entity-id="${entity.id}"]`);
+    if (existingCard) {
+        console.log(`Entidade ${entity.name} (${entity.id}) já existe na biblioteca. Ignorando.`);
+        return;
+    }
+    
+    console.log(`Renderizando entidade na biblioteca: ${entity.name} (${entity.id})`);
+    
+    const list = document.getElementById('entity-list');
+    if (!list) {
+        console.error("Elemento 'entity-list' não encontrado!");
+        return;
+    }
+    
+    const template = document.getElementById('entity-card-template');
+    if (!template) {
+        console.error("Template 'entity-card-template' não encontrado!");
+        return;
+    }
+    
+    const clone = template.content.cloneNode(true);
+    const card = clone.querySelector('.entity-card');
+    card.dataset.entityId = entity.id;
+    card.dataset.entityName = entity.name;
+    card.dataset.entityIcon = entity.icon; 
+    
+    const iconEl = clone.querySelector('.entity-icon');
+    iconEl.setAttribute('data-lucide', entity.icon || 'box'); 
+
+    clone.querySelector('.entity-name').textContent = entity.name;
+    
+    if (entity.id.startsWith('-')) {
+        clone.querySelector('.delete-custom-entity-btn').classList.remove('hidden');
+    }
+    
+    list.appendChild(clone);
+    
+    if (window.lucide) {
+        lucide.createIcons();
+    } else {
+        createIcons();
+    }
+    
+    if (list && !list._sortable) {
+        list._sortable = new Sortable(list, { 
+            group: { name: 'entities', pull: 'clone', put: false }, 
+            sort: false, 
+            animation: 150,
+            ghostClass: 'sortable-ghost',
+            chosenClass: 'sortable-chosen',
+            dragClass: 'sortable-drag',
+            delay: 50,
+            delayOnTouchOnly: true,
+        });
+    }
+}
+
+function renderModule(moduleData) {
+    const container = document.getElementById('module-container');
+    const template = document.getElementById('module-template');
+    const clone = template.content.cloneNode(true);
+    const moduleEl = clone.querySelector('.module-quadro');
+    
+    moduleEl.dataset.moduleId = moduleData.id;
+    clone.querySelector('.module-title').textContent = moduleData.name;
+    
+    container.appendChild(clone);
+    const newModuleEl = container.querySelector(`[data-module-id="${moduleData.id}"]`);
+    setupDragAndDropForModule(newModuleEl);
+    createIcons();
+    
+    newModuleEl.classList.add('animate-pulse');
+    setTimeout(() => newModuleEl.classList.remove('animate-pulse'), 2000);
+    
+    return newModuleEl;
+}
+
+function renderDroppedEntity(moduleId, entityId, entityData, entityInfo) {
+    const moduleEl = document.querySelector(`.module-quadro[data-module-id="${moduleId}"]`);
+    if (!moduleEl) return;
+    
+    const dropzone = moduleEl.querySelector('.entities-dropzone');
+    const template = document.getElementById('dropped-entity-card-template');
+    const clone = template.content.cloneNode(true);
+    const card = clone.querySelector('.dropped-entity-card');
+    card.dataset.entityId = entityId;
+    card.dataset.entityName = entityData.entityName;
+    card.dataset.moduleId = moduleId;
+    
+    const iconEl = clone.querySelector('.entity-icon');
+    if (entityInfo) {
+       iconEl.setAttribute('data-lucide', entityInfo.icon || 'box');
+    } else {
+       iconEl.style.display = 'none';
+    }
+
+    clone.querySelector('.entity-name').textContent = entityData.entityName;
+    card.classList.remove('animate-pulse');
+    dropzone.appendChild(clone);
+    
+    if (window.lucide) {
+        lucide.createIcons();
+    } else {
+        createIcons();
+    }
+}
+
+function populateFieldsToolbox() {
+    const toolbox = document.getElementById('fields-toolbox');
+    if (!toolbox) return;
+    
+    toolbox.innerHTML = '';
+    fieldTypes.forEach(field => {
+        const clone = document.getElementById('toolbox-field-template').content.cloneNode(true);
+        const item = clone.querySelector('.toolbox-item');
+        item.dataset.fieldType = field.type;
+        const iconEl = clone.querySelector('.field-icon');
+        iconEl.setAttribute('data-lucide', field.icon);
+        clone.querySelector('.field-name').textContent = field.name;
+        toolbox.appendChild(clone);
+    });
+    createIcons();
+    
+    if (toolbox && !toolbox._sortable) {
+        toolbox._sortable = new Sortable(toolbox, { 
+            group: { name: 'fields', pull: 'clone', put: false }, 
+            sort: false, 
+            animation: 150,
+            ghostClass: 'sortable-ghost',
+            chosenClass: 'sortable-chosen',
+            dragClass: 'sortable-drag',
+            delay: 50,
+            delayOnTouchOnly: true,
+        });
+    }
+}
+
+function renderFormField(fieldData) {
+    const dropzone = document.getElementById('form-builder-dropzone');
+    if (!dropzone) return;
+    
+    const template = document.getElementById('form-field-template');
+    const clone = template.content.cloneNode(true);
+    const card = clone.querySelector('.form-field-card');
+    
+    const domId = `field-card-${fieldData.id}`;
+    card.id = domId;
+    
+    card.dataset.fieldId = fieldData.id;
+    card.dataset.fieldData = JSON.stringify(fieldData);
+    const fieldInfo = fieldTypes.find(f => f.type === fieldData.type);
+    
+    const iconEl = clone.querySelector('.field-icon');
+    iconEl.setAttribute('data-lucide', fieldInfo.icon);
+    
+    clone.querySelector('.field-label').textContent = fieldData.label;
+    
+    if (fieldData.type === 'sub-entity') {
+        clone.querySelector('.field-type').textContent = fieldData.subType === 'independent' ? 
+            `Sub-Entidade` : 
+            `Relação → ${fieldData.targetEntityName}`;
+        clone.querySelector('.edit-sub-entity-btn').classList.remove('hidden');
+        clone.querySelector('.edit-field-btn').style.display = 'none';
+    } else {
+        clone.querySelector('.field-type').textContent = fieldInfo.name;
+        
+        if (fieldData.config && Object.keys(fieldData.config).length > 0) {
+            const label = clone.querySelector('.field-label');
+            if (!fieldData.config.required) {
+                label.textContent += ' (Configurado)';
+            } else {
+                label.textContent += ' *';
+            }
+        }
+    }
+    
+    dropzone.appendChild(clone);
+    
+    const newField = dropzone.lastElementChild;
+    newField.classList.add('animate-pulse');
+    setTimeout(() => newField.classList.remove('animate-pulse'), 2000);
+    
+    createIcons();
+    
+    const emptyFormState = document.getElementById('empty-form-state');
+    if (emptyFormState) {
+        if (dropzone.children.length > 0) {
+            emptyFormState.classList.add('hidden');
+        } else {
+            emptyFormState.classList.remove('hidden');
+        }
+    }
+    
+    return newField;
+}
+
+function updateModalBreadcrumb() {
+    const breadcrumbContainer = document.getElementById('modal-breadcrumb');
+    const backBtn = document.getElementById('modal-back-btn');
+    if (!breadcrumbContainer || !backBtn) return;
+    
+    breadcrumbContainer.innerHTML = '';
+    
+    if (modalNavigationStack.length === 0) {
+        backBtn.classList.add('hidden');
+        const context = JSON.parse(document.getElementById('entity-builder-modal').dataset.context);
+        const titleSpan = document.createElement('span');
+        titleSpan.className = 'font-bold text-indigo-800';
+        titleSpan.innerHTML = `<i data-lucide="file-edit" class="inline h-4 w-4 sm:h-5 sm:w-5 mr-1 text-indigo-600"></i> <span class="text-slate-800">${context.entityName}</span>`;
+        breadcrumbContainer.appendChild(titleSpan);
+    } else {
+        backBtn.classList.remove('hidden');
+        if (window.innerWidth < 640) {
+            const currentContext = JSON.parse(document.getElementById('entity-builder-modal').dataset.context);
+            const currentTitleSpan = document.createElement('span');
+            currentTitleSpan.className = 'font-semibold text-indigo-800';
+            currentTitleSpan.textContent = currentContext.label || currentContext.entityName;
+            breadcrumbContainer.appendChild(currentTitleSpan);
+        } else {
+            modalNavigationStack.forEach((state, index) => {
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = state.entityName || state.label;
+                nameSpan.className = 'text-slate-500 truncate';
+                breadcrumbContainer.appendChild(nameSpan);
                 
-                // Inicialização inicial
-                updateLucideIcons();
-                
-                // Garantir que os ícones sejam criados após o carregamento completo
-                window.addEventListener('load', function() {
-                    setTimeout(updateLucideIcons, 300);
-                });
-                
-                // Observador otimizado com debounce
-                let timeout;
-                const observer = new MutationObserver(function(mutations) {
-                    clearTimeout(timeout);
-                    timeout = setTimeout(() => {
-                        let hasNewNodes = false;
-                        
-                        // Verificar mutações para novos nós com data-lucide
-                        for (const mutation of mutations) {
-                            if (mutation.addedNodes && mutation.addedNodes.length) {
-                                for (const node of mutation.addedNodes) {
-                                    if (node.nodeType === 1) {  // É um elemento
-                                        if (node.hasAttribute && node.hasAttribute('data-lucide')) {
-                                            hasNewNodes = true;
-                                            break;
-                                        }
-                                        // Verifica filhos
-                                        if (node.querySelector && node.querySelector('[data-lucide]')) {
-                                            hasNewNodes = true;
-                                            break;
-                                        }
-                                    }
-                                }
-                                if (hasNewNodes) break;
-                            }
-                        }
-                        
-                        if (hasNewNodes) {
-                            console.log('Novos nós com data-lucide detectados, atualizando ícones');
-                            observer.disconnect(); // Desconecta o observer antes de atualizar
-                            updateLucideIcons();
-                            observer.observe(document.body, { // Reconecta depois
-                                childList: true,
-                                subtree: true
-                            });
-                        }
-                    }, 100); // Debounce de 100ms
-                });
-                
-                observer.observe(document.body, {
-                    childList: true,
-                    subtree: true
-                });
-                
-                // Expõe uma função global para atualizar ícones
-                window.updateLucideIcons = updateLucideIcons;
+                if (index < modalNavigationStack.length - 1) {
+                    const separator = document.createElement('span');
+                    separator.className = 'mx-1 sm:mx-2 text-slate-400';
+                    separator.innerHTML = `<i data-lucide="chevron-right" class="inline h-3 w-3 sm:h-4 sm:w-4"></i>`;
+                    breadcrumbContainer.appendChild(separator);
+                } else {
+                    const separator = document.createElement('span');
+                    separator.className = 'mx-1 sm:mx-2 text-slate-400';
+                    separator.innerHTML = `<i data-lucide="chevron-right" class="inline h-3 w-3 sm:h-4 sm:w-4"></i>`;
+                    breadcrumbContainer.appendChild(separator);
+                }
+            });
+            
+            const context = JSON.parse(document.getElementById('entity-builder-modal').dataset.context);
+            const currentTitleSpan = document.createElement('span');
+            currentTitleSpan.className = 'font-semibold text-indigo-800 truncate';
+            currentTitleSpan.textContent = context.label || context.entityName;
+            breadcrumbContainer.appendChild(currentTitleSpan);
+        }
+    }
+    
+    createIcons();
+}
+
+// ---- Funções de Interação ----
+function setupDragAndDropForModule(moduleElement) {
+    const dropzone = moduleElement.querySelector('.entities-dropzone');
+    if (!dropzone || dropzone._sortable) return;
+    
+    dropzone._sortable = new Sortable(dropzone, { 
+        group: 'entities', 
+        animation: 150, 
+        onAdd: handleEntityDrop,
+        ghostClass: 'sortable-ghost',
+        chosenClass: 'sortable-chosen',
+        dragClass: 'sortable-drag',
+        delay: 50,
+        delayOnTouchOnly: true,
+    });
+}
+
+function setupEventListeners() {
+    const moduleContainer = document.getElementById('module-container');
+    if (moduleContainer && !moduleContainer._sortable) {
+        moduleContainer._sortable = new Sortable(moduleContainer, {
+            animation: 150,
+            handle: '.module-quadro',
+            ghostClass: 'sortable-ghost',
+            chosenClass: 'sortable-chosen',
+            dragClass: 'sortable-drag',
+            delay: 150,
+            delayOnTouchOnly: true,
+            onEnd: function(evt) {
+                const moduleElements = document.querySelectorAll('.module-quadro');
+                const newOrder = Array.from(moduleElements).map(el => el.dataset.moduleId);
+                const currentWorkspace = getCurrentWorkspace();
+                const workspaceId = currentWorkspace ? currentWorkspace.id : 'default';
+                const ownerId = currentWorkspace && !currentWorkspace.isOwner ? currentWorkspace.ownerId : null;
+                saveModulesOrder(newOrder, workspaceId, ownerId);
             }
         });
-    </script>
+    }
 
-    <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-database-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-storage-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-functions-compat.js"></script>
-
-    <!-- Link para o ficheiro CSS externo -->
-    <link rel="stylesheet" href="css/style.css">
-</head>
-<body class="text-slate-800 bg-slate-50">
-
-    <!-- Indicador de Carregamento Visual -->
-    <div id="loading-overlay" class="loading-overlay">
-        <div class="spinner"></div>
-    </div>
-
-    <!-- ESTRUTURA PRINCIPAL DA APLICAÇÃO -->
-    <div id="app" class="h-screen w-screen flex flex-col overflow-hidden" style="display: none;">
+    document.body.addEventListener('click', e => {
+        const configureBtn = e.target.closest('.configure-btn');
+        if (configureBtn) {
+            const card = configureBtn.closest('.dropped-entity-card');
+            openModal({ moduleId: card.dataset.moduleId, entityId: card.dataset.entityId, entityName: card.dataset.entityName });
+            return;
+        }
         
-        <header class="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex justify-between items-center shadow-sm z-30 sticky top-0">
-            <div class="flex items-center gap-2 sm:gap-3">
-                <button id="mobile-menu-toggle" class="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 sm:hidden">
-                    <i class="fa-solid fa-bars w-6 h-6"></i>
-                </button>
-                <div class="relative">
-                    <button id="user-menu-button" class="flex items-center gap-2 sm:gap-3 cursor-pointer p-2 rounded-lg hover:bg-slate-100">
-                        <div class="p-2 sm:p-2.5 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-lg shadow-md">
-                            <i data-lucide="layout-dashboard" class="w-4 h-4 sm:w-5 sm:h-5"></i>
-                        </div>
-                        <h1 class="text-xl sm:text-2xl font-bold text-slate-800">Construktor</h1>
-                        <i class="fa-solid fa-chevron-down h-4 w-4 text-slate-400"></i>
-                    </button>
-
-                    <div id="user-menu-dropdown" class="absolute top-full mt-2 w-64 bg-white rounded-lg shadow-xl border border-slate-200 p-2 z-50 hidden">
-                        <div class="p-2">
-                            <p class="text-xs text-slate-500">Logado como</p>
-                            <div class="flex items-center gap-2 mt-1">
-                                <img id="user-avatar-preview" src="https://ui-avatars.com/api/?background=random" class="h-8 w-8 rounded-full">
-                                <span id="user-display-name" class="font-semibold text-slate-700">Carregando...</span>
-                            </div>
-                        </div>
-                        <hr class="my-2">
-                        <a href="#" id="edit-profile-button" class="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-slate-100 text-slate-600">
-                            <i class="fa-solid fa-gear h-4 w-4"></i>
-                            <span>Configurações do Perfil</span>
-                        </a>
-                        <a href="#" id="invite-user-button" class="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-slate-100 text-slate-600">
-                            <i class="fa-solid fa-user-plus h-4 w-4"></i>
-                            <span>Convidar</span>
-                        </a>
-                        <a href="#" id="manage-invites-button" class="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-slate-100 text-slate-600 relative">
-                            <i class="fa-solid fa-inbox h-4 w-4"></i>
-                            <span>Gerenciar Convites</span>
-                            <span id="menu-invites-badge" class="absolute hidden top-1 right-2 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">0</span>
-                        </a>
-                        <hr class="my-2">
-                        <a href="#" id="logout-button" class="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-slate-100 text-slate-600">
-                            <i class="fa-solid fa-right-from-bracket h-4 w-4"></i>
-                            <span>Sair</span>
-                        </a>
-                    </div>
-                </div>
-            </div>
-            <div class="flex items-center gap-2 sm:gap-4">
-                <button id="help-button" class="text-slate-600 hover:text-indigo-600 transition-colors flex items-center gap-1">
-                    <i class="fa-solid fa-circle-question h-5 w-5"></i>
-                    <span class="text-sm font-medium hidden sm:inline">Ajuda</span>
-                </button>
-                <a href="/pages/code-view.html" target="_blank" class="bg-gradient-to-r from-green-600 to-teal-600 text-white px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg hover:from-green-700 hover:to-teal-700 transition-all shadow-md flex items-center gap-2 text-sm sm:text-base hidden sm:flex">
-                    <i class="fa-solid fa-code h-4 w-4 sm:h-5 sm:w-5"></i>
-                    <span class="font-medium">Ver Código</span>
-                </a>
-                <a href="/pages/user-view.html" target="_blank" class="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all shadow-md flex items-center gap-2 text-sm sm:text-base">
-                    <i class="fa-solid fa-eye h-4 w-4 sm:h-5 sm:w-5"></i>
-                    <span class="font-medium">Ver Página</span>
-                </a>
-                <!-- Botão de logout removido pois agora está no menu do usuário -->
-                
-            </div>
-        </header>
-
-        <main class="flex-1 flex overflow-hidden relative">
-            <!-- Sidebar para desktop -->
-            <aside id="desktop-sidebar" class="w-64 sm:w-80 bg-white border-r border-slate-200 flex flex-col overflow-hidden shadow-sm h-full absolute inset-y-0 left-0 transform -translate-x-full sm:translate-x-0 transition-transform duration-300 ease-in-out z-20">
-                <div class="p-4 border-b border-slate-200 flex justify-between items-center sm:hidden">
-                    <h2 class="font-bold text-lg text-indigo-800">Biblioteca</h2>
-                    <button id="close-mobile-menu" class="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100">
-                        <i class="fa-solid fa-xmark w-5 h-5"></i>
-                    </button>
-                </div>
-                
-                <div class="p-4 sm:p-5 border-b border-slate-200 hidden sm:block">
-                    <h2 class="font-bold text-lg flex items-center gap-2 text-indigo-800">
-                        <i class="fa-solid fa-book-open text-indigo-600"></i> Biblioteca de Componentes
-                    </h2>
-                    <p class="text-sm text-slate-500 mt-1">Arraste os componentes para criar seu sistema</p>
-                </div>
-                
-                <div class="flex-1 overflow-y-auto p-4 sm:p-5 space-y-5">
-                    <!-- Seletor de Área de Trabalho -->
-                    <div id="workspace-selector" class="mb-4">
-                        <div class="flex items-center justify-between mb-2">
-                            <h3 class="text-sm font-semibold text-slate-700 flex items-center gap-1">
-                                <i class="fa-solid fa-briefcase h-4 w-4 text-purple-500"></i> Área de Trabalho
-                            </h3>
-                            <button id="share-workspace-btn" class="text-xs bg-purple-50 text-purple-700 px-2 py-1 rounded-full hover:bg-purple-100 transition-all">
-                                <i class="fa-solid fa-share-nodes h-3 w-3 inline-block mr-1"></i>Compartilhar
-                            </button>
-                        </div>
-                        
-                        <div class="flex gap-1">
-                            <select id="workspace-select" class="flex-1 text-sm border border-slate-300 rounded-lg px-2 py-1.5 text-slate-700 bg-white focus:outline-none focus:ring-1 focus:ring-purple-500">
-                                <option value="">Carregando...</option>
-                            </select>
-                            <button id="add-workspace-btn" class="bg-purple-50 text-purple-600 px-2 py-1.5 rounded-lg hover:bg-purple-100 transition-all">
-                                <i class="fa-solid fa-plus h-4 w-4"></i>
-                            </button>
-                        </div>
-                        
-                        <div id="current-workspace-title" class="mt-1 text-xs text-slate-500 truncate">Minha Área de Trabalho</div>
-                    </div>
-
-                    <div id="entity-library">
-                        <div class="flex items-center justify-between mb-3">
-                            <h3 class="text-md font-semibold text-slate-700 flex items-center gap-1">
-                                <i class="fa-solid fa-database h-4 w-4 text-indigo-500"></i> Entidades
-                            </h3>
-                            <span class="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full">Arraste →</span>
-                        </div>
-                        
-                        <div id="entity-list" class="space-y-2.5"></div>
-                        
-                        <button id="add-new-entity-btn" class="mt-4 w-full bg-indigo-50 text-indigo-700 px-4 py-3 rounded-lg hover:bg-indigo-100 transition-all flex items-center gap-2 justify-center border border-indigo-100 shadow-sm">
-                            <i class="fa-solid fa-circle-plus h-5 w-5"></i>
-                            <span class="font-medium">Criar Nova Entidade</span>
-                        </button>
-                    </div>
-                    
-                    <!-- Seção de Recursos Compartilhados -->
-                    <div id="shared-resources" class="mt-5 pt-5 border-t border-slate-200">
-                        <div class="flex items-center justify-between mb-3">
-                            <h3 class="text-md font-semibold text-slate-700 flex items-center gap-1">
-                                <i class="fa-solid fa-share-nodes h-4 w-4 text-emerald-500"></i> Compartilhados Comigo
-                            </h3>
-                            <button id="refresh-shared-resources" class="text-xs bg-emerald-50 text-emerald-700 px-2 py-1 rounded-full hover:bg-emerald-100 transition-all">
-                                <i class="fa-solid fa-arrows-rotate h-3 w-3 inline-block mr-1"></i>Atualizar
-                            </button>
-                        </div>
-                        
-                        <div id="shared-resources-list" class="space-y-2.5">
-                            <!-- Aqui serão adicionados os recursos compartilhados -->
-                        </div>
-                        
-                        <div id="no-shared-resources" class="bg-slate-50 rounded-lg p-3 text-center text-slate-500 border border-slate-200">
-                            <i class="fa-solid fa-circle-info h-5 w-5 mx-auto mb-2 text-slate-400"></i>
-                            <p class="text-sm">Nenhum recurso compartilhado encontrado</p>
-                        </div>
-                    </div>
-
-                    <div id="quick-tip" class="bg-gradient-to-r from-purple-50 to-indigo-50 p-4 rounded-lg border border-indigo-100 shadow-sm transition-all duration-300">
-                        <div class="flex justify-between items-start">
-                            <h3 class="font-semibold text-indigo-800 flex items-center gap-2 mb-2">
-                                <i class="fa-solid fa-lightbulb h-4 w-4 text-amber-500"></i> Dica Rápida
-                            </h3>
-                            <button class="close-tip-btn text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-white/50" data-tip-id="quick-tip">
-                                <i class="fa-solid fa-xmark h-4 w-4"></i>
-                            </button>
-                        </div>
-                        <p class="text-sm text-slate-700">Crie módulos para organizar as funcionalidades do seu sistema. Arraste entidades para os módulos e configure-as conforme necessário.</p>
-                    </div>
-                </div>
-            </aside>
-
-            <!-- Conteúdo principal -->
-            <section class="flex-1 overflow-hidden flex flex-col sm:ml-80">
-                <div class="border-b border-slate-200 bg-white py-3 px-4 sm:px-6 flex justify-between items-center shadow-sm">
-                    <h2 class="text-lg sm:text-xl font-bold flex items-center gap-2 text-slate-800">
-                        <i class="fa-solid fa-table-cells text-indigo-500"></i> Módulos do Sistema
-                    </h2>
-                    <button id="add-new-module-btn" class="bg-indigo-600 text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 shadow-sm text-sm sm:text-base">
-                        <i class="fa-solid fa-plus h-4 w-4 sm:h-5 sm:w-5"></i>
-                        <span class="font-medium">Adicionar</span>
-                    </button>
-                </div>
-                
-                <div class="flex-1 overflow-y-auto p-4 sm:p-6">
-                    <div class="mx-auto">
-                        <!-- Mensagem de orientação inicial -->
-                        <div id="welcome-tip" class="bg-white rounded-xl shadow-md p-4 sm:p-5 mb-5 border border-slate-200 transition-all duration-300">
-                            <div class="flex flex-col sm:flex-row sm:items-start gap-4">
-                                <div class="bg-blue-100 p-3 rounded-full text-blue-600 self-center sm:self-start">
-                                    <i class="fa-solid fa-circle-info h-6 w-6"></i>
-                                </div>
-                                <div class="flex-1">
-                                    <div class="flex justify-between items-start mb-1">
-                                        <h3 class="font-semibold text-lg text-slate-800">Bem-vindo ao Construktor</h3>
-                                        <button class="close-tip-btn text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100" data-tip-id="welcome-tip">
-                                            <i class="fa-solid fa-xmark h-5 w-5"></i>
-                                        </button>
-                                    </div>
-                                    <p class="text-slate-600 text-sm sm:text-base">Comece criando módulos para seu sistema e adicionando entidades a eles.</p>
-                                    <div class="flex flex-wrap gap-2 sm:gap-3 mt-3">
-                                        <div class="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 bg-indigo-50 text-indigo-700 rounded-full text-xs sm:text-sm">
-                                            <i class="fa-solid fa-table-cells-large h-3 w-3 sm:h-4 sm:w-4"></i> Passo 1: Crie módulos
-                                        </div>
-                                        <div class="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 bg-indigo-50 text-indigo-700 rounded-full text-xs sm:text-sm">
-                                            <i class="fa-solid fa-left-right h-3 w-3 sm:h-4 sm:w-4"></i> Passo 2: Arraste entidades
-                                        </div>
-                                        <div class="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 bg-indigo-50 text-indigo-700 rounded-full text-xs sm:text-sm">
-                                            <i class="fa-solid fa-gear h-3 w-3 sm:h-4 sm:w-4"></i> Passo 3: Configure campos
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Dica sobre reorganização de módulos -->
-                        <div id="modules-tip" class="bg-amber-50 rounded-lg shadow-sm p-3 sm:p-4 mb-5 border border-amber-200 flex items-center gap-3">
-                            <div class="text-amber-600">
-                                <i class="fa-solid fa-arrows-up-down-left-right h-5 w-5 sm:h-6 sm:w-6"></i>
-                            </div>
-                            <div class="flex-1">
-                                <p class="text-amber-800 text-sm sm:text-base">Você pode reorganizar os módulos arrastando-os para mudar sua ordem.</p>
-                            </div>
-                            <button class="close-tip-btn text-amber-500 hover:text-amber-700 p-1 rounded-full hover:bg-amber-100" data-tip-id="modules-tip">
-                                <i class="fa-solid fa-xmark h-4 w-4 sm:h-5 sm:w-5"></i>
-                            </button>
-                        </div>
-                        
-                        <div id="module-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                            <!-- Módulos criados dinamicamente aparecerão aqui -->
-                        </div>
-
-                        <!-- Elemento visual para indicar onde criar módulos quando vazio -->
-                        <div id="empty-state" class="hidden flex flex-col items-center justify-center bg-white rounded-xl border-2 border-dashed border-indigo-200 p-6 sm:p-10 mt-4 text-center">
-                            <div class="bg-indigo-100 p-3 rounded-full mb-3">
-                                <i class="fa-solid fa-table-cells-large h-8 w-8 text-indigo-600"></i>
-                            </div>
-                            <h3 class="text-lg font-semibold text-slate-800 mb-2">Nenhum módulo criado</h3>
-                            <p class="text-slate-600 max-w-md mb-4 text-sm sm:text-base">Módulos ajudam a organizar as funcionalidades do seu sistema em categorias lógicas como Vendas, Compras, Recursos Humanos, etc.</p>
-                            <button id="empty-add-module-btn" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 shadow-sm">
-                                <i class="fa-solid fa-plus h-5 w-5"></i>
-                                <span>Criar seu primeiro módulo</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </section>
-        </main>
-
-        <!-- Botão flutuante para adicionar módulo (visível apenas em mobile) -->
-        <div class="fixed right-4 bottom-4 sm:hidden z-20">
-            <button id="mobile-add-module-btn" class="bg-indigo-600 text-white p-3 rounded-full hover:bg-indigo-700 transition-colors shadow-lg flex items-center justify-center">
-                <i class="fa-solid fa-plus h-6 w-6"></i>
-            </button>
-        </div>
-    </div>
-
-    <!-- Modal de Perfil de Usuário -->
-    <div id="profile-modal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center z-50 hidden p-4">
-        <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 scale-95 opacity-0 transition-all duration-300">
-            <div class="flex justify-between items-center mb-5">
-                <h2 class="text-xl font-bold text-slate-800">Meu Perfil</h2>
-                <button id="close-profile-modal" class="text-slate-500 hover:text-slate-800 p-1.5 rounded-lg hover:bg-slate-100">
-                    <i class="fa-solid fa-xmark h-5 w-5"></i>
-                </button>
-            </div>
-            <div class="flex flex-col items-center mb-6">
-                <div class="relative mb-4">
-                    <img id="modal-avatar-preview" src="https://ui-avatars.com/api/?background=random" class="h-24 w-24 rounded-full border-4 border-white shadow-lg">
-                    <button id="change-avatar-button" class="absolute bottom-0 right-0 bg-indigo-600 text-white p-2 rounded-full shadow-md hover:bg-indigo-700 transition-all">
-                        <i class="fa-solid fa-camera h-4 w-4"></i>
-                    </button>
-                </div>
-                <input type="file" id="avatar-upload-input" accept="image/*" class="hidden">
-            </div>
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Apelido</label>
-                    <input id="nickname-input" type="text" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">E-mail</label>
-                    <input id="email-input" type="email" class="w-full px-3 py-2 bg-slate-100 border border-slate-300 rounded-lg" readonly>
-                </div>
-            </div>
-            <div class="flex justify-end gap-3 mt-6">
-                <button id="cancel-profile-button" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200">Cancelar</button>
-                <button id="save-profile-button" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Salvar</button>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Modal de Convite -->
-    <div id="invite-modal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center z-50 hidden p-4">
-        <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 scale-95 opacity-0 transition-all duration-300">
-            <div class="flex justify-between items-center mb-5">
-                <h2 class="text-xl font-bold text-slate-800">Convidar Usuário</h2>
-                <button id="close-invite-modal" class="text-slate-500 hover:text-slate-800 p-1.5 rounded-lg hover:bg-slate-100">
-                    <i class="fa-solid fa-xmark h-5 w-5"></i>
-                </button>
-            </div>
-            <p class="text-slate-600 mb-4">Convide outros usuários para acessar o sistema como administrador.</p>
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">E-mail do Usuário</label>
-                    <input id="invite-email-input" type="email" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" placeholder="ex: usuario@email.com">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Nível de Permissão</label>
-                    <select id="permission-select" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">
-                        <option value="admin">Administrador (Acesso Total)</option>
-                        <option value="editor" disabled>Editor (Em breve)</option>
-                        <option value="viewer" disabled>Leitor (Em breve)</option>
-                    </select>
-                </div>
-            </div>
-            <div class="flex justify-end gap-3 mt-6">
-                <button id="cancel-invite-button" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200">Cancelar</button>
-                <button id="send-invite-button" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Enviar Convite</button>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Modal de Gerenciar Convites -->
-    <div id="manage-invites-modal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center z-50 hidden p-4">
-        <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl p-6 scale-95 opacity-0 transition-all duration-300">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-xl font-bold text-slate-800">Gerenciar Convites</h2>
-                <button id="close-manage-invites-modal" class="text-slate-500 hover:text-slate-800 p-1.5 rounded-lg hover:bg-slate-100">
-                    <i class="fa-solid fa-xmark h-5 w-5"></i>
-                </button>
-            </div>
-            
-            <div class="flex mb-4">
-                <button id="tab-invites-sent" class="flex-1 py-2 px-4 text-center border-b-2 border-indigo-600 font-medium text-indigo-600">Enviados</button>
-                <button id="tab-invites-received" class="flex-1 py-2 px-4 text-center border-b-2 border-slate-200 font-medium text-slate-500 relative">
-                    Recebidos
-                    <span id="received-invites-badge" class="absolute hidden top-1 right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">0</span>
-                </button>
-                <button id="tab-invites-access" class="flex-1 py-2 px-4 text-center border-b-2 border-slate-200 font-medium text-slate-500">
-                    Acessos
-                </button>
-            </div>
-            
-            <div id="sent-invites-container" class="overflow-y-auto max-h-64">
-                <div class="bg-slate-50 rounded-lg p-4 text-center text-slate-500" id="no-sent-invites">
-                    <i class="fa-solid fa-circle-info h-6 w-6 mx-auto mb-2 text-slate-400"></i>
-                    <p>Você ainda não enviou nenhum convite</p>
-                </div>
-                <!-- Aqui serão adicionados os convites enviados dinamicamente -->
-                <div class="space-y-3" id="sent-invites-list">
-                    <!-- Exemplo de cartão de convite enviado -->
-                </div>
-            </div>
-            
-            <div id="received-invites-container" class="overflow-y-auto max-h-64 hidden">
-                <div class="bg-slate-50 rounded-lg p-4 text-center text-slate-500" id="no-received-invites">
-                    <i class="fa-solid fa-circle-info h-6 w-6 mx-auto mb-2 text-slate-400"></i>
-                    <p>Você não recebeu nenhum convite</p>
-                </div>
-                <!-- Aqui serão adicionados os convites recebidos dinamicamente -->
-                <div class="space-y-3" id="received-invites-list">
-                    <!-- Exemplo de cartão de convite recebido -->
-                </div>
-            </div>
-            
-            <div id="access-management-container" class="overflow-y-auto max-h-64 hidden">
-                <div class="bg-slate-50 rounded-lg p-4 text-center text-slate-500" id="no-shared-access">
-                    <i class="fa-solid fa-circle-info h-6 w-6 mx-auto mb-2 text-slate-400"></i>
-                    <p>Nenhum usuário com acesso compartilhado encontrado</p>
-                </div>
-                <!-- Aqui serão adicionados os usuários com acesso compartilhado -->
-                <div class="space-y-3" id="shared-access-list">
-                    <!-- Os usuários com acesso serão adicionados aqui dinamicamente -->
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal de Construção de Entidade -->
-    <div id="entity-builder-modal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center z-50 hidden p-4">
-        <div class="bg-white w-full max-w-6xl h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden scale-95 opacity-0 transition-all duration-300">
-            <div class="p-4 sm:p-5 border-b border-slate-200 flex justify-between items-center bg-gradient-to-r from-indigo-50 to-purple-50">
-                <!-- Breadcrumb para navegação hierárquica -->
-                <div id="modal-breadcrumb" class="flex items-center text-sm sm:text-lg overflow-hidden"></div>
-                <div class="flex items-center gap-2 sm:gap-4">
-                    <button id="modal-back-btn" class="hidden text-slate-600 bg-white hover:bg-slate-100 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg transition-colors flex items-center gap-1 sm:gap-2 shadow-sm border border-slate-200 text-sm">
-                        <i class="fa-solid fa-arrow-left h-4 w-4 sm:h-5 sm:w-5"></i>
-                        <span class="hidden sm:inline">Voltar</span>
-                    </button>
-                    <button id="save-structure-btn" class="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-colors flex items-center gap-1 sm:gap-2 shadow-md text-sm">
-                        <i class="fa-solid fa-floppy-disk h-4 w-4 sm:h-5 sm:w-5"></i>
-                        <span>Guardar</span>
-                    </button>
-                    <button id="close-modal-btn" class="text-slate-500 hover:text-slate-800 bg-white p-1.5 rounded-lg hover:bg-slate-100 transition-colors">
-                        <i class="fa-solid fa-xmark h-5 w-5 sm:h-6 sm:w-6"></i>
-                    </button>
-                </div>
-            </div>
-            
-            <div class="flex-1 flex flex-col sm:flex-row overflow-hidden">
-                <!-- Sidebar do modal - colapsável em mobile -->
-                <div id="modal-sidebar-container" class="w-full sm:w-72 bg-slate-50 border-b sm:border-r sm:border-b-0 border-slate-200 sm:flex-shrink-0 sm:overflow-y-auto">
-                    <div class="p-4 flex items-center justify-between sm:hidden border-b border-slate-200">
-                        <h3 class="font-bold text-md text-indigo-800">Caixa de Ferramentas</h3>
-                        <button id="toggle-modal-sidebar" class="p-1 rounded-lg text-slate-600 hover:bg-slate-100">
-                            <i class="fa-solid fa-chevron-down h-5 w-5"></i>
-                        </button>
-                    </div>
-                    
-                    <div id="modal-sidebar-content" class="p-4 sm:p-5 hidden sm:block">
-                        <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 mb-4">
-                            <h3 class="font-bold text-md mb-2 flex items-center gap-2 text-indigo-800">
-                                <i class="fa-solid fa-wrench text-indigo-600"></i> Caixa de Ferramentas
-                            </h3>
-                            <p class="text-xs text-slate-500 mb-3">Arraste os campos para o formulário à direita</p>
-                            <div id="fields-toolbox" class="space-y-2.5"></div>
-                        </div>
-                        
-                        <div class="bg-amber-50 p-4 rounded-lg border border-amber-200 shadow-sm">
-                            <h3 class="font-semibold text-amber-800 flex items-center gap-2 mb-2">
-                                <i class="fa-solid fa-lightbulb h-4 w-4 text-amber-500"></i> Ajuda
-                            </h3>
-                            <ul class="text-sm text-amber-700 space-y-2 list-disc pl-4">
-                                <li>Arraste campos da caixa de ferramentas para o formulário</li>
-                                <li>Configure cada campo com nome e propriedades</li>
-                                <li>Salve a estrutura quando terminar</li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Área do formulário -->
-                <main class="flex-1 overflow-y-auto bg-slate-100 p-4 sm:p-6">
-                    <div class="bg-white p-4 sm:p-6 rounded-xl shadow-md min-h-full border border-slate-200">
-                        <h3 class="text-base sm:text-lg font-semibold text-slate-800 mb-3 sm:mb-4 flex items-center gap-2">
-                            <i class="fa-solid fa-align-left text-indigo-500 h-4 w-4 sm:h-5 sm:w-5"></i> Editor de Formulário
-                        </h3>
-                        <p class="text-xs sm:text-sm text-slate-500 mb-4 sm:mb-6">Crie a estrutura do formulário arrastando os campos da caixa de ferramentas</p>
-                        
-                        <div id="form-builder-dropzone" class="space-y-3 min-h-[200px] sm:min-h-[300px] bg-slate-50 p-3 sm:p-4 rounded-lg border-2 border-dashed border-slate-200"></div>
-                        
-                        <div id="empty-form-state" class="hidden flex flex-col items-center justify-center text-center py-6 sm:py-10">
-                            <div class="bg-indigo-100 p-3 rounded-full mb-3">
-                                <i class="fa-solid fa-arrow-left h-6 w-6 sm:h-8 sm:w-8 text-indigo-600"></i>
-                            </div>
-                            <h3 class="text-base sm:text-lg font-semibold text-slate-700 mb-2">Formulário Vazio</h3>
-                            <p class="text-slate-500 max-w-md text-sm">Arraste campos da caixa de ferramentas para começar a criar seu formulário.</p>
-                        </div>
-                    </div>
-                </main>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Painel de Propriedades do Campo (inspirado no Notion) -->
-    <div id="field-properties-panel" class="fixed inset-y-0 right-0 bg-white w-full sm:w-96 shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out z-50 flex flex-col">
-        <!-- Cabeçalho do painel -->
-        <div class="p-4 sm:p-5 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white flex justify-between items-center">
-            <div class="flex items-center gap-2">
-                <i id="field-properties-icon" class="fa-solid fa-calendar h-5 w-5 text-indigo-600"></i>
-                <h3 class="font-bold text-lg text-slate-800">Propriedades do Campo</h3>
-            </div>
-            <button id="close-properties-panel" class="text-slate-500 hover:text-slate-800 p-1.5 rounded-lg hover:bg-slate-100 transition-colors">
-                <i class="fa-solid fa-xmark h-5 w-5"></i>
-            </button>
-        </div>
+        const deleteEntityBtn = e.target.closest('.delete-entity-btn');
+        if (deleteEntityBtn) { 
+            confirmAndRemoveEntityFromModule(deleteEntityBtn.closest('.dropped-entity-card')); 
+            return; 
+        }
         
-        <!-- Conteúdo do painel com rolagem -->
-        <div class="flex-1 overflow-y-auto p-4 sm:p-5">
-            <!-- Informações Básicas (comum a todos os tipos) -->
-            <div class="mb-6">
-                <h4 class="text-base font-semibold text-slate-700 mb-3">Informações Básicas</h4>
-                <div class="space-y-4">
-                    <div>
-                        <label for="field-label" class="block text-sm font-medium text-slate-700 mb-1">Nome do Campo</label>
-                        <input type="text" id="field-label" class="w-full p-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Ex: Data de Nascimento">
-                    </div>
-                    <div>
-                        <label for="field-description" class="block text-sm font-medium text-slate-700 mb-1">Descrição (opcional)</label>
-                        <input type="text" id="field-description" class="w-full p-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Ex: Informe a data de nascimento">
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <input type="checkbox" id="field-required" class="rounded text-indigo-600 focus:ring-indigo-500">
-                        <label for="field-required" class="text-sm font-medium text-slate-700">Campo obrigatório</label>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Configurações específicas do tipo de campo -->
-            <div>
-                <h4 class="text-base font-semibold text-slate-700 mb-3">Configurações Específicas</h4>
-                
-                <!-- Configurações para CAMPO DE DATA -->
-                <div id="date-field-config" class="field-type-config space-y-5">
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-2">Formato de Data</label>
-                        <div class="space-y-2">
-                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                                <input type="radio" name="date-format" value="DD/MM/AAAA" class="text-indigo-600 focus:ring-indigo-500" checked>
-                                <span class="text-sm">DD/MM/AAAA (Padrão Brasil)</span>
-                            </label>
-                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                                <input type="radio" name="date-format" value="MM/DD/AAAA" class="text-indigo-600 focus:ring-indigo-500">
-                                <span class="text-sm">MM/DD/AAAA (Padrão Americano)</span>
-                            </label>
-                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                                <input type="radio" name="date-format" value="AAAA-MM-DD" class="text-indigo-600 focus:ring-indigo-500">
-                                <span class="text-sm">AAAA-MM-DD (Padrão ISO)</span>
-                            </label>
-                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                                <input type="radio" name="date-format" value="complete" class="text-indigo-600 focus:ring-indigo-500">
-                                <span class="text-sm">25 de junho de 2025 (Completo)</span>
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-2">Inclusão de Horas</label>
-                        <div class="space-y-2">
-                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                                <input type="radio" name="time-format" value="none" class="text-indigo-600 focus:ring-indigo-500" checked>
-                                <span class="text-sm">Sem Horas (Apenas data)</span>
-                            </label>
-                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                                <input type="radio" name="time-format" value="HH:mm" class="text-indigo-600 focus:ring-indigo-500">
-                                <span class="text-sm">Com Horas e Minutos (HH:mm)</span>
-                            </label>
-                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                                <input type="radio" name="time-format" value="HH:mm:ss" class="text-indigo-600 focus:ring-indigo-500">
-                                <span class="text-sm">Com Horas, Minutos e Segundos (HH:mm:ss)</span>
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-2">Comportamento do Campo</label>
-                        <div class="space-y-2">
-                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                                <input type="radio" name="date-behavior" value="singleDate" class="text-indigo-600 focus:ring-indigo-500" checked>
-                                <span class="text-sm">Data Única</span>
-                            </label>
-                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                                <input type="radio" name="date-behavior" value="dateRange" class="text-indigo-600 focus:ring-indigo-500">
-                                <span class="text-sm">Intervalo de Datas (Início e Fim)</span>
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-2">Valor Padrão</label>
-                        <div class="space-y-2">
-                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                                <input type="radio" name="date-default" value="none" class="text-indigo-600 focus:ring-indigo-500" checked>
-                                <span class="text-sm">Nenhum</span>
-                            </label>
-                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                                <input type="radio" name="date-default" value="today" class="text-indigo-600 focus:ring-indigo-500">
-                                <span class="text-sm">Data de Hoje</span>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Configurações para CAMPO DE TEXTO -->
-                <div id="text-field-config" class="field-type-config space-y-5 hidden">
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-2">Tipo de Conteúdo</label>
-                        <div class="space-y-2">
-                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                                <input type="radio" name="text-content-type" value="text" class="text-indigo-600 focus:ring-indigo-500" checked>
-                                <span class="text-sm">Texto Simples</span>
-                            </label>
-                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                                <input type="radio" name="text-content-type" value="email" class="text-indigo-600 focus:ring-indigo-500">
-                                <span class="text-sm">Email (com validação)</span>
-                            </label>
-                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                                <input type="radio" name="text-content-type" value="url" class="text-indigo-600 focus:ring-indigo-500">
-                                <span class="text-sm">URL (com validação)</span>
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-2">Aparência</label>
-                        <div class="space-y-2">
-                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                                <input type="radio" name="text-appearance" value="singleLine" class="text-indigo-600 focus:ring-indigo-500" checked>
-                                <span class="text-sm">Linha Única</span>
-                            </label>
-                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                                <input type="radio" name="text-appearance" value="multiLine" class="text-indigo-600 focus:ring-indigo-500">
-                                <span class="text-sm">Múltiplas Linhas</span>
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <div>
-                        <label for="text-max-length" class="block text-sm font-medium text-slate-700 mb-2">Limite de Caracteres</label>
-                        <input type="number" id="text-max-length" class="w-full p-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" min="0" placeholder="Deixe em branco para ilimitado">
-                    </div>
-                </div>
-                
-                <!-- Configurações para CAMPO DE NÚMERO -->
-                <div id="number-field-config" class="field-type-config space-y-5 hidden">
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-2">Formato do Número</label>
-                        <div class="space-y-2">
-                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                                <input type="radio" name="number-format" value="plain" class="text-indigo-600 focus:ring-indigo-500" checked>
-                                <span class="text-sm">Número Simples</span>
-                            </label>
-                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                                <input type="radio" name="number-format" value="thousands" class="text-indigo-600 focus:ring-indigo-500">
-                                <span class="text-sm">Com Separador de Milhar (1.234.567)</span>
-                            </label>
-                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                                <input type="radio" name="number-format" value="decimal" class="text-indigo-600 focus:ring-indigo-500">
-                                <span class="text-sm">Número Decimal</span>
-                            </label>
-                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                                <input type="radio" name="number-format" value="currency" class="text-indigo-600 focus:ring-indigo-500">
-                                <span class="text-sm">Moeda</span>
-                            </label>
-                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                                <input type="radio" name="number-format" value="percentage" class="text-indigo-600 focus:ring-indigo-500">
-                                <span class="text-sm">Porcentagem (%)</span>
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <div id="decimal-precision-container" class="hidden">
-                        <label for="decimal-precision" class="block text-sm font-medium text-slate-700 mb-2">Casas Decimais</label>
-                        <input type="number" id="decimal-precision" class="w-full p-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" min="0" max="10" value="2">
-                    </div>
-                    
-                    <div id="currency-symbol-container" class="hidden">
-                        <label for="currency-symbol" class="block text-sm font-medium text-slate-700 mb-2">Símbolo da Moeda</label>
-                        <input type="text" id="currency-symbol" class="w-full p-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Ex: R$, $, €" value="R$">
-                    </div>
-                    
-                    <div>
-                        <label for="number-min-value" class="block text-sm font-medium text-slate-700 mb-2">Valor Mínimo (opcional)</label>
-                        <input type="number" id="number-min-value" class="w-full p-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Deixe em branco para ilimitado">
-                    </div>
-                    
-                    <div>
-                        <label for="number-max-value" class="block text-sm font-medium text-slate-700 mb-2">Valor Máximo (opcional)</label>
-                        <input type="number" id="number-max-value" class="w-full p-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Deixe em branco para ilimitado">
-                    </div>
-                </div>
-                
-                <!-- Configurações para CAMPO DE SELEÇÃO -->
-                <div id="select-field-config" class="field-type-config space-y-5 hidden">
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-2">Comportamento da Seleção</label>
-                        <div class="space-y-2">
-                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                                <input type="radio" name="select-behavior" value="single" class="text-indigo-600 focus:ring-indigo-500" checked>
-                                <span class="text-sm">Permitir apenas uma opção</span>
-                            </label>
-                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                                <input type="radio" name="select-behavior" value="multiple" class="text-indigo-600 focus:ring-indigo-500">
-                                <span class="text-sm">Permitir múltiplas opções</span>
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-2">Aparência</label>
-                        <div class="space-y-2">
-                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                                <input type="radio" name="select-appearance" value="dropdown" class="text-indigo-600 focus:ring-indigo-500" checked>
-                                <span class="text-sm">Lista Suspensa (Dropdown)</span>
-                            </label>
-                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
-                                <input type="radio" name="select-appearance" value="buttons" class="text-indigo-600 focus:ring-indigo-500">
-                                <span class="text-sm">Lista de Botões (Radio/Checkbox)</span>
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <div>
-                        <div class="flex justify-between items-center mb-2">
-                            <label class="text-sm font-medium text-slate-700">Opções</label>
-                            <button id="add-select-option" class="text-xs bg-indigo-50 text-indigo-600 px-2 py-1 rounded-md hover:bg-indigo-100 transition-colors">
-                                <i data-lucide="plus-circle" class="h-3 w-3 inline mr-1"></i> Adicionar
-                            </button>
-                        </div>
-                        
-                        <div id="select-options-container" class="space-y-2 bg-slate-50 p-3 rounded-lg border border-slate-200 min-h-[100px] max-h-[200px] overflow-y-auto">
-                            <!-- As opções serão adicionadas aqui dinamicamente -->
-                            <div class="select-option-item flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200">
-                                <div class="flex-1">
-                                    <input type="text" class="w-full p-1.5 border border-slate-300 rounded text-sm" placeholder="Nome da opção" value="Opção 1">
-                                </div>
-                                <button class="move-option-up text-slate-500 hover:text-slate-700 p-1">
-                                    <i data-lucide="chevron-up" class="h-4 w-4"></i>
-                                </button>
-                                <button class="move-option-down text-slate-500 hover:text-slate-700 p-1">
-                                    <i data-lucide="chevron-down" class="h-4 w-4"></i>
-                                </button>
-                                <button class="delete-option text-slate-500 hover:text-red-500 p-1">
-                                    <i data-lucide="trash-2" class="h-4 w-4"></i>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+        const deleteCustomEntityBtn = e.target.closest('.delete-custom-entity-btn');
+        if (deleteCustomEntityBtn) { 
+            confirmAndRemoveCustomEntity(deleteCustomEntityBtn.closest('.entity-card')); 
+            return; 
+        }
         
-        <!-- Rodapé do painel com botões -->
-        <div class="p-4 sm:p-5 border-t border-slate-200 bg-gradient-to-r from-slate-50 to-white flex gap-3 justify-end">
-            <button id="cancel-field-properties" class="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors">
-                Cancelar
-            </button>
-            <button id="apply-field-properties" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
-                Aplicar
-            </button>
-        </div>
-    </div>
+        const deleteModuleBtn = e.target.closest('.delete-module-btn');
+        if (deleteModuleBtn) { 
+            confirmAndRemoveModule(deleteModuleBtn.closest('.module-quadro')); 
+            return; 
+        }
+        
+        const editSubEntityBtn = e.target.closest('.edit-sub-entity-btn');
+        if (editSubEntityBtn) { 
+            handleEditSubEntity(editSubEntityBtn); 
+            return; 
+        }
+        
+        const refreshSharedBtn = document.getElementById('refresh-shared-resources');
+        if (e.target === refreshSharedBtn || refreshSharedBtn?.contains(e.target)) {
+            loadAndRenderSharedResources();
+            return;
+        }
+    });
     
-    <!-- TEMPLATES -->
-    <template id="module-template">
-        <div class="module-quadro bg-white rounded-xl shadow-md overflow-hidden border border-slate-200 hover:shadow-lg transition-shadow" data-module-id="">
-            <div class="bg-gradient-to-r from-indigo-500 to-purple-600 p-3 sm:p-4 text-white">
-                <div class="flex justify-between items-center">
-                    <h3 class="module-title text-base sm:text-lg font-bold"></h3>
-                    <button class="delete-module-btn text-white/70 hover:text-white p-1 sm:p-1.5 rounded-md transition-colors hover:bg-white/10">
-                        <i class="fa-solid fa-trash-can h-4 w-4 sm:h-5 sm:w-5"></i>
-                    </button>
-                </div>
-            </div>
-            <div class="entities-dropzone p-3 sm:p-4 space-y-2 sm:space-y-3 min-h-[150px] sm:min-h-[220px] bg-gradient-to-b from-indigo-50/50 to-white"></div>
-            <div class="border-t border-slate-200 p-2 sm:p-3 bg-slate-50/80">
-                <div class="text-xs text-slate-500 flex items-center gap-1.5">
-                    <i class="fa-solid fa-left-right h-3 w-3 sm:h-3.5 sm:w-3.5"></i>
-                    <span>Arraste entidades para este módulo</span>
-                </div>
-            </div>
-        </div>
-    </template>
+    const addNewEntityBtn = document.getElementById('add-new-entity-btn');
+    if (addNewEntityBtn) addNewEntityBtn.addEventListener('click', handleAddNewEntity);
     
-    <template id="entity-card-template">
-        <div class="entity-card bg-white p-3 sm:p-3.5 rounded-lg border border-slate-200 shadow-sm flex items-center justify-between cursor-grab transition-all hover:shadow-md hover:border-indigo-200 active:shadow-inner" data-entity-id="" data-entity-name="" data-entity-icon="">
-            <div class="flex items-center gap-2 sm:gap-3">
-                <div class="h-7 w-7 sm:h-8 sm:w-8 rounded-md bg-indigo-100 flex items-center justify-center text-indigo-600">
-                    <i class="entity-icon"></i>
-                </div>
-                <span class="entity-name font-medium text-slate-700 text-sm sm:text-base"></span>
-            </div>
-            <div class="flex items-center gap-1 sm:gap-2">
-                <button class="delete-custom-entity-btn text-slate-400 hover:text-red-600 p-1 rounded-md transition-colors hidden">
-                    <i class="fa-solid fa-trash-can h-4 w-4"></i>
-                </button>
-                <i class="fa-solid fa-grip-vertical text-slate-400 h-4 w-4 sm:h-5 sm:w-5"></i>
-            </div>
-        </div>
-    </template>
+    const addNewModuleBtn = document.getElementById('add-new-module-btn');
+    if (addNewModuleBtn) addNewModuleBtn.addEventListener('click', handleAddNewModule);
     
-    <template id="dropped-entity-card-template">
-        <div class="dropped-entity-card bg-white p-3 sm:p-4 rounded-lg border-l-4 border border-indigo-300 border-l-indigo-500 shadow-sm flex items-center justify-between animate-pulse hover:shadow-md transition-shadow" data-entity-id="" data-entity-name="">
-            <div class="flex items-center gap-2 sm:gap-3">
-                <div class="h-8 w-8 sm:h-9 sm:w-9 rounded-md bg-indigo-100 flex items-center justify-center text-indigo-600">
-                    <i class="entity-icon"></i>
+    const closeModalBtn = document.getElementById('close-modal-btn');
+    if (closeModalBtn) closeModalBtn.addEventListener('click', closeModal);
+    
+    const saveStructureBtn = document.getElementById('save-structure-btn');
+    if (saveStructureBtn) saveStructureBtn.addEventListener('click', saveCurrentStructure);
+    
+    const modalBackBtn = document.getElementById('modal-back-btn');
+    if (modalBackBtn) modalBackBtn.addEventListener('click', handleModalBack);
+    
+    const emptyAddModuleBtn = document.getElementById('empty-add-module-btn');
+    if (emptyAddModuleBtn) emptyAddModuleBtn.addEventListener('click', handleAddNewModule);
+    
+    const mobileAddModuleBtn = document.getElementById('mobile-add-module-btn');
+    if (mobileAddModuleBtn) mobileAddModuleBtn.addEventListener('click', handleAddNewModule);
+
+    const formBuilderDropzone = document.getElementById('form-builder-dropzone');
+    if (formBuilderDropzone) {
+        if (!formBuilderDropzone._sortable) {
+            formBuilderDropzone._sortable = new Sortable(formBuilderDropzone, { 
+                group: 'fields', 
+                animation: 150, 
+                onAdd: handleFieldDrop, 
+                handle: '[data-lucide="grip-vertical"]',
+                ghostClass: 'sortable-ghost',
+                chosenClass: 'sortable-chosen',
+                dragClass: 'sortable-drag',
+                delay: 50,
+                delayOnTouchOnly: true,
+            });
+        }
+        
+        formBuilderDropzone.addEventListener('click', e => {
+             const deleteBtn = e.target.closest('.delete-field-btn');
+             if (deleteBtn) {
+                showConfirmDialog('Tem certeza?', "Não poderá reverter esta ação!", 'Sim, eliminar!', 'Cancelar', 'warning')
+                .then(confirmed => { 
+                    if (confirmed) { 
+                        const fieldCard = deleteBtn.closest('.form-field-card');
+                        const fieldName = fieldCard.querySelector('.field-label').textContent;
+                        fieldCard.remove();
+                        showSuccess('Eliminado!', `O campo "${fieldName}" foi removido.`);
+                        
+                        const dropzone = document.getElementById('form-builder-dropzone');
+                        const emptyFormState = document.getElementById('empty-form-state');
+                        if (dropzone.children.length === 0 && emptyFormState) {
+                            emptyFormState.classList.remove('hidden');
+                        }
+                    } 
+                });
+             }
+             
+             const editBtn = e.target.closest('.edit-field-btn');
+             if (editBtn) {
+                const fieldCard = editBtn.closest('.form-field-card');
+                const fieldData = JSON.parse(fieldCard.dataset.fieldData);
+                openFieldPropertiesPanel(fieldData, fieldCard);
+             }
+        });
+    }
+    
+    window.addEventListener('resize', () => {
+        const entityBuilderModal = document.getElementById('entity-builder-modal');
+        if (entityBuilderModal && !entityBuilderModal.classList.contains('hidden')) {
+            updateModalBreadcrumb();
+        }
+    });
+
+    const viewCodeLink = document.getElementById('view-code-secure-link');
+    if (viewCodeLink) {
+        viewCodeLink.addEventListener('click', async function(event) {
+            event.preventDefault();
+            
+            const { value: password, isConfirmed } = await Swal.fire({
+                title: 'Acesso Restrito',
+                input: 'password',
+                inputLabel: 'Senha para Ver Código',
+                inputPlaceholder: 'Digite a senha',
+                showCancelButton: true,
+                confirmButtonText: 'Acessar',
+                cancelButtonText: 'Cancelar',
+                inputAttributes: {
+                    autocapitalize: 'off',
+                    autocorrect: 'off'
+                },
+                customClass: {
+                    popup: 'shadow-xl rounded-xl'
+                }
+            });
+
+            if (isConfirmed && password) {
+                if (password === '246819') {
+                    window.open('/pages/code-view.html', '_blank');
+                } else {
+                    showError('Senha Incorreta', 'A senha fornecida está incorreta.');
+                }
+            }
+        });
+    }
+}
+
+async function handleEntityDrop(event) {
+    const { item, to } = event;
+    const { entityId, entityName, entityIcon } = item.dataset;
+    const moduleEl = to.closest('.module-quadro');
+    const moduleId = moduleEl.dataset.moduleId;
+
+    if (moduleEl.querySelector(`.dropped-entity-card[data-entity-id="${entityId}"]`)) {
+        item.remove();
+        showError('Entidade já existe!', `A entidade "${entityName}" já está presente neste módulo.`);
+        return;
+    }
+    
+    item.remove();
+    
+    const template = document.getElementById('dropped-entity-card-template');
+    const clone = template.content.cloneNode(true);
+    const card = clone.querySelector('.dropped-entity-card');
+    card.dataset.entityId = entityId;
+    card.dataset.entityName = entityName;
+    card.dataset.moduleId = moduleId;
+    
+    const iconEl = clone.querySelector('.entity-icon');
+    if (entityIcon) {
+       iconEl.setAttribute('data-lucide', entityIcon);
+    } else {
+       iconEl.style.display = 'none';
+    }
+
+    clone.querySelector('.entity-name').textContent = entityName;
+    to.appendChild(clone);
+    
+    if (window.lucide) {
+        lucide.createIcons();
+    } else {
+        createIcons();
+    }
+    
+    const entityCard = to.querySelector(`.dropped-entity-card[data-entity-id="${entityId}"]`);
+    if (entityCard) {
+        setTimeout(() => {
+            entityCard.classList.remove('animate-pulse');
+        }, 2000);
+    }
+    
+    const currentWorkspace = getCurrentWorkspace();
+    const workspaceId = currentWorkspace ? currentWorkspace.id : 'default';
+    const ownerId = currentWorkspace && currentWorkspace.isShared ? currentWorkspace.ownerId : null;
+    await saveEntityToModule(moduleId, entityId, entityName, workspaceId, ownerId);
+    
+    showSuccess('Entidade adicionada!', 'Clique em configurar para definir seus campos.');
+}
+
+async function handleFieldDrop(event) {
+    const { item } = event;
+    const fieldType = item.dataset.fieldType;
+    item.remove();
+
+    if (fieldType === 'sub-entity') {
+        const choice = await showConfirmDialog(
+            'Como deseja criar esta tabela?',
+            'Pode criar uma sub-entidade nova ou ligar a uma que já existe.',
+            'Criar Nova',
+            'Ligar a Existente',
+            'info'
+        );
+
+        if (choice === true) {
+            const result = await showInputDialog(
+                'Nome da Nova Sub-Entidade',
+                'Nome',
+                'Ex: Endereços, Contactos'
+            );
+            
+            if (result.confirmed && result.value) {
+                const fieldData = { 
+                    id: `field_${Date.now()}`, 
+                    type: 'sub-entity', 
+                    label: result.value, 
+                    subType: 'independent', 
+                    subSchema: { attributes: [] } 
+                };
+                renderFormField(fieldData);
+            }
+        } else if (choice === false) {
+            const currentEntityId = JSON.parse(document.getElementById('entity-builder-modal').dataset.context).entityId;
+            const currentWorkspace = getCurrentWorkspace();
+            const workspaceId = currentWorkspace ? currentWorkspace.id : 'default';
+            const ownerId = currentWorkspace && currentWorkspace.isShared ? currentWorkspace.ownerId : null;
+            const allEntities = await loadAllEntities(workspaceId, ownerId);
+            const availableEntities = allEntities.filter(e => e.id !== currentEntityId);
+            
+            if (availableEntities.length === 0) {
+                showError('Aviso', 'Não existem outras entidades para criar uma ligação. Crie pelo menos uma outra entidade primeiro.');
+                return;
+            }
+            
+            const entityOptions = availableEntities.map(e => `<option value="${e.id}|${e.name}">${e.name}</option>`).join('');
+            
+            const htmlContent = `
+                <div class="mb-4">
+                    <label for="swal-input-label" class="block text-sm font-medium text-slate-700 mb-1 text-left">Nome do Campo</label>
+                    <input id="swal-input-label" class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Ex: Cliente Associado">
                 </div>
                 <div>
-                    <span class="entity-name font-semibold text-slate-700 block text-sm sm:text-base"></span>
-                    <span class="text-xs text-slate-500 hidden sm:inline">Clique para configurar</span>
+                    <label for="swal-input-target-entity" class="block text-sm font-medium text-slate-700 mb-1 text-left">Ligar a qual entidade?</label>
+                    <select id="swal-input-target-entity" class="w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">${entityOptions}</select>
                 </div>
-            </div>
-            <div class="flex items-center gap-1 sm:gap-2">
-                <button class="configure-btn text-indigo-600 hover:text-indigo-800 p-1 sm:p-1.5 rounded-md transition-colors hover:bg-indigo-50">
-                    <i class="fa-solid fa-gear h-4 w-4 sm:h-5 sm:w-5"></i>
-                </button>
-                <button class="delete-entity-btn text-slate-500 hover:text-red-600 p-1 sm:p-1.5 rounded-md transition-colors hover:bg-red-50">
-                    <i class="fa-solid fa-trash-can h-4 w-4 sm:h-5 sm:w-5"></i>
-                </button>
-            </div>
-        </div>
-    </template>
-    
-    <template id="toolbox-field-template">
-        <div class="toolbox-item bg-white p-2.5 sm:p-3 rounded-lg border border-slate-200 shadow-sm flex items-center gap-2 sm:gap-3 cursor-grab hover:border-indigo-300 hover:shadow transition-all active:shadow-inner" data-field-type="">
-            <div class="h-6 w-6 sm:h-7 sm:w-7 rounded-md bg-indigo-100 flex items-center justify-center text-indigo-600">
-                <i class="field-icon"></i>
-            </div>
-            <span class="field-name font-medium text-slate-700 text-xs sm:text-sm"></span>
-        </div>
-    </template>
-    
-    <template id="form-field-template">
-        <div class="form-field-card bg-white p-3 sm:p-4 rounded-lg border border-slate-200 shadow-sm flex items-center justify-between hover:border-indigo-200 transition-colors" data-field-id="">
-            <div class="flex items-center gap-2 sm:gap-3">
-                <i class="fa-solid fa-grip-vertical cursor-move text-slate-400 h-4 w-4 sm:h-5 sm:w-5"></i>
-                <div class="h-7 w-7 sm:h-8 sm:w-8 rounded-md bg-indigo-100 flex items-center justify-center text-indigo-600">
-                    <i class="field-icon"></i>
-                </div>
-                <div class="flex flex-col">
-                    <span class="field-label font-semibold text-slate-700 text-sm sm:text-base"></span>
-                    <span class="field-type text-xs text-slate-500"></span>
-                </div>
-            </div>
-            <div class="flex items-center gap-1 sm:gap-1.5">
-                <button class="edit-sub-entity-btn text-emerald-600 hover:text-emerald-700 p-1 sm:p-1.5 rounded-md transition-colors hover:bg-emerald-50 hidden" title="Editar Estrutura da Sub-Entidade">
-                    <i class="fa-solid fa-file-pen h-4 w-4 sm:h-5 sm:w-5"></i>
-                </button>
-                <button class="edit-field-btn text-blue-600 hover:text-blue-700 p-1 sm:p-1.5 rounded-md transition-colors hover:bg-blue-50" title="Editar Propriedade">
-                    <i class="fa-solid fa-pen h-4 w-4 sm:h-5 sm:w-5"></i>
-                </button>
-                <button class="delete-field-btn text-slate-500 hover:text-red-600 p-1 sm:p-1.5 rounded-md transition-colors hover:bg-red-50" title="Eliminar Propriedade">
-                    <i class="fa-solid fa-trash-can h-4 w-4 sm:h-5 sm:w-5"></i>
-                </button>
-            </div>
-        </div>
-    </template>
-
-    <!-- Template para Convite Enviado -->
-    <template id="sent-invite-template">
-        <div class="invite-card bg-white rounded-lg border border-slate-200 shadow-sm p-3" data-invite-id="">
-            <div class="flex flex-col">
-                <div class="flex justify-between items-start">
-                    <div>
-                        <div class="flex items-center gap-2 mb-1">
-                            <i class="fa-solid fa-envelope h-4 w-4 text-indigo-500"></i>
-                            <span class="invite-email font-medium text-slate-700"></span>
-                        </div>
-                        <div class="flex items-center gap-1 text-xs text-slate-500">
-                            <i data-lucide="clock" class="h-3 w-3"></i>
-                            <span class="invite-date"></span>
-                        </div>
-                        <div class="mt-2">
-                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium invite-status-badge"></span>
-                        </div>
-                    </div>
-                </div>
+            `;
+            
+            if (typeof Swal !== 'undefined') {
+                const { value: formValues, isConfirmed } = await Swal.fire({
+                    title: 'Ligar a uma Entidade Existente',
+                    html: htmlContent,
+                    showCancelButton: true,
+                    focusConfirm: false,
+                    customClass: {
+                        popup: 'shadow-xl rounded-xl'
+                    },
+                    preConfirm: () => {
+                        const label = document.getElementById('swal-input-label').value;
+                        const selectElement = document.getElementById('swal-input-target-entity');
+                        const [targetEntityId, targetEntityName] = selectElement.value.split('|');
+                        if (!label) { 
+                            Swal.showValidationMessage('O nome do campo é obrigatório.'); 
+                            return false; 
+                        }
+                        return { label, targetEntityId, targetEntityName };
+                    }
+                });
                 
-                <div class="flex gap-2 mt-3 justify-end cancel-invite-container">
-                    <button class="cancel-invite-btn text-slate-700 hover:text-red-500 px-3 py-1.5 flex items-center gap-1 rounded-md bg-slate-50">
-                        <i data-lucide="x" class="h-4 w-4"></i>
-                        <span class="text-sm font-medium">Cancelar</span>
-                    </button>
-                </div>
-            </div>
-        </div>
-    </template>
+                if(isConfirmed && formValues) {
+                    const fieldData = { 
+                        id: `field_${Date.now()}`, 
+                        type: 'sub-entity', 
+                        ...formValues, 
+                        subType: 'relationship' 
+                    };
+                    renderFormField(fieldData);
+                }
+            }
+        }
+    } else {
+        const result = await showInputDialog(
+            'Adicionar Campo',
+            'Nome do Campo',
+            'Ex: Nome Fantasia'
+        );
+        
+        if (result.confirmed && result.value) {
+            const fieldId = `field_${Date.now()}`;
+            const fieldData = { 
+                id: fieldId, 
+                type: fieldType, 
+                label: result.value,
+                config: { ...defaultFieldConfigs[fieldType] }
+            };
+            renderFormField(fieldData);
+            showSuccess('Campo adicionado!', '');
+        }
+    }
+}
 
-    <!-- Template para Convite Recebido -->
-    <template id="received-invite-template">
-        <div class="invite-card bg-white rounded-lg border border-slate-200 shadow-sm p-3" data-invite-id="">
-            <div class="flex flex-col">
-                <div class="flex justify-between items-start">
-                    <div>
-                        <div class="flex items-center gap-2 mb-1">
-                            <i data-lucide="user" class="h-4 w-4 text-indigo-500"></i>
-                            <span class="invite-sender font-medium text-slate-700"></span>
-                        </div>
-                        <div class="flex items-center gap-1 text-xs text-slate-500">
-                            <i data-lucide="clock" class="h-3 w-3"></i>
-                            <span class="invite-date"></span>
-                        </div>
-                        <div class="mt-1 text-xs text-slate-600">
-                            <span>Permissão: </span>
-                            <span class="invite-permission font-medium"></span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="flex gap-2 mt-3 justify-end">
-                    <button class="accept-invite-btn text-emerald-600 hover:text-emerald-700 px-3 py-1.5 flex items-center gap-1 rounded-md bg-emerald-50">
-                        <i data-lucide="check" class="h-4 w-4"></i>
-                        <span class="text-sm font-medium">Aceitar</span>
-                    </button>
-                    <button class="decline-invite-btn text-slate-700 hover:text-red-500 px-3 py-1.5 flex items-center gap-1 rounded-md bg-slate-50">
-                        <i data-lucide="x" class="h-4 w-4"></i>
-                        <span class="text-sm font-medium">Recusar</span>
-                    </button>
-                </div>
-            </div>
-        </div>
-    </template>
+function openModal(context) {
+    const modal = document.getElementById('entity-builder-modal');
+    if (!modal) return;
     
-    <!-- Template para Recurso Compartilhado -->
-    <template id="shared-resource-template">
-        <div class="shared-resource-item bg-white rounded-lg border border-emerald-100 shadow-sm p-3 hover:shadow-md transition-shadow" data-resource-id="" data-owner-id="" data-resource-type="" data-role="">
+    modal.dataset.context = JSON.stringify(context);
+    
+    updateModalBreadcrumb();
+    const dropzone = document.getElementById('form-builder-dropzone');
+    if (dropzone) {
+        dropzone.innerHTML = '';
+    }
+    
+    const modalSidebarContent = document.getElementById('modal-sidebar-content');
+    if (modalSidebarContent) {
+        if (window.innerWidth >= 640) {
+            modalSidebarContent.classList.remove('hidden');
+        } else {
+            modalSidebarContent.classList.add('hidden');
+        }
+    }
+    
+    const toggleModalSidebar = document.getElementById('toggle-modal-sidebar');
+    if (toggleModalSidebar) {
+        const icon = toggleModalSidebar.querySelector('i');
+        if (icon) {
+            icon.setAttribute('data-lucide', 'chevron-down');
+            createIcons();
+        }
+    }
+
+    if (context.isSubEntity) {
+        (context.subSchema.attributes || []).forEach(renderFormField);
+    } else {
+        const currentWorkspace = getCurrentWorkspace();
+        const workspaceId = currentWorkspace ? currentWorkspace.id : 'default';
+        const ownerId = currentWorkspace && !currentWorkspace.isOwner ? currentWorkspace.ownerId : null;
+        
+        loadStructureForEntity(context.moduleId, context.entityId, workspaceId, ownerId)
+            .then(schema => {
+                console.log("Estrutura carregada para entidade:", context.entityId, schema);
+                if (schema && schema.attributes && schema.attributes.length > 0) {
+                    schema.attributes.forEach(renderFormField);
+                } else {
+                    console.log("Nenhuma estrutura encontrada ou estrutura vazia para entidade:", context.entityId);
+                }
+            })
+            .catch(error => {
+                console.error("Erro ao carregar estrutura da entidade:", error);
+            });
+    }
+    
+    modal.classList.remove('hidden');
+    setTimeout(() => modal.querySelector('.bg-white').classList.remove('scale-95', 'opacity-0'), 10);
+}
+
+function closeModal() {
+    const modal = document.getElementById('entity-builder-modal');
+    if (!modal) return;
+    
+    modal.querySelector('.bg-white').classList.add('scale-95', 'opacity-0');
+    setTimeout(() => {
+        modal.classList.add('hidden');
+        modalNavigationStack = [];
+    }, 300);
+}
+
+async function handleAddNewEntity() {
+    const currentWorkspace = getCurrentWorkspace();
+    if (!currentWorkspace) {
+        showError('Erro', 'Nenhuma área de trabalho selecionada.');
+        return;
+    }
+    
+    // The problem description implies that if it's not the owner, they might still be able to create
+    // if they are an editor/admin. The permission check should ideally happen based on Firebase rules.
+    // For now, adhering to the existing frontend check, but this might need review
+    // if editors/admins *should* be able to create entities directly in the library of a shared workspace.
+    // The current Firebase rules ALLOW entity creation for editors/admins in shared workspaces.
+    // The original instruction was: "um utilizador convidado com permissão de "admin" ou "editor") 
+    // possam efetivamente editar os workspaces partilhados, como criar módulos e ENTIDADES."
+    // This implies the check `!currentWorkspace.isOwner` might be too restrictive here if the user has editor/admin rights.
+    // However, I will stick to the plan of passing ownerId first.
+    // The specific error message "Você não tem permissão para criar entidades nesta área de trabalho."
+    // might be triggered by this frontend check before Firebase rules even get a chance.
+    // For now, I will modify to pass ownerId, but this permission check might need to be revisited.
+
+    const workspaceId = currentWorkspace.id;
+    // const ownerId = currentWorkspace.isOwner ? null : currentWorkspace.ownerId; // This was the previous pattern
+    // The problem statement says "const ownerId = currentWorkspace.isOwner ? nulo: currentWorkspace.ownerId;"
+    // Let's assume currentWorkspace.isShared exists and is the opposite of isOwner for shared workspaces.
+    // Or, more directly, if it's NOT isOwner, then pass currentWorkspace.ownerId.
+    const ownerId = !currentWorkspace.isOwner ? currentWorkspace.ownerId : null;
+
+
+    // Original check - this might prevent editors on shared workspaces from creating entities
+    // if (ownerId && !currentWorkspace.isOwner) { //Simplified from !currentWorkspace.isOwner
+    // This check seems to contradict the goal of allowing editors to create entities.
+    // Let's assume the Firebase rules will handle permissions.
+    // The original code had:
+    // if (!currentWorkspace.isOwner) {
+    //     showError('Erro', 'Você não tem permissão para criar entidades nesta área de trabalho.');
+    //     return;
+    // }
+    // This check will be re-evaluated after seeing if Firebase correctly denies based on rules for viewers.
+
+    const iconHtml = availableEntityIcons.map(icon => 
+        `<button class="icon-picker-btn p-2 rounded-md hover:bg-indigo-100 transition-all" data-icon="${icon}">
+            <div class="h-6 w-6 sm:h-8 sm:w-8 rounded-md bg-indigo-50 flex items-center justify-center text-indigo-600">
+                <i data-lucide="${icon}"></i>
+            </div>
+         </button>`
+    ).join('');
+    
+    if (typeof Swal !== 'undefined') {
+        const { value: formValues, isConfirmed } = await Swal.fire({
+            title: 'Criar Nova Entidade',
+            html: `
+                <div class="mb-4">
+                    <label for="swal-input-name" class="block text-sm font-medium text-slate-700 mb-1 text-left">Nome da Entidade</label>
+                    <input id="swal-input-name" class="swal2-input w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Ex: Fornecedor, Produto, Funcionário...">
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-slate-700 mb-2 text-left">Escolha um ícone:</p>
+                    <div class="grid grid-cols-4 sm:grid-cols-6 gap-2">${iconHtml}</div>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Criar Entidade',
+            cancelButtonText: 'Cancelar',
+            focusConfirm: false,
+            customClass: {
+                popup: 'shadow-xl rounded-xl'
+            },
+            didOpen: () => {
+                createIcons();
+                document.querySelector('#swal2-html-container').addEventListener('click', e => {
+                    const button = e.target.closest('.icon-picker-btn');
+                    if (button) {
+                        document.querySelectorAll('.icon-picker-btn').forEach(btn => btn.classList.remove('bg-indigo-200'));
+                        button.classList.add('bg-indigo-200');
+                    }
+                });
+            },
+            preConfirm: () => {
+                const name = document.getElementById('swal-input-name').value;
+                const selectedIconEl = document.querySelector('.icon-picker-btn.bg-indigo-200');
+                if (!name) { 
+                    Swal.showValidationMessage('O nome da entidade é obrigatório.'); 
+                    return false; 
+                }
+                if (!selectedIconEl) { 
+                    Swal.showValidationMessage('Por favor, escolha um ícone.'); 
+                    return false; 
+                }
+                return { name, icon: selectedIconEl.dataset.icon };
+            }
+        });
+        
+        if (isConfirmed && formValues) {
+            showLoading('Criando entidade...');
+            
+            try {
+                // workspaceId and ownerId defined earlier in this function
+                const entityId = await createEntity({ 
+                    name: formValues.name, 
+                    icon: formValues.icon 
+                }, workspaceId, ownerId);
+                
+                // loadAllEntities also needs workspaceId and ownerId
+                const updatedEntities = await loadAllEntities(workspaceId, ownerId);
+                
+                const entityList = document.getElementById('entity-list');
+                if (entityList) {
+                    entityList.innerHTML = '';
+                }
+                
+                updatedEntities.forEach(entity => {
+                    renderEntityInLibrary(entity);
+                });
+                
+                hideLoading();
+                showSuccess('Entidade Criada!', `A entidade "${formValues.name}" está pronta para ser usada.`);
+            } catch (error) {
+                hideLoading();
+                showError('Erro', 'Ocorreu um erro ao criar a entidade. Tente novamente.');
+            }
+        }
+    }
+}
+
+async function handleAddNewModule() {
+    const currentWorkspace = getCurrentWorkspace();
+    if (!currentWorkspace) {
+        showError('Erro', 'Nenhuma área de trabalho selecionada.');
+        return;
+    }
+    
+    // Similar to handleAddNewEntity, this frontend check might be too restrictive
+    // if editors/admins should be allowed to create modules.
+    // Firebase rules are now in place to allow this.
+    // if (!currentWorkspace.isOwner) {
+    //     showError('Erro', 'Você não tem permissão para criar módulos nesta área de trabalho.');
+    //     return;
+    // }
+    
+    const workspaceId = currentWorkspace.id;
+    const ownerId = !currentWorkspace.isOwner ? currentWorkspace.ownerId : null;
+
+    const result = await showInputDialog(
+        'Criar Novo Módulo',
+        'Nome do Módulo',
+        'Ex: Vendas, Recursos Humanos, Financeiro...'
+    );
+    
+    if (result.confirmed && result.value) {
+        showLoading('Criando módulo...');
+        
+        try {
+            // workspaceId and ownerId defined earlier
+            const moduleId = await createModule(result.value, workspaceId, ownerId);
+            
+            const moduleEl = renderModule({ id: moduleId, name: result.value }); // renderModule doesn't interact with DB directly for creation
+            checkEmptyStates();
+            
+            hideLoading();
+            showSuccess('Módulo Criado!', `O módulo "${result.value}" foi criado com sucesso.`);
+            
+            if (document.querySelectorAll('.module-quadro').length === 1) {
+                setTimeout(() => {
+                    showSuccess('Dica', 'Agora arraste entidades da biblioteca para o seu novo módulo.');
+                }, 1000);
+            }
+        } catch (error) {
+            hideLoading();
+            showError('Erro', 'Ocorreu um erro ao criar o módulo. Tente novamente.');
+        }
+    }
+}
+
+function handleEditSubEntity(button) {
+    const card = button.closest('.form-field-card');
+    const fieldData = JSON.parse(card.dataset.fieldData);
+    
+    if (fieldData.subType === 'independent') {
+        const parentContext = JSON.parse(document.getElementById('entity-builder-modal').dataset.context);
+        modalNavigationStack.push(parentContext);
+        
+        openModal({
+            isSubEntity: true,
+            label: fieldData.label,
+            parentFieldId: fieldData.id,
+            subSchema: fieldData.subSchema,
+        });
+    } else if (fieldData.subType === 'relationship') {
+        const allEntities = getEntities();
+        const targetEntity = allEntities.find(e => e.id === fieldData.targetEntityId);
+        if (!targetEntity) {
+            showError('Erro', 'A entidade relacionada já não existe.');
+            return;
+        }
+        
+        const parentContext = JSON.parse(document.getElementById('entity-builder-modal').dataset.context);
+        modalNavigationStack.push(parentContext);
+
+        openModal({
+            moduleId: 'system',
+            entityId: targetEntity.id,
+            entityName: targetEntity.name,
+        });
+    }
+}
+
+function handleModalBack() {
+    if (modalNavigationStack.length > 0) {
+        const parentContext = modalNavigationStack.pop();
+        openModal(parentContext);
+    }
+}
+
+async function confirmAndRemoveEntityFromModule(card) {
+    const { entityName, moduleId, entityId } = card.dataset;
+    
+    const confirmed = await showConfirmDialog(
+        `Remover '${entityName}'?`,
+        'Tem a certeza que deseja remover esta entidade do módulo?',
+        'Sim, remover!',
+        'Cancelar',
+        'warning'
+    );
+    
+    if (confirmed) { 
+        try {
+            const currentWorkspace = getCurrentWorkspace();
+            const workspaceId = currentWorkspace ? currentWorkspace.id : 'default';
+            const ownerId = currentWorkspace && !currentWorkspace.isOwner ? currentWorkspace.ownerId : null;
+            await deleteEntityFromModule(moduleId, entityId, workspaceId, ownerId);
+            card.remove();
+            showSuccess('Removido!', `A entidade "${entityName}" foi removida do módulo.`);
+        } catch (error) {
+            showError('Erro', 'Ocorreu um erro ao remover a entidade. Tente novamente.');
+        }
+    }
+}
+
+async function confirmAndRemoveCustomEntity(card) {
+    const { entityId, entityName } = card.dataset;
+    
+    const confirmed = await showConfirmDialog(
+        'Eliminar Entidade?',
+        `Isto irá remover <strong>${entityName}</strong> da biblioteca e de <strong>todos os módulos</strong>.<br><br><span class="font-bold text-red-600">Esta ação é PERMANENTE.</span>`,
+        'Sim, eliminar!',
+        'Cancelar',
+        'danger'
+    );
+    
+    if (confirmed) {
+        showLoading('Eliminando entidade...');
+        
+        try {
+            const currentWorkspace = getCurrentWorkspace();
+            const workspaceId = currentWorkspace ? currentWorkspace.id : 'default';
+            const ownerId = currentWorkspace && !currentWorkspace.isOwner ? currentWorkspace.ownerId : null;
+            await deleteEntity(entityId, workspaceId, ownerId);
+            
+            // This part removes elements from the UI. If entities from different workspaces are shown
+            // (e.g. an owner's entities and a shared workspace's entities), this querySelectorAll
+            // might need to be more specific, but for now, it should be fine as it's based on entityId.
+            document.querySelectorAll(`.dropped-entity-card[data-entity-id="${entityId}"]`).forEach(c => c.remove());
+            
+            card.remove();
+            
+            hideLoading();
+            showSuccess('Eliminado!', `A entidade "${entityName}" foi eliminada permanentemente.`);
+        } catch (error) {
+            hideLoading();
+            showError('Erro', 'Ocorreu um erro ao eliminar a entidade. Tente novamente.');
+        }
+    }
+}
+
+async function confirmAndRemoveModule(moduleEl) {
+    const moduleId = moduleEl.dataset.moduleId;
+    const moduleName = moduleEl.querySelector('.module-title').textContent;
+    
+    const confirmed = await showConfirmDialog(
+        'Eliminar Módulo?',
+        `Isto irá remover <strong>${moduleName}</strong> e <strong>TODAS as entidades</strong> dentro dele.<br><br><span class="font-bold text-red-600">Esta ação é PERMANENTE.</span>`,
+        'Sim, eliminar!',
+        'Cancelar',
+        'danger'
+    );
+    
+    if (confirmed) {
+        showLoading('Eliminando módulo...');
+        
+        try {
+            const currentWorkspace = getCurrentWorkspace();
+            const workspaceId = currentWorkspace ? currentWorkspace.id : 'default';
+            const ownerId = currentWorkspace && !currentWorkspace.isOwner ? currentWorkspace.ownerId : null;
+            await deleteModule(moduleId, workspaceId, ownerId);
+            moduleEl.remove();
+            checkEmptyStates();
+            
+            hideLoading();
+            showSuccess('Eliminado!', `O módulo "${moduleName}" foi eliminado permanentemente.`);
+        } catch (error) {
+            hideLoading();
+            showError('Erro', 'Ocorreu um erro ao eliminar o módulo. Tente novamente.');
+        }
+    }
+}
+
+async function saveCurrentStructure() {
+    const modal = document.getElementById('entity-builder-modal');
+    const context = JSON.parse(modal.dataset.context);
+    const fieldCards = document.getElementById('form-builder-dropzone').querySelectorAll('.form-field-card');
+    const attributes = Array.from(fieldCards).map(card => JSON.parse(card.dataset.fieldData));
+
+    console.log("Salvando estrutura:", { context, attributes });
+
+    showLoading('Guardando estrutura...');
+
+    try {
+        const currentWorkspace = getCurrentWorkspace();
+        const workspaceId = currentWorkspace ? currentWorkspace.id : 'default';
+        const ownerId = currentWorkspace && !currentWorkspace.isOwner ? currentWorkspace.ownerId : null;
+        
+        console.log("Salvando com workspaceId:", workspaceId, "ownerId:", ownerId, "isOwner:", currentWorkspace?.isOwner);
+        
+        if (context.isSubEntity) {
+            const parentContext = modalNavigationStack[modalNavigationStack.length - 1];
+            console.log("Salvando sub-entidade para:", parentContext);
+            
+            // For sub-entities, the ownerId should correspond to the owner of the main entity's workspace.
+            // We assume parentContext's workspace is the same as currentWorkspace.
+            await saveSubEntityStructure(
+                parentContext.moduleId, 
+                parentContext.entityId, 
+                context.parentFieldId, 
+                attributes,
+                workspaceId,
+                ownerId // Pass ownerId here
+            );
+            
+            hideLoading();
+            showSuccess('Guardado!', 'A estrutura da sub-entidade foi guardada com sucesso.');
+        } else {
+            console.log("Salvando entidade principal:", {
+                moduleId: context.moduleId,
+                entityId: context.entityId,
+                entityName: context.entityName,
+                attributesCount: attributes.length,
+                workspaceId,
+                ownerId
+            });
+            
+            await saveEntityStructure(
+                context.moduleId, 
+                context.entityId, 
+                context.entityName, 
+                attributes, 
+                workspaceId,
+                ownerId // Pass ownerId here
+            );
+            
+            hideLoading();
+            showSuccess('Guardado!', `A estrutura da entidade "${context.entityName}" foi guardada com sucesso.`);
+        }
+    } catch (error) {
+        hideLoading();
+        console.error("Erro ao salvar estrutura:", error);
+        showError('Erro', 'Ocorreu um erro ao guardar a estrutura. Tente novamente.');
+    }
+}
+
+// Funções para o painel de propriedades de campos
+function openFieldPropertiesPanel(fieldData, fieldCard) {
+    const panel = document.getElementById('field-properties-panel');
+    if (!panel) return;
+    
+    panel.dataset.editingFieldCard = fieldCard ? fieldCard.id : '';
+    panel.dataset.fieldData = JSON.stringify(fieldData);
+    
+    const icon = document.getElementById('field-properties-icon');
+    const fieldInfo = fieldTypes.find(f => f.type === fieldData.type);
+    if (icon && fieldInfo) {
+        icon.setAttribute('data-lucide', fieldInfo.icon);
+        createIcons();
+    }
+    
+    document.getElementById('field-label').value = fieldData.label || '';
+    document.getElementById('field-description').value = fieldData.description || '';
+    document.getElementById('field-required').checked = fieldData.config?.required || false;
+    
+    document.querySelectorAll('.field-type-config').forEach(el => {
+        el.classList.add('hidden');
+    });
+    
+    const configPanel = document.getElementById(`${fieldData.type}-field-config`);
+    if (configPanel) {
+        configPanel.classList.remove('hidden');
+        
+        switch (fieldData.type) {
+            case 'date':
+                setupDateFieldConfig(fieldData.config || defaultFieldConfigs.date);
+                break;
+            case 'text':
+            case 'textarea':
+                setupTextFieldConfig(fieldData.config || defaultFieldConfigs.text);
+                break;
+            case 'number':
+                setupNumberFieldConfig(fieldData.config || defaultFieldConfigs.number);
+                break;
+            case 'select':
+                setupSelectFieldConfig(fieldData.config || defaultFieldConfigs.select);
+                break;
+        }
+    }
+    
+    panel.classList.remove('translate-x-full');
+}
+
+function closeFieldPropertiesPanel() {
+    const panel = document.getElementById('field-properties-panel');
+    if (panel) {
+        panel.classList.add('translate-x-full');
+    }
+}
+
+function setupDateFieldConfig(config) {
+    document.querySelector(`input[name="date-format"][value="${config.dateFormat || 'DD/MM/AAAA'}"]`).checked = true;
+    document.querySelector(`input[name="time-format"][value="${config.includeTime || 'none'}"]`).checked = true;
+    document.querySelector(`input[name="date-behavior"][value="${config.behavior || 'singleDate'}"]`).checked = true;
+    document.querySelector(`input[name="date-default"][value="${config.defaultValue || 'none'}"]`).checked = true;
+}
+
+function setupTextFieldConfig(config) {
+    document.querySelector(`input[name="text-content-type"][value="${config.contentType || 'text'}"]`).checked = true;
+    document.querySelector(`input[name="text-appearance"][value="${config.appearance || 'singleLine'}"]`).checked = true;
+    const maxLengthInput = document.getElementById('text-max-length');
+    maxLengthInput.value = config.maxLength || '';
+}
+
+function setupNumberFieldConfig(config) {
+    document.querySelector(`input[name="number-format"][value="${config.format || 'plain'}"]`).checked = true;
+    document.getElementById('decimal-precision').value = config.precision || 2;
+    document.getElementById('currency-symbol').value = config.symbol || 'R$';
+    document.getElementById('number-min-value').value = config.minValue || '';
+    document.getElementById('number-max-value').value = config.maxValue || '';
+    
+    const numberFormat = config.format || 'plain';
+    document.getElementById('decimal-precision-container').classList.toggle('hidden', !['decimal', 'currency', 'percentage'].includes(numberFormat));
+    document.getElementById('currency-symbol-container').classList.toggle('hidden', numberFormat !== 'currency');
+    
+    document.querySelectorAll('input[name="number-format"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            const format = this.value;
+            document.getElementById('decimal-precision-container').classList.toggle('hidden', !['decimal', 'currency', 'percentage'].includes(format));
+            document.getElementById('currency-symbol-container').classList.toggle('hidden', format !== 'currency');
+        });
+    });
+}
+
+function setupSelectFieldConfig(config) {
+    document.querySelector(`input[name="select-behavior"][value="${config.allowMultiple ? 'multiple' : 'single'}"]`).checked = true;
+    document.querySelector(`input[name="select-appearance"][value="${config.appearance || 'dropdown'}"]`).checked = true;
+    
+    const optionsContainer = document.getElementById('select-options-container');
+    optionsContainer.innerHTML = '';
+    
+    const options = config.options && config.options.length > 0 ? config.options : [{ id: 'opt1', label: 'Opção 1' }];
+    
+    options.forEach((option, index) => {
+        const optionElement = createSelectOption(option.label, index);
+        optionsContainer.appendChild(optionElement);
+    });
+    
+    document.getElementById('add-select-option').addEventListener('click', function() {
+        const newOption = createSelectOption(`Opção ${optionsContainer.children.length + 1}`, optionsContainer.children.length);
+        optionsContainer.appendChild(newOption);
+        createIcons();
+    });
+}
+
+function createSelectOption(label, index) {
+    const optionTemplate = `
+        <div class="select-option-item flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200">
+            <div class="flex-1">
+                <input type="text" class="w-full p-1.5 border border-slate-300 rounded text-sm" placeholder="Nome da opção" value="${label}">
+            </div>
+            <button class="move-option-up text-slate-500 hover:text-slate-700 p-1" ${index === 0 ? 'disabled' : ''}>
+                <i data-lucide="chevron-up" class="h-4 w-4"></i>
+            </button>
+            <button class="move-option-down text-slate-500 hover:text-slate-700 p-1">
+                <i data-lucide="chevron-down" class="h-4 w-4"></i>
+            </button>
+            <button class="delete-option text-slate-500 hover:text-red-500 p-1">
+                <i data-lucide="trash-2" class="h-4 w-4"></i>
+            </button>
+        </div>
+    `;
+    
+    const template = document.createElement('template');
+    template.innerHTML = optionTemplate.trim();
+    const optionElement = template.content.firstChild;
+    
+    optionElement.querySelector('.move-option-up').addEventListener('click', function() {
+        const item = this.closest('.select-option-item');
+        const prev = item.previousElementSibling;
+        if (prev) item.parentNode.insertBefore(item, prev);
+    });
+    
+    optionElement.querySelector('.move-option-down').addEventListener('click', function() {
+        const item = this.closest('.select-option-item');
+        const next = item.nextElementSibling;
+        if (next) item.parentNode.insertBefore(next, item);
+    });
+    
+    optionElement.querySelector('.delete-option').addEventListener('click', function() {
+        const item = this.closest('.select-option-item');
+        const container = item.parentNode;
+        if (container.children.length > 1) {
+            item.remove();
+        } else {
+            showError('Erro', 'Deve haver pelo menos uma opção.');
+        }
+    });
+    
+    return optionElement;
+}
+
+function applyFieldProperties() {
+    const panel = document.getElementById('field-properties-panel');
+    if (!panel) return;
+    
+    const fieldData = JSON.parse(panel.dataset.fieldData);
+    const fieldCardId = panel.dataset.editingFieldCard;
+    const fieldCard = document.getElementById(fieldCardId);
+    
+    if (!fieldCard) return;
+    
+    fieldData.label = document.getElementById('field-label').value;
+    fieldData.description = document.getElementById('field-description').value;
+    
+    if (!fieldData.config) {
+        fieldData.config = { ...defaultFieldConfigs[fieldData.type] };
+    }
+    
+    fieldData.config.required = document.getElementById('field-required').checked;
+    
+    switch (fieldData.type) {
+        case 'date':
+            fieldData.config.dateFormat = document.querySelector('input[name="date-format"]:checked').value;
+            fieldData.config.includeTime = document.querySelector('input[name="time-format"]:checked').value;
+            fieldData.config.behavior = document.querySelector('input[name="date-behavior"]:checked').value;
+            fieldData.config.defaultValue = document.querySelector('input[name="date-default"]:checked').value;
+            break;
+            
+        case 'text':
+        case 'textarea':
+            fieldData.config.contentType = document.querySelector('input[name="text-content-type"]:checked').value;
+            fieldData.config.appearance = document.querySelector('input[name="text-appearance"]:checked').value;
+            
+            const maxLength = document.getElementById('text-max-length').value;
+            fieldData.config.maxLength = maxLength ? parseInt(maxLength) : null;
+            break;
+            
+        case 'number':
+            fieldData.config.format = document.querySelector('input[name="number-format"]:checked').value;
+            fieldData.config.precision = parseInt(document.getElementById('decimal-precision').value || 2);
+            fieldData.config.symbol = document.getElementById('currency-symbol').value || 'R$';
+            
+            const minValue = document.getElementById('number-min-value').value;
+            fieldData.config.minValue = minValue ? parseFloat(minValue) : null;
+            
+            const maxValue = document.getElementById('number-max-value').value;
+            fieldData.config.maxValue = maxValue ? parseFloat(maxValue) : null;
+            break;
+            
+        case 'select':
+            fieldData.config.allowMultiple = document.querySelector('input[name="select-behavior"]:checked').value === 'multiple';
+            fieldData.config.appearance = document.querySelector('input[name="select-appearance"]:checked').value;
+            
+            const optionsContainer = document.getElementById('select-options-container');
+            const options = [];
+            
+            Array.from(optionsContainer.children).forEach((optItem, index) => {
+                const label = optItem.querySelector('input').value.trim();
+                if (label) {
+                    options.push({ id: `opt${index + 1}`, label: label });
+                }
+            });
+            
+            fieldData.config.options = options;
+            break;
+    }
+    
+    fieldCard.querySelector('.field-label').textContent = fieldData.label;
+    fieldCard.dataset.fieldData = JSON.stringify(fieldData);
+    
+    closeFieldPropertiesPanel();
+    
+    showSuccess('Propriedades atualizadas!', '');
+}
+
+function setupFieldPropertiesPanelEvents() {
+    const closeBtn = document.getElementById('close-properties-panel');
+    if (closeBtn) closeBtn.addEventListener('click', closeFieldPropertiesPanel);
+    
+    const cancelBtn = document.getElementById('cancel-field-properties');
+    if (cancelBtn) cancelBtn.addEventListener('click', closeFieldPropertiesPanel);
+    
+    const applyBtn = document.getElementById('apply-field-properties');
+    if (applyBtn) applyBtn.addEventListener('click', applyFieldProperties);
+    
+    document.querySelectorAll('input[name="number-format"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            const format = this.value;
+            document.getElementById('decimal-precision-container').classList.toggle('hidden', !['decimal', 'currency', 'percentage'].includes(format));
+            document.getElementById('currency-symbol-container').classList.toggle('hidden', format !== 'currency');
+        });
+    });
+    
+    const addOptionBtn = document.getElementById('add-select-option');
+    if (addOptionBtn) {
+        addOptionBtn.addEventListener('click', function() {
+            const optionsContainer = document.getElementById('select-options-container');
+            const newOption = createSelectOption(`Opção ${optionsContainer.children.length + 1}`, optionsContainer.children.length);
+            optionsContainer.appendChild(newOption);
+            createIcons();
+        });
+    }
+}
+
+function renderSharedResource(resource) {
+    const container = document.getElementById('shared-resources-list');
+    if (!container) return;
+    
+    const itemHtml = `
+        <div class="shared-resource-item bg-white rounded-lg border border-emerald-100 shadow-sm p-3 hover:shadow-md transition-shadow" 
+             data-resource-id="${resource.id}" data-owner-id="${resource.ownerId}" data-resource-type="${resource.type}" data-role="${resource.role}">
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2">
                     <div class="h-8 w-8 rounded-md bg-emerald-100 flex items-center justify-center text-emerald-600">
                         <i data-lucide="layout-grid" class="h-5 w-5"></i>
                     </div>
                     <div>
-                        <span class="shared-resource-owner font-medium text-slate-700 block text-sm">Creator de</span>
-                        <span class="shared-resource-role text-xs text-slate-500">Permissão: </span>
+                        <span class="font-medium text-slate-700 block text-sm">Creator de ${resource.ownerName}</span>
+                        <span class="text-xs text-slate-500">Permissão: ${formatRoleText(resource.role)}</span>
                     </div>
                 </div>
                 <button class="access-shared-resource-btn bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-md hover:bg-emerald-100 transition-colors text-sm flex items-center gap-1">
@@ -996,44 +1473,79 @@
                 </button>
             </div>
         </div>
-    </template>
+    `;
     
-    <!-- Template para Usuário com Acesso Compartilhado -->
-    <template id="shared-access-template">
-        <div class="shared-access-item bg-white rounded-lg border border-slate-200 shadow-sm p-3" data-user-id="" data-email="" data-resource-id="" data-role="">
-            <div class="flex flex-col">
-                <div class="flex justify-between items-start">
-                    <div class="flex-1">
-                        <div class="flex items-center gap-2 mb-1">
-                            <i data-lucide="user" class="h-4 w-4 text-indigo-500"></i>
-                            <span class="user-email font-medium text-slate-700"></span>
-                        </div>
-                        <div class="flex items-center gap-2 mt-1">
-                            <span class="text-xs text-slate-600">Permissão:</span>
-                            <select class="permission-select text-xs border border-slate-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500">
-                                <option value="admin">Administrador</option>
-                                <option value="editor">Editor</option>
-                                <option value="viewer">Leitor</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="flex gap-2 mt-3 justify-end">
-                    <button class="save-permission-btn text-emerald-600 hover:text-emerald-700 px-3 py-1.5 flex items-center gap-1 rounded-md bg-emerald-50 hidden">
-                        <i data-lucide="check" class="h-4 w-4"></i>
-                        <span class="text-sm font-medium">Salvar</span>
-                    </button>
-                    <button class="remove-access-btn text-slate-700 hover:text-red-500 px-3 py-1.5 flex items-center gap-1 rounded-md bg-slate-50">
-                        <i data-lucide="trash-2" class="h-4 w-4"></i>
-                        <span class="text-sm font-medium">Remover</span>
-                    </button>
-                </div>
-            </div>
-        </div>
-    </template>
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = itemHtml.trim();
+    const item = tempDiv.firstChild;
+    
+    item.querySelector('.access-shared-resource-btn').addEventListener('click', () => {
+        accessSharedResource(resource);
+    });
+    
+    container.appendChild(item);
+    
+    createIcons();
+}
 
-    <!-- Scripts Modularizados -->
-    <script type="module" src="js/main.js"></script>
-</body>
-</html>
+function formatRoleText(role) {
+    switch (role) {
+        case 'admin': return 'Administrador';
+        case 'editor': return 'Editor';
+        case 'viewer': return 'Leitor';
+        default: return role || 'Desconhecido';
+    }
+}
+
+async function accessSharedResource(resource) {
+    showLoading('Acessando recurso compartilhado...');
+    
+    try {
+        if (resource.type === 'module_constructor') {
+            const sharedModules = await loadSharedUserModules(resource.ownerId);
+            
+            if (sharedModules.length > 0) {
+                showSuccess('Acesso concedido', `Você agora tem acesso aos módulos de ${resource.ownerName}.`);
+                
+                let modulesHtml = '';
+                sharedModules.forEach(module => {
+                    modulesHtml += `<li class="p-2 border-b border-slate-100">${module.name}</li>`;
+                });
+                
+                Swal.fire({
+                    title: `Módulos de ${resource.ownerName}`,
+                    html: `<ul class="text-left mt-4 border rounded-lg bg-slate-50">${modulesHtml}</ul>`,
+                    icon: 'success',
+                    confirmButtonText: 'OK'
+                });
+            } else {
+                showError('Sem módulos', 'Este usuário não possui módulos compartilhados.');
+            }
+        } else {
+            showError('Tipo não suportado', 'Este tipo de recurso compartilhado ainda não é suportado.');
+        }
+    } catch (error) {
+        console.error('Erro ao acessar recurso compartilhado:', error);
+        showError('Erro de acesso', 'Não foi possível acessar o recurso compartilhado. Verifique suas permissões.');
+    } finally {
+        hideLoading();
+    }
+}
+
+async function loadAndRenderSharedResources() {
+    // Esta função agora é gerenciada pelo módulo de workspaces
+}
+
+// Exporta funções públicas
+export {
+    renderEntityInLibrary,
+    renderModule,
+    renderDroppedEntity,
+    renderFormField,
+    openModal,
+    closeModal,
+    openFieldPropertiesPanel,
+    closeFieldPropertiesPanel,
+    setupFieldPropertiesPanelEvents,
+    loadAndRenderSharedResources
+};
