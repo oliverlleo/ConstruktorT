@@ -22,38 +22,98 @@ export function initUserProfile(database) {
     auth = firebase.auth();
     storage = firebase.storage();
     
-    // Adia a execução para garantir que o DOM esteja totalmente pronto
-    setTimeout(() => {
-        setupUserMenu();
-        setupProfileModal();
-        loadUserProfileData(); // loadUserProfileData também acessa elementos do DOM, então é bom adiá-lo também.
-    }, 0);
+    // Chamadas síncronas restauradas para melhor tratamento de erro pelo catch de initApp
+    setupUserMenu();
+    setupProfileModal();
+    loadUserProfileData();
 }
 
 /**
  * Configura o menu do usuário
  */
 function setupUserMenu() {
-    const userMenuButton = document.getElementById('user-menu-button');
-    const userMenuDropdown = document.getElementById('user-menu-dropdown');
+    let attempts = 0;
+    const maxAttempts = 15; // Tentar por ~1.5 segundos (15 * 100ms)
+    const intervalDelay = 100; // ms
 
-    if (!userMenuButton) {
-        console.error("Elemento 'user-menu-button' não encontrado durante setupUserMenu.");
-        // Se o botão principal não existe, não faz sentido continuar configurando o menu.
-        // Poderia também verificar userMenuDropdown, mas o botão é mais crítico.
-        return;
-    }
+    const intervalId = setInterval(() => {
+        const userMenuButton = document.getElementById('user-menu-button');
+        const userMenuDropdown = document.getElementById('user-menu-dropdown');
 
-    if (!userMenuDropdown) {
-        console.error("Elemento 'user-menu-dropdown' não encontrado durante setupUserMenu.");
-        // Pode optar por retornar aqui também, ou permitir que o botão exista sem um dropdown funcional.
-        // Por segurança, vamos retornar se o dropdown também não for encontrado.
-        return;
-    }
+        if (userMenuButton && userMenuDropdown) {
+            clearInterval(intervalId);
+            console.log("Elementos do menu do usuário encontrados. Configurando listeners...");
 
-    // Agora podemos prosseguir, sabendo que userMenuButton e userMenuDropdown existem.
-    // Mostra/Esconde o menu ao clicar no botão
-    userMenuButton.addEventListener('click', () => {
+            // Configuração original dos listeners (movida para dentro do if)
+            userMenuButton.addEventListener('click', () => {
+                userMenuDropdown.classList.toggle('hidden');
+                userMenuActive = !userMenuActive;
+
+                const chevronIcon = userMenuButton.querySelector('[data-lucide="chevron-down"], [data-lucide="chevron-up"]');
+                if (chevronIcon) {
+                    chevronIcon.setAttribute('data-lucide', userMenuActive ? 'chevron-up' : 'chevron-down');
+                    if (window.updateLucideIcons) window.updateLucideIcons();
+                }
+            });
+
+            document.addEventListener('click', (event) => {
+                if (userMenuButton && userMenuDropdown && !userMenuButton.contains(event.target) && !userMenuDropdown.contains(event.target)) {
+                    if (!userMenuDropdown.classList.contains('hidden')) {
+                        userMenuDropdown.classList.add('hidden');
+                        userMenuActive = false;
+                        const chevronIcon = userMenuButton.querySelector('[data-lucide="chevron-down"], [data-lucide="chevron-up"]');
+                        if (chevronIcon) {
+                            chevronIcon.setAttribute('data-lucide', 'chevron-down');
+                            if (window.updateLucideIcons) window.updateLucideIcons();
+                        }
+                    }
+                }
+            });
+
+            const editProfileButton = document.getElementById('edit-profile-button');
+            if (editProfileButton) {
+                editProfileButton.addEventListener('click', () => {
+                    if (userMenuDropdown) userMenuDropdown.classList.add('hidden');
+                    userMenuActive = false;
+                    const chevronIcon = userMenuButton.querySelector('[data-lucide="chevron-up"]');
+                    if (chevronIcon) {
+                        chevronIcon.setAttribute('data-lucide', 'chevron-down');
+                        if (window.updateLucideIcons) window.updateLucideIcons();
+                    }
+                    openProfileModal();
+                });
+            }
+            // A ausência do editProfileButton não é um erro crítico para o menu em si.
+
+            const logoutButton = document.getElementById('logout-button');
+            if (logoutButton) {
+                logoutButton.addEventListener('click', async () => {
+                    if (userMenuDropdown) userMenuDropdown.classList.add('hidden');
+                    userMenuActive = false;
+                    const chevronIcon = userMenuButton.querySelector('[data-lucide="chevron-up"]');
+                    if (chevronIcon) {
+                        chevronIcon.setAttribute('data-lucide', 'chevron-down');
+                        if (window.updateLucideIcons) window.updateLucideIcons();
+                    }
+                    const result = await logout();
+                    if (!result.success) {
+                        showError('Erro ao sair', result.error);
+                    }
+                });
+            }
+            // A ausência do logoutButton não é um erro crítico para o menu em si.
+
+        } else {
+            attempts++;
+            if (attempts >= maxAttempts) {
+                clearInterval(intervalId);
+                console.error("Timeout: Elementos 'user-menu-button' ou 'user-menu-dropdown' não encontrados após " + (maxAttempts * intervalDelay / 1000) + "s.");
+                // Lança um erro para ser pego pelo try...catch em initApp
+                throw new Error("Falha ao inicializar o menu do usuário: Elementos essenciais não encontrados no DOM.");
+            }
+        }
+    }, intervalDelay);
+}
             userMenuDropdown.classList.toggle('hidden');
             userMenuActive = !userMenuActive;
 
@@ -129,37 +189,73 @@ function setupUserMenu() {
  * Configura o modal de perfil
  */
 function setupProfileModal() {
-    const profileModal = document.getElementById('profile-modal');
-    const closeProfileModal = document.getElementById('close-profile-modal');
-    const cancelProfileButton = document.getElementById('cancel-profile-button');
-    const saveProfileButton = document.getElementById('save-profile-button');
-    const changeAvatarButton = document.getElementById('change-avatar-button');
-    const avatarUploadInput = document.getElementById('avatar-upload-input');
+    let attempts = 0;
+    const maxAttempts = 15; // Tentar por ~1.5 segundos
+    const intervalDelay = 100; // ms
 
-    if (!profileModal) {
-        console.error("Elemento 'profile-modal' não encontrado durante setupProfileModal.");
-        return;
-    }
-    if (!closeProfileModal) {
-        console.error("Elemento 'close-profile-modal' não encontrado durante setupProfileModal.");
-        return;
-    }
-    if (!cancelProfileButton) {
-        console.error("Elemento 'cancel-profile-button' não encontrado durante setupProfileModal.");
-        return;
-    }
-    if (!saveProfileButton) {
-        console.error("Elemento 'save-profile-button' não encontrado durante setupProfileModal.");
-        return;
-    }
-    if (!changeAvatarButton) {
-        console.error("Elemento 'change-avatar-button' não encontrado durante setupProfileModal.");
-        return;
-    }
-    if (!avatarUploadInput) {
-        console.error("Elemento 'avatar-upload-input' não encontrado durante setupProfileModal.");
-        return;
-    }
+    const intervalId = setInterval(() => {
+        const profileModal = document.getElementById('profile-modal');
+        const closeProfileModal = document.getElementById('close-profile-modal');
+        const cancelProfileButton = document.getElementById('cancel-profile-button');
+        const saveProfileButton = document.getElementById('save-profile-button');
+        const changeAvatarButton = document.getElementById('change-avatar-button');
+        const avatarUploadInput = document.getElementById('avatar-upload-input');
+
+        if (profileModal && closeProfileModal && cancelProfileButton && saveProfileButton && changeAvatarButton && avatarUploadInput) {
+            clearInterval(intervalId);
+            console.log("Elementos do modal de perfil encontrados. Configurando listeners...");
+
+            // Configuração original dos listeners (movida para dentro do if)
+            const closeModal = () => {
+                const innerModal = profileModal.querySelector('.bg-white');
+                if (innerModal) {
+                    innerModal.classList.add('scale-95', 'opacity-0');
+                    setTimeout(() => {
+                        profileModal.classList.add('hidden');
+                    }, 300);
+                } else {
+                    profileModal.classList.add('hidden');
+                }
+            };
+
+            window.openProfileModal = () => {
+                profileModal.classList.remove('hidden');
+                const innerModal = profileModal.querySelector('.bg-white');
+                if (innerModal) {
+                    setTimeout(() => {
+                        innerModal.classList.remove('scale-95', 'opacity-0');
+                    }, 10);
+                }
+            };
+
+            closeProfileModal.addEventListener('click', closeModal);
+            cancelProfileButton.addEventListener('click', closeModal);
+
+            changeAvatarButton.addEventListener('click', () => {
+                avatarUploadInput.click();
+            });
+
+            avatarUploadInput.addEventListener('change', handleAvatarUpload);
+            saveProfileButton.addEventListener('click', saveUserProfile);
+
+        } else {
+            attempts++;
+            if (attempts >= maxAttempts) {
+                clearInterval(intervalId);
+                let missingElements = [];
+                if (!profileModal) missingElements.push('profile-modal');
+                if (!closeProfileModal) missingElements.push('close-profile-modal');
+                if (!cancelProfileButton) missingElements.push('cancel-profile-button');
+                if (!saveProfileButton) missingElements.push('save-profile-button');
+                if (!changeAvatarButton) missingElements.push('change-avatar-button');
+                if (!avatarUploadInput) missingElements.push('avatar-upload-input');
+
+                console.error(`Timeout: Elementos do modal de perfil não encontrados (${missingElements.join(', ')}) após ` + (maxAttempts * intervalDelay / 1000) + "s.");
+                throw new Error(`Falha ao inicializar o modal de perfil: Elementos essenciais (${missingElements.join(', ')}) não encontrados no DOM.`);
+            }
+        }
+    }, intervalDelay);
+}
     
     // Fechar o modal
     const closeModal = () => {
