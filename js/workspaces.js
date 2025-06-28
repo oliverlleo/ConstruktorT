@@ -33,23 +33,11 @@ export async function initWorkspaces(database) {
   console.log("Inicializando módulo de áreas de trabalho...");
   db = database;
 
-  // A LINHA ABAIXO É O PROBLEMA. APAGUE-A OU COMENTE-A.
-  // setupWorkspaceSelector(); 
+  setupWorkspaceSelector();
 
   // Carrega as áreas de trabalho próprias e compartilhadas
   await loadUserWorkspaces();
   await _loadSharedWorkspaces(); // CORREÇÃO: Chamada da função que estava em falta
-
-  // ADICIONE A LINHA AQUI, NO FINAL DA FUNÇÃO.
-  setupWorkspaceSelector();
-
-  // Adiciona um listener para o evento de logout
-  document.addEventListener('userLoggedOut', () => {
-      userWorkspaces = [];
-      sharedWorkspaces = [];
-      currentWorkspace = null;
-      updateWorkspaceSelector();
-  });
 
   // Configura listener para mudanças no controle de acesso
   const userId = getUsuarioId();
@@ -318,36 +306,47 @@ async function createNewWorkspace() {
 /**
  * Alterna para uma área de trabalho específica
  */
-export async function switchToWorkspace(workspace) {
-    if (!workspace) {
-        console.error("Tentativa de mudar para um workspace nulo.");
-        return;
-    }
+async function switchToWorkspace(workspace) {
+  showLoading("Carregando área de trabalho...");
 
-    console.log(`Mudando para a área de trabalho: ${workspace.name} (${workspace.id})`);
+  try {
     currentWorkspace = workspace;
-    localStorage.setItem("selectedWorkspaceId", workspace.id);
 
-    // --- INÍCIO DA CORREÇÃO CRÍTICA ---
-    // Apenas atualiza os elementos da UI existentes, NÃO redesenha tudo.
-
-    const currentWorkspaceTitle = document.getElementById("current-workspace-title");
-    if (currentWorkspaceTitle) {
-        currentWorkspaceTitle.textContent = currentWorkspace.name;
+    // Atualiza o seletor
+    const workspaceSelect = document.getElementById("workspace-select");
+    if (workspaceSelect) {
+      workspaceSelect.value = workspace.id;
     }
 
+    // Atualiza o título da área de trabalho
+    const workspaceTitle = document.getElementById("current-workspace-title");
+    if (workspaceTitle) {
+      workspaceTitle.textContent = workspace.name;
+    }
+
+    // Mostra/esconde botão de compartilhamento baseado na propriedade
     const shareBtn = document.getElementById("share-workspace-btn");
     if (shareBtn) {
-        if (workspace.isOwner) {
-            shareBtn.classList.remove("hidden");
-        } else {
-            shareBtn.classList.add("hidden");
-        }
+      if (workspace.isOwner) {
+        shareBtn.classList.remove("hidden");
+      } else {
+        shareBtn.classList.add("hidden");
+      }
     }
-    // --- FIM DA CORREÇÃO CRÍTICA ---
 
-    // Dispara um evento para que outras partes da aplicação saibam da mudança
-    document.dispatchEvent(new CustomEvent("workspaceChanged", { detail: { workspaceId: workspace.id, isOwner: workspace.isOwner } }));
+    // Dispara evento para outros módulos atualizarem
+    window.dispatchEvent(
+      new CustomEvent("workspaceChanged", {
+        detail: { workspace: currentWorkspace },
+      })
+    );
+
+    hideLoading();
+  } catch (error) {
+    hideLoading();
+    console.error("Erro ao alternar área de trabalho:", error);
+    showError("Erro", "Ocorreu um erro ao carregar a área de trabalho.");
+  }
 }
 
 /**
@@ -493,47 +492,45 @@ async function sendWorkspaceInvitation(email, permission) {
  * Atualiza o seletor de área de trabalho
  */
 function updateWorkspaceSelector() {
-    const workspaceSelect = document.getElementById("workspace-select");
-    if (!workspaceSelect) return;
+  const workspaceSelect = document.getElementById("workspace-select");
+  if (!workspaceSelect) return;
 
-    const hasWorkspaces = userWorkspaces.length > 0 || sharedWorkspaces.length > 0;
-    if (!hasWorkspaces) {
-        workspaceSelect.innerHTML = '<option value="">Crie uma área de trabalho</option>';
-        return;
-    }
+  workspaceSelect.innerHTML = "";
 
-    // SUBSTITUA A LINHA ACIMA POR ESTE BLOCO:
-    while (workspaceSelect.options.length > 0) {
-        workspaceSelect.remove(0);
-    }
+  // Adiciona áreas de trabalho próprias
+  if (userWorkspaces.length > 0) {
+    const ownGroup = document.createElement("optgroup");
+    ownGroup.label = "Minhas Áreas de Trabalho";
 
-    if (userWorkspaces.length > 0) {
-        const ownGroup = document.createElement("optgroup");
-        ownGroup.label = "Minhas Áreas de Trabalho";
-        userWorkspaces.forEach(workspace => {
-            const option = document.createElement("option");
-            option.value = workspace.id;
-            option.textContent = workspace.name;
-            ownGroup.appendChild(option);
-        });
-        workspaceSelect.appendChild(ownGroup);
-    }
+    userWorkspaces.forEach((workspace) => {
+      const option = document.createElement("option");
+      option.value = workspace.id;
+      option.textContent = workspace.name;
+      ownGroup.appendChild(option);
+    });
 
-    if (sharedWorkspaces.length > 0) {
-        const sharedGroup = document.createElement("optgroup");
-        sharedGroup.label = "Compartilhadas Comigo";
-        sharedWorkspaces.forEach(workspace => {
-            const option = document.createElement("option");
-            option.value = workspace.id;
-            option.textContent = `${workspace.name} (${workspace.ownerName})`;
-            sharedGroup.appendChild(option);
-        });
-        workspaceSelect.appendChild(sharedGroup);
-    }
+    workspaceSelect.appendChild(ownGroup);
+  }
 
-    if (currentWorkspace) {
-        workspaceSelect.value = currentWorkspace.id;
-    }
+  // Adiciona áreas de trabalho compartilhadas
+  if (sharedWorkspaces.length > 0) {
+    const sharedGroup = document.createElement("optgroup");
+    sharedGroup.label = "Compartilhadas Comigo";
+
+    sharedWorkspaces.forEach((workspace) => {
+      const option = document.createElement("option");
+      option.value = workspace.id;
+      option.textContent = `${workspace.name} (${workspace.ownerName})`;
+      sharedGroup.appendChild(option);
+    });
+
+    workspaceSelect.appendChild(sharedGroup);
+  }
+
+  // Seleciona a área de trabalho atual
+  if (currentWorkspace) {
+    workspaceSelect.value = currentWorkspace.id;
+  }
 }
 
 /**

@@ -48,48 +48,28 @@ export function setupMobileInteractions() {
     const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
     const desktopSidebar = document.getElementById('desktop-sidebar');
     const closeMobileMenu = document.getElementById('close-mobile-menu');
-    const overlay = document.getElementById('app'); // Assuming 'app' is the main container acting as overlay
-
+    
     if (mobileMenuToggle && desktopSidebar) {
         mobileMenuToggle.addEventListener('click', () => {
             desktopSidebar.classList.add('open');
-            if (overlay) overlay.classList.remove('hidden'); // Show overlay
             mobileSidebarOpen = true;
         });
     }
-
+    
     if (closeMobileMenu && desktopSidebar) {
         closeMobileMenu.addEventListener('click', () => {
             desktopSidebar.classList.remove('open');
-            if (overlay) overlay.classList.add('hidden'); // Hide overlay
             mobileSidebarOpen = false;
         });
     }
-
-    // Fechar menu ao clicar fora (overlay) ou em um botão da sidebar
+    
+    // Fechar menu ao clicar fora (overlay)
     document.addEventListener('click', (e) => {
         if (mobileSidebarOpen && desktopSidebar && !desktopSidebar.contains(e.target) && e.target !== mobileMenuToggle) {
             desktopSidebar.classList.remove('open');
-            if (overlay) overlay.classList.add('hidden'); // Hide overlay
             mobileSidebarOpen = false;
         }
     });
-
-    // Este é o trecho problemático que precisa ser corrigido.
-    // Ele adiciona um event listener a todos os botões da sidebar para fechar o menu em mobile.
-    // Precisamos garantir que ele não afete os botões de workspace.
-    if (desktopSidebar) {
-        const sidebarButtons = desktopSidebar.querySelectorAll("button:not(#mobile-menu-btn):not(#add-new-module-btn):not(#share-workspace-btn):not(#add-workspace-btn)");
-        sidebarButtons.forEach(btn => {
-            btn.addEventListener("click", () => {
-                if (window.innerWidth < 640) { // sm breakpoint in Tailwind
-                    desktopSidebar.classList.remove("open");
-                    if (overlay) overlay.classList.add("hidden");
-                    mobileSidebarOpen = false;
-                }
-            });
-        });
-    }
     
     // Toggle para a sidebar do modal em dispositivos móveis
     const toggleModalSidebar = document.getElementById('toggle-modal-sidebar');
