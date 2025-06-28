@@ -191,10 +191,11 @@ function setupProfileModal() {
     }, intervalDelay);
 }
 
-// O código duplicado abaixo foi removido.
-// Ele era uma cópia da lógica de `closeModal`, `window.openProfileModal`,
-// e adição de event listeners que agora está dentro do bloco `if (profileModal && ...)`
-// da função setupProfileModal acima.
+// Comentário anterior sobre código duplicado removido era referente a uma tentativa anterior.
+// A remoção efetiva do código duplicado que causava o SyntaxError na linha 232
+// (ou seja, definições órfãs de closeModal, window.openProfileModal, e event listeners
+// que pertenciam a uma versão antiga de setupProfileModal) acontece aqui, garantindo que
+// nada fique entre o final da setupProfileModal com polling e o início de loadUserProfileData.
 
 /**
  * Carrega os dados do perfil do usuário
