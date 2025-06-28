@@ -885,13 +885,13 @@ async function handleAddNewEntity() {
         const { value: formValues, isConfirmed } = await Swal.fire({
             title: 'Criar Nova Entidade',
             html: `
-                <div class="mb-4 px-4">
+                <div class="mb-4">
                     <label for="swal-input-name" class="block text-sm font-medium text-slate-700 mb-1 text-left">Nome da Entidade</label>
                     <input id="swal-input-name" class="swal2-input w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Ex: Fornecedor, Produto, Funcionário...">
                 </div>
                 <div>
                     <p class="text-sm font-medium text-slate-700 mb-2 text-left">Escolha um ícone:</p>
-                    <div class="grid grid-cols-4 sm:grid-cols-6 gap-2">${iconHtml}</div>
+                    <div class="grid grid-cols-4 sm:grid-cols-6 gap-2 justify-items-center">${iconHtml}</div>
                 </div>
             `,
             showCancelButton: true,
@@ -899,7 +899,8 @@ async function handleAddNewEntity() {
             cancelButtonText: 'Cancelar',
             focusConfirm: false,
             customClass: {
-                popup: 'shadow-xl rounded-xl'
+                popup: 'shadow-xl rounded-xl',
+                htmlContainer: 'swal-html-container-mobile-padding'
             },
             didOpen: () => {
                 createIcons();
