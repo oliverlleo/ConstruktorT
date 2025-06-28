@@ -221,34 +221,59 @@ async function loadUserProfileData() {
     const nicknameInput = document.getElementById('nickname-input');
     const emailInput = document.getElementById('email-input');
     
+    // Log para verificar a existência dos elementos ao carregar dados
+    if (!userDisplayName) console.warn("[userProfile.js] Elemento 'user-display-name' não encontrado em loadUserProfileData.");
+    if (!userAvatarPreview) console.warn("[userProfile.js] Elemento 'user-avatar-preview' não encontrado em loadUserProfileData.");
+    if (!modalAvatarPreview) console.warn("[userProfile.js] Elemento 'modal-avatar-preview' não encontrado em loadUserProfileData.");
+    if (!nicknameInput) console.warn("[userProfile.js] Elemento 'nickname-input' não encontrado em loadUserProfileData.");
+    if (!emailInput) console.warn("[userProfile.js] Elemento 'email-input' não encontrado em loadUserProfileData.");
+
     try {
-        // Tenta buscar os dados do usuário no Firebase
         const snapshot = await db.ref(`users/${userId}`).once('value');
         const userData = snapshot.val() || {};
         
-        // Define os valores nos elementos da UI
-        const displayName = userData.displayName || getUsuarioNome() || 'Usuário';
-        userDisplayName.textContent = displayName;
-        nicknameInput.value = displayName;
-        emailInput.value = getUsuarioEmail() || '';
-        
-        // Define a imagem do avatar
-        const photoURL = userData.photoURL || getUsuarioFoto() || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`;
-        userAvatarPreview.src = photoURL;
-        modalAvatarPreview.src = photoURL;
+        const displayNameValue = userData.displayName || getUsuarioNome() || 'Usuário';
+        const emailValue = getUsuarioEmail() || '';
+        const photoURLValue = userData.photoURL || getUsuarioFoto() || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayNameValue)}&background=random`;
+
+        if (userDisplayName) {
+            userDisplayName.textContent = displayNameValue;
+        }
+        if (nicknameInput) {
+            nicknameInput.value = displayNameValue;
+        }
+        if (emailInput) {
+            emailInput.value = emailValue;
+        }
+        if (userAvatarPreview) {
+            userAvatarPreview.src = photoURLValue;
+        }
+        if (modalAvatarPreview) {
+            modalAvatarPreview.src = photoURLValue;
+        }
+
     } catch (error) {
         console.error('Erro ao carregar dados do usuário:', error);
-        
-        // Valores padrão em caso de erro
-        const displayName = getUsuarioNome() || 'Usuário';
-        userDisplayName.textContent = displayName;
-        nicknameInput.value = displayName;
-        emailInput.value = getUsuarioEmail() || '';
-        
-        // Avatar padrão em caso de erro
-        const photoURL = getUsuarioFoto() || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random`;
-        userAvatarPreview.src = photoURL;
-        modalAvatarPreview.src = photoURL;
+        // Fallback em caso de erro, também com verificações
+        const displayNameValue = getUsuarioNome() || 'Usuário';
+        const emailValue = getUsuarioEmail() || '';
+        const photoURLValue = getUsuarioFoto() || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayNameValue)}&background=random`;
+
+        if (userDisplayName) {
+            userDisplayName.textContent = displayNameValue;
+        }
+        if (nicknameInput) {
+            nicknameInput.value = displayNameValue;
+        }
+        if (emailInput) {
+            emailInput.value = emailValue;
+        }
+        if (userAvatarPreview) {
+            userAvatarPreview.src = photoURLValue;
+        }
+        if (modalAvatarPreview) {
+            modalAvatarPreview.src = photoURLValue;
+        }
     }
 }
 
