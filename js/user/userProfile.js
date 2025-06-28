@@ -7,25 +7,52 @@ import { getUsuarioAtual, getUsuarioId, getUsuarioNome, getUsuarioEmail, getUsua
 import { showSuccess, showError, showLoading, hideLoading } from '../ui.js';
 
 // Variáveis do módulo
-let db;
+// let db; // db will be passed as a parameter
 let storage;
 let auth;
 let userMenuActive = false;
 
 /**
- * Inicializa o módulo de perfil do usuário (configura eventos que não dependem de dados carregados)
- * @param {Object} database - Referência ao banco de dados Firebase (pode ser undefined se auth e storage são configurados globalmente)
+ * Inicializa o módulo de perfil do usuário.
+ * Agora espera receber 'db'.
+ * @param {string} userId - O ID do usuário logado.
+ * @param {Object} dbInstance - A instância do Firebase Realtime Database.
  */
-export function initUserProfileModule(database) {
-    console.log('Inicializando listeners do módulo de perfil do usuário...');
-    // db, auth, storage will be initialized in main.js or through firebase global object
-    // If they are not available globally, they need to be passed and set here.
-    // For now, assuming firebase.auth() and firebase.storage() are available.
-    if (firebase && firebase.database) db = firebase.database(); // Or however you access it
-    if (firebase && firebase.auth) auth = firebase.auth();
-    if (firebase && firebase.storage) storage = firebase.storage();
+export async function initUserProfile(userId, dbInstance) {
+    console.log("Módulo de perfil do usuário recebendo 'db'...");
+    // db = dbInstance; // Set the module-level db if other functions not receiving it directly still rely on it.
+                       // For now, we'll pass db explicitly where needed.
+    auth = firebase.auth(); // Assuming global firebase object
+    storage = firebase.storage(); // Assuming global firebase object
 
-    // Setup parts of the UI that are event-driven and don't need initial userData
+    // Setup event listeners and non-data-dependent parts of the modal first
+    setupProfileModalListeners(); // Renamed to avoid confusion, sets up modal open/close/save
+    setupUserMenuListeners();   // Sets up menu open/close, logout, edit profile button actions
+
+    try {
+        // Load data and then populate UI that depends on this data
+        const userData = await loadUserProfileData(userId, dbInstance);
+        if (userData) {
+            populateUserMenu(userData); // New function to populate menu with data
+            populateProfileModal(userData); // New function to populate modal fields with data
+        } else {
+            // Handle case where user data might not be found, e.g., set default display
+            console.warn(`User data not found for ${userId}. UI will use defaults.`);
+            populateUserMenu({ displayName: getUsuarioNome() || 'Usuário', photoURL: getUsuarioFoto() });
+            populateProfileModal({ displayName: getUsuarioNome() || 'Usuário', photoURL: getUsuarioFoto(), email: getUsuarioEmail() });
+        }
+    } catch (error) {
+        console.error("Erro ao carregar e popular dados do perfil do usuário:", error);
+        // Fallback to default display in case of error
+        populateUserMenu({ displayName: getUsuarioNome() || 'Usuário', photoURL: getUsuarioFoto() });
+        populateProfileModal({ displayName: getUsuarioNome() || 'Usuário', photoURL: getUsuarioFoto(), email: getUsuarioEmail() });
+    }
+}
+
+/**
+ * Configura os listeners do menu do usuário (ações como abrir/fechar, logout)
+ */
+function setupUserMenuListeners() {
     const userMenuButton = document.getElementById('user-menu-button');
     const userMenuDropdown = document.getElementById('user-menu-dropdown');
     const profileModal = document.getElementById('profile-modal');

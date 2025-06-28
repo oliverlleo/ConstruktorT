@@ -10,8 +10,8 @@ import { initDatabase, loadAllEntities, loadAndRenderModules, loadDroppedEntitie
          deleteEntity, deleteModule, saveEntityStructure, saveSubEntityStructure, saveModulesOrder } from './database.js';
 import { initUI, createIcons, checkEmptyStates, showLoading, hideLoading, showSuccess, 
          showError, showConfirmDialog, showInputDialog } from './ui.js';
-// Updated imports for userProfile
-import { initUserProfileModule, loadUserProfileData, setupUserMenu, setupProfileModal } from './user/userProfile.js';
+// Updated imports for userProfile - initUserProfile is now the main entry point
+import { initUserProfile, loadUserProfileData } from './user/userProfile.js';
 import { initInvitations, checkPendingInvitations } from './user/invitations.js';
 import { initWorkspaces, getCurrentWorkspace } from './workspaces.js';
 
@@ -40,7 +40,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         console.log(`[LOADING] ${message}`);
     };
-    
+
     setLoadingMessage('Inicializando aplicação...');
 
     try {
@@ -242,8 +242,6 @@ async function loadWorkspaceData(workspace) {
         showError('Erro de Carregamento', 'Ocorreu um erro ao carregar a área de trabalho. Verifique a consola para mais detalhes.');
     }
 }
-
-document.addEventListener('DOMContentLoaded', initApp);
 
 // ---- Funções de Renderização ----
 function renderEntityInLibrary(entity) {
@@ -1635,3 +1633,4 @@ export {
     setupFieldPropertiesPanelEvents,
     loadAndRenderSharedResources
 };
+// document.addEventListener('DOMContentLoaded', initApp); // This line is removed

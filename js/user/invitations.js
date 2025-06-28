@@ -8,24 +8,22 @@ import { showSuccess, showError, showLoading, hideLoading } from '../ui.js';
 // import { getUserProfileData } from './userProfile.js'; // No longer needed
 
 // Variáveis do módulo
-let db;
+let db; // Will be set by initInvitations
 let activeTab = 'sent';
-let _currentUserData = null; // To store userData passed from main.js
-let _currentUserId = null; // To store userId passed from main.js
+// _currentUserData and _currentUserId are removed as userData is no longer passed to initInvitations directly.
+// userId will be passed to initInvitations and can be stored if needed, or functions can rely on getUsuarioId().
 
 /**
  * Inicializa o módulo de convites
- * @param {Object} database - Referência ao banco de dados Firebase
- * @param {String} currentUserId - ID do usuário logado
- * @param {Object} currentUserData - Dados do perfil do usuário logado
+ * @param {string} userId - ID do usuário logado.
+ * @param {Object} dbInstance - Referência ao banco de dados Firebase.
  */
-export function initInvitations(database, currentUserId, currentUserData) {
-    console.log('Inicializando módulo de convites com UID:', currentUserId, 'e userData:', currentUserData);
-    db = database;
-    _currentUserId = currentUserId;
-    _currentUserData = currentUserData;
+export function initInvitations(userId, dbInstance) { // Signature changed
+    console.log('Inicializando módulo de convites para UID:', userId);
+    db = dbInstance; // Set the module-level db instance
+    // _currentUserId = userId; // Store if needed by other functions not getting it directly
     
-    setupInviteModal();
+    setupInviteModal(); // These setup functions use the module-level 'db'
     setupManageInvitesModal();
 }
 
