@@ -306,47 +306,36 @@ async function createNewWorkspace() {
 /**
  * Alterna para uma área de trabalho específica
  */
-async function switchToWorkspace(workspace) {
-  showLoading("Carregando área de trabalho...");
+export async function switchToWorkspace(workspace) {
+    if (!workspace) {
+        console.error("Tentativa de mudar para um workspace nulo.");
+        return;
+    }
 
-  try {
+    console.log(`Mudando para a área de trabalho: ${workspace.name} (${workspace.id})`);
     currentWorkspace = workspace;
+    localStorage.setItem("selectedWorkspaceId", workspace.id);
 
-    // Atualiza o seletor
-    const workspaceSelect = document.getElementById("workspace-select");
-    if (workspaceSelect) {
-      workspaceSelect.value = workspace.id;
+    // --- INÍCIO DA CORREÇÃO CRÍTICA ---
+    // Apenas atualiza os elementos da UI existentes, NÃO redesenha tudo.
+
+    const currentWorkspaceTitle = document.getElementById("current-workspace-title");
+    if (currentWorkspaceTitle) {
+        currentWorkspaceTitle.textContent = currentWorkspace.name;
     }
 
-    // Atualiza o título da área de trabalho
-    const workspaceTitle = document.getElementById("current-workspace-title");
-    if (workspaceTitle) {
-      workspaceTitle.textContent = workspace.name;
-    }
-
-    // Mostra/esconde botão de compartilhamento baseado na propriedade
     const shareBtn = document.getElementById("share-workspace-btn");
     if (shareBtn) {
-      if (workspace.isOwner) {
-        shareBtn.classList.remove("hidden");
-      } else {
-        shareBtn.classList.add("hidden");
-      }
+        if (workspace.isOwner) {
+            shareBtn.classList.remove("hidden");
+        } else {
+            shareBtn.classList.add("hidden");
+        }
     }
+    // --- FIM DA CORREÇÃO CRÍTICA ---
 
-    // Dispara evento para outros módulos atualizarem
-    window.dispatchEvent(
-      new CustomEvent("workspaceChanged", {
-        detail: { workspace: currentWorkspace },
-      })
-    );
-
-    hideLoading();
-  } catch (error) {
-    hideLoading();
-    console.error("Erro ao alternar área de trabalho:", error);
-    showError("Erro", "Ocorreu um erro ao carregar a área de trabalho.");
-  }
+    // Dispara um evento para que outras partes da aplicação saibam da mudança
+    document.dispatchEvent(new CustomEvent("workspaceChanged", { detail: { workspaceId: workspace.id, isOwner: workspace.isOwner } }));
 }
 
 /**
@@ -495,11 +484,11 @@ function updateWorkspaceSelector() {
     const container = document.getElementById("workspace-selector");
     if (!container) return;
 
-    // Limpa o container
+    // Limpa o container para a renderização inicial
     container.innerHTML = '';
 
-    // Cria e adiciona o título
-    const titleHtml = `
+    // Cria e adiciona o título e o botão de compartilhar
+    const headerHtml = `
         <div class="flex items-center justify-between mb-2">
             <h3 class="text-sm font-semibold text-slate-700 flex items-center gap-1">
                 <i class="fa-solid fa-briefcase h-4 w-4 text-purple-500"></i> Área de Trabalho
@@ -509,18 +498,16 @@ function updateWorkspaceSelector() {
             </button>
         </div>
     `;
-    container.insertAdjacentHTML('beforeend', titleHtml);
+    container.insertAdjacentHTML('beforeend', headerHtml);
 
     // Cria o container para o select e o botão de adicionar
     const controlsContainer = document.createElement('div');
     controlsContainer.className = 'flex gap-1';
 
-    // Cria o select
     const workspaceSelect = document.createElement('select');
     workspaceSelect.id = 'workspace-select';
     workspaceSelect.className = 'flex-1 text-sm border border-slate-300 rounded-lg px-2 py-1.5 text-slate-700 bg-white focus:outline-none focus:ring-1 focus:ring-purple-500';
 
-    // Adiciona as optgroups
     if (userWorkspaces.length > 0) {
         const ownGroup = document.createElement("optgroup");
         ownGroup.label = "Minhas Áreas de Trabalho";
@@ -544,10 +531,8 @@ function updateWorkspaceSelector() {
         });
         workspaceSelect.appendChild(sharedGroup);
     }
-
     controlsContainer.appendChild(workspaceSelect);
 
-    // Cria e adiciona o botão de "Criar Novo Workspace"
     const addWorkspaceBtn = document.createElement('button');
     addWorkspaceBtn.id = 'add-workspace-btn';
     addWorkspaceBtn.className = 'bg-purple-50 text-purple-600 px-2 py-1.5 rounded-lg hover:bg-purple-100 transition-all';
@@ -556,27 +541,21 @@ function updateWorkspaceSelector() {
 
     container.appendChild(controlsContainer);
 
-    // Adiciona o título do workspace atual
     const currentWorkspaceTitle = document.createElement('div');
     currentWorkspaceTitle.id = 'current-workspace-title';
     currentWorkspaceTitle.className = 'mt-1 text-xs text-slate-500 truncate';
-    if (currentWorkspace) {
-        currentWorkspaceTitle.textContent = currentWorkspace.name;
-    }
     container.appendChild(currentWorkspaceTitle);
 
-    // Reatribui os eventos de clique, pois os elementos foram recriados
     setupWorkspaceSelector();
 
-    // Seleciona a área de trabalho atual no dropdown
+    // Atualiza o estado da UI com base no workspace atual
     if (currentWorkspace) {
         workspaceSelect.value = currentWorkspace.id;
-    }
-
-    // Atualiza a visibilidade do botão de compartilhar
-    const shareBtn = document.getElementById("share-workspace-btn");
-    if (shareBtn && currentWorkspace && currentWorkspace.isOwner) {
-        shareBtn.classList.remove("hidden");
+        currentWorkspaceTitle.textContent = currentWorkspace.name;
+        const shareBtn = document.getElementById("share-workspace-btn");
+        if (shareBtn && currentWorkspace.isOwner) {
+            shareBtn.classList.remove("hidden");
+        }
     }
 }
 
