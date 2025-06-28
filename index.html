@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Construktor - Construtor Visual de ERP/CRM</title>
+    
+    <!-- Dependências Externas -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/js/all.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.395.0/dist/umd/lucide.min.js"></script>
+    <script>
+        // Configuração aprimorada para garantir que os ícones Lucide sejam registrados corretamente
+        document.addEventListener('DOMContentLoaded', function() {
+            if (window.lucide) {
+                // Inicialização única do Lucide para evitar loops infinitos
+                let isUpdatingIcons = false;
+                
+                function updateLucideIcons() {
+                    if (isUpdatingIcons) return;
+                    isUpdatingIcons = true;
+                    
+                    try {
+                        lucide.createIcons();
+                        console.log('Ícones Lucide atualizados com sucesso');
+                    } catch (error) {
+                        console.warn('Erro ao atualizar ícones:', error);
+                    } finally {
+                        isUpdatingIcons = false;
+                    }
+                }
+                
+                // Inicialização inicial
+                updateLucideIcons();
+                
+                // Garantir que os ícones sejam criados após o carregamento completo
+                window.addEventListener('load', function() {
+                    setTimeout(updateLucideIcons, 300);
+                });
+                
+                // Observador otimizado com debounce
+                let timeout;
+                const observer = new MutationObserver(function(mutations) {
+                    clearTimeout(timeout);
+                    timeout = setTimeout(() => {
+                        let hasNewNodes = false;
+                        
+                        // Verificar mutações para novos nós com data-lucide
+                        for (const mutation of mutations) {
+                            if (mutation.addedNodes && mutation.addedNodes.length) {
+                                for (const node of mutation.addedNodes) {
+                                    if (node.nodeType === 1) {  // É um elemento
+                                        if (node.hasAttribute && node.hasAttribute('data-lucide')) {
+                                            hasNewNodes = true;
+                                            break;
+                                        }
+                                        // Verifica filhos
+                                        if (node.querySelector && node.querySelector('[data-lucide]')) {
+                                            hasNewNodes = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                                if (hasNewNodes) break;
+                            }
+                        }
+                        
+                        if (hasNewNodes) {
+                            console.log('Novos nós com data-lucide detectados, atualizando ícones');
+                            observer.disconnect(); // Desconecta o observer antes de atualizar
+                            updateLucideIcons();
+                            observer.observe(document.body, { // Reconecta depois
+                                childList: true,
+                                subtree: true
+                            });
+                        }
+                    }, 100); // Debounce de 100ms
+                });
+                
+                observer.observe(document.body, {
+                    childList: true,
+                    subtree: true
+                });
+                
+                // Expõe uma função global para atualizar ícones
+                window.updateLucideIcons = updateLucideIcons;
+            }
+        });
+    </script>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-storage-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-functions-compat.js"></script>
+
+    <!-- Link para o ficheiro CSS externo -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="text-slate-800 bg-slate-50">
+
+    <!-- Indicador de Carregamento Visual -->
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- ESTRUTURA PRINCIPAL DA APLICAÇÃO -->
+    <div id="app" class="h-screen w-screen flex flex-col overflow-hidden" style="display: none;">
+        
+        <header class="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex justify-between items-center shadow-sm z-30 sticky top-0">
+            <div class="flex items-center gap-2 sm:gap-3">
+                <button id="mobile-menu-toggle" class="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 sm:hidden">
+                    <i class="fa-solid fa-bars w-6 h-6"></i>
+                </button>
+                <div class="relative">
+                    <button id="user-menu-button" class="flex items-center gap-2 sm:gap-3 cursor-pointer p-2 rounded-lg hover:bg-slate-100">
+                        <div class="p-2 sm:p-2.5 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-lg shadow-md">
+                            <i data-lucide="layout-dashboard" class="w-4 h-4 sm:w-5 sm:h-5"></i>
+                        </div>
+                        <h1 class="text-xl sm:text-2xl font-bold text-slate-800">Construktor</h1>
+                        <i class="fa-solid fa-chevron-down h-4 w-4 text-slate-400"></i>
+                    </button>
+
+                    <div id="user-menu-dropdown" class="absolute top-full mt-2 w-64 bg-white rounded-lg shadow-xl border border-slate-200 p-2 z-50 hidden">
+                        <div class="p-2">
+                            <p class="text-xs text-slate-500">Logado como</p>
+                            <div class="flex items-center gap-2 mt-1">
+                                <img id="user-avatar-preview" src="https://ui-avatars.com/api/?background=random" class="h-8 w-8 rounded-full">
+                                <span id="user-display-name" class="font-semibold text-slate-700">Carregando...</span>
+                            </div>
+                        </div>
+                        <hr class="my-2">
+                        <a href="#" id="edit-profile-button" class="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-slate-100 text-slate-600">
+                            <i class="fa-solid fa-gear h-4 w-4"></i>
+                            <span>Configurações do Perfil</span>
+                        </a>
+                        <a href="#" id="invite-user-button" class="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-slate-100 text-slate-600">
+                            <i class="fa-solid fa-user-plus h-4 w-4"></i>
+                            <span>Convidar</span>
+                        </a>
+                        <a href="#" id="manage-invites-button" class="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-slate-100 text-slate-600 relative">
+                            <i class="fa-solid fa-inbox h-4 w-4"></i>
+                            <span>Gerenciar Convites</span>
+                            <span id="menu-invites-badge" class="absolute hidden top-1 right-2 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">0</span>
+                        </a>
+                        <hr class="my-2">
+                        <a href="#" id="logout-button" class="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-slate-100 text-slate-600">
+                            <i class="fa-solid fa-right-from-bracket h-4 w-4"></i>
+                            <span>Sair</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 sm:gap-4">
+                <button id="help-button" class="text-slate-600 hover:text-indigo-600 transition-colors flex items-center gap-1">
+                    <i class="fa-solid fa-circle-question h-5 w-5"></i>
+                    <span class="text-sm font-medium hidden sm:inline">Ajuda</span>
+                </button>
+                <a href="/pages/code-view.html" target="_blank" class="bg-gradient-to-r from-green-600 to-teal-600 text-white px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg hover:from-green-700 hover:to-teal-700 transition-all shadow-md flex items-center gap-2 text-sm sm:text-base">
+                    <i class="fa-solid fa-code h-4 w-4 sm:h-5 sm:w-5"></i>
+                    <span class="font-medium">Ver Código</span>
+                </a>
+                <a href="/pages/user-view.html" target="_blank" class="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all shadow-md flex items-center gap-2 text-sm sm:text-base">
+                    <i class="fa-solid fa-eye h-4 w-4 sm:h-5 sm:w-5"></i>
+                    <span class="font-medium">Ver Página</span>
+                </a>
+                <!-- Botão de logout removido pois agora está no menu do usuário -->
+                
+            </div>
+        </header>
+
+        <main class="flex-1 flex overflow-hidden relative">
+            <!-- Sidebar para desktop -->
+            <aside id="desktop-sidebar" class="w-64 sm:w-80 bg-white border-r border-slate-200 flex flex-col overflow-hidden shadow-sm h-full absolute inset-y-0 left-0 transform -translate-x-full sm:translate-x-0 transition-transform duration-300 ease-in-out z-20">
+                <div class="p-4 border-b border-slate-200 flex justify-between items-center sm:hidden">
+                    <h2 class="font-bold text-lg text-indigo-800">Biblioteca</h2>
+                    <button id="close-mobile-menu" class="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100">
+                        <i class="fa-solid fa-xmark w-5 h-5"></i>
+                    </button>
+                </div>
+                
+                <div class="p-4 sm:p-5 border-b border-slate-200 hidden sm:block">
+                    <h2 class="font-bold text-lg flex items-center gap-2 text-indigo-800">
+                        <i class="fa-solid fa-book-open text-indigo-600"></i> Biblioteca de Componentes
+                    </h2>
+                    <p class="text-sm text-slate-500 mt-1">Arraste os componentes para criar seu sistema</p>
+                </div>
+                
+                <div class="flex-1 overflow-y-auto p-4 sm:p-5 space-y-5">
+                    <!-- Seletor de Área de Trabalho -->
+                    <div id="workspace-selector" class="mb-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="text-sm font-semibold text-slate-700 flex items-center gap-1">
+                                <i class="fa-solid fa-briefcase h-4 w-4 text-purple-500"></i> Área de Trabalho
+                            </h3>
+                            <button id="share-workspace-btn" class="text-xs bg-purple-50 text-purple-700 px-2 py-1 rounded-full hover:bg-purple-100 transition-all">
+                                <i class="fa-solid fa-share-nodes h-3 w-3 inline-block mr-1"></i>Compartilhar
+                            </button>
+                        </div>
+                        
+                        <div class="flex gap-1">
+                            <select id="workspace-select" class="flex-1 text-sm border border-slate-300 rounded-lg px-2 py-1.5 text-slate-700 bg-white focus:outline-none focus:ring-1 focus:ring-purple-500">
+                                <option value="">Carregando...</option>
+                            </select>
+                            <button id="add-workspace-btn" class="bg-purple-50 text-purple-600 px-2 py-1.5 rounded-lg hover:bg-purple-100 transition-all">
+                                <i class="fa-solid fa-plus h-4 w-4"></i>
+                            </button>
+                        </div>
+                        
+                        <div id="current-workspace-title" class="mt-1 text-xs text-slate-500 truncate">Minha Área de Trabalho</div>
+                    </div>
+
+                    <div id="entity-library">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-md font-semibold text-slate-700 flex items-center gap-1">
+                                <i class="fa-solid fa-database h-4 w-4 text-indigo-500"></i> Entidades
+                            </h3>
+                            <span class="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full">Arraste →</span>
+                        </div>
+                        
+                        <div id="entity-list" class="space-y-2.5"></div>
+                        
+                        <button id="add-new-entity-btn" class="mt-4 w-full bg-indigo-50 text-indigo-700 px-4 py-3 rounded-lg hover:bg-indigo-100 transition-all flex items-center gap-2 justify-center border border-indigo-100 shadow-sm">
+                            <i class="fa-solid fa-circle-plus h-5 w-5"></i>
+                            <span class="font-medium">Criar Nova Entidade</span>
+                        </button>
+                    </div>
+                    
+                    <!-- Seção de Recursos Compartilhados -->
+                    <div id="shared-resources" class="mt-5 pt-5 border-t border-slate-200">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-md font-semibold text-slate-700 flex items-center gap-1">
+                                <i class="fa-solid fa-share-nodes h-4 w-4 text-emerald-500"></i> Compartilhados Comigo
+                            </h3>
+                            <button id="refresh-shared-resources" class="text-xs bg-emerald-50 text-emerald-700 px-2 py-1 rounded-full hover:bg-emerald-100 transition-all">
+                                <i class="fa-solid fa-arrows-rotate h-3 w-3 inline-block mr-1"></i>Atualizar
+                            </button>
+                        </div>
+                        
+                        <div id="shared-resources-list" class="space-y-2.5">
+                            <!-- Aqui serão adicionados os recursos compartilhados -->
+                        </div>
+                        
+                        <div id="no-shared-resources" class="bg-slate-50 rounded-lg p-3 text-center text-slate-500 border border-slate-200">
+                            <i class="fa-solid fa-circle-info h-5 w-5 mx-auto mb-2 text-slate-400"></i>
+                            <p class="text-sm">Nenhum recurso compartilhado encontrado</p>
+                        </div>
+                    </div>
+
+                    <div id="quick-tip" class="bg-gradient-to-r from-purple-50 to-indigo-50 p-4 rounded-lg border border-indigo-100 shadow-sm transition-all duration-300">
+                        <div class="flex justify-between items-start">
+                            <h3 class="font-semibold text-indigo-800 flex items-center gap-2 mb-2">
+                                <i class="fa-solid fa-lightbulb h-4 w-4 text-amber-500"></i> Dica Rápida
+                            </h3>
+                            <button class="close-tip-btn text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-white/50" data-tip-id="quick-tip">
+                                <i class="fa-solid fa-xmark h-4 w-4"></i>
+                            </button>
+                        </div>
+                        <p class="text-sm text-slate-700">Crie módulos para organizar as funcionalidades do seu sistema. Arraste entidades para os módulos e configure-as conforme necessário.</p>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Conteúdo principal -->
+            <section class="flex-1 overflow-hidden flex flex-col sm:ml-80">
+                <div class="border-b border-slate-200 bg-white py-3 px-4 sm:px-6 flex justify-between items-center shadow-sm">
+                    <h2 class="text-lg sm:text-xl font-bold flex items-center gap-2 text-slate-800">
+                        <i class="fa-solid fa-table-cells text-indigo-500"></i> Módulos do Sistema
+                    </h2>
+                    <button id="add-new-module-btn" class="bg-indigo-600 text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 shadow-sm text-sm sm:text-base">
+                        <i class="fa-solid fa-plus h-4 w-4 sm:h-5 sm:w-5"></i>
+                        <span class="font-medium">Adicionar</span>
+                    </button>
+                </div>
+                
+                <div class="flex-1 overflow-y-auto p-4 sm:p-6">
+                    <div class="mx-auto">
+                        <!-- Mensagem de orientação inicial -->
+                        <div id="welcome-tip" class="bg-white rounded-xl shadow-md p-4 sm:p-5 mb-5 border border-slate-200 transition-all duration-300">
+                            <div class="flex flex-col sm:flex-row sm:items-start gap-4">
+                                <div class="bg-blue-100 p-3 rounded-full text-blue-600 self-center sm:self-start">
+                                    <i class="fa-solid fa-circle-info h-6 w-6"></i>
+                                </div>
+                                <div class="flex-1">
+                                    <div class="flex justify-between items-start mb-1">
+                                        <h3 class="font-semibold text-lg text-slate-800">Bem-vindo ao Construktor</h3>
+                                        <button class="close-tip-btn text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100" data-tip-id="welcome-tip">
+                                            <i class="fa-solid fa-xmark h-5 w-5"></i>
+                                        </button>
+                                    </div>
+                                    <p class="text-slate-600 text-sm sm:text-base">Comece criando módulos para seu sistema e adicionando entidades a eles.</p>
+                                    <div class="flex flex-wrap gap-2 sm:gap-3 mt-3">
+                                        <div class="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 bg-indigo-50 text-indigo-700 rounded-full text-xs sm:text-sm">
+                                            <i class="fa-solid fa-table-cells-large h-3 w-3 sm:h-4 sm:w-4"></i> Passo 1: Crie módulos
+                                        </div>
+                                        <div class="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 bg-indigo-50 text-indigo-700 rounded-full text-xs sm:text-sm">
+                                            <i class="fa-solid fa-left-right h-3 w-3 sm:h-4 sm:w-4"></i> Passo 2: Arraste entidades
+                                        </div>
+                                        <div class="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 bg-indigo-50 text-indigo-700 rounded-full text-xs sm:text-sm">
+                                            <i class="fa-solid fa-gear h-3 w-3 sm:h-4 sm:w-4"></i> Passo 3: Configure campos
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Dica sobre reorganização de módulos -->
+                        <div id="modules-tip" class="bg-amber-50 rounded-lg shadow-sm p-3 sm:p-4 mb-5 border border-amber-200 flex items-center gap-3">
+                            <div class="text-amber-600">
+                                <i class="fa-solid fa-arrows-up-down-left-right h-5 w-5 sm:h-6 sm:w-6"></i>
+                            </div>
+                            <div class="flex-1">
+                                <p class="text-amber-800 text-sm sm:text-base">Você pode reorganizar os módulos arrastando-os para mudar sua ordem.</p>
+                            </div>
+                            <button class="close-tip-btn text-amber-500 hover:text-amber-700 p-1 rounded-full hover:bg-amber-100" data-tip-id="modules-tip">
+                                <i class="fa-solid fa-xmark h-4 w-4 sm:h-5 sm:w-5"></i>
+                            </button>
+                        </div>
+                        
+                        <div id="module-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                            <!-- Módulos criados dinamicamente aparecerão aqui -->
+                        </div>
+
+                        <!-- Elemento visual para indicar onde criar módulos quando vazio -->
+                        <div id="empty-state" class="hidden flex flex-col items-center justify-center bg-white rounded-xl border-2 border-dashed border-indigo-200 p-6 sm:p-10 mt-4 text-center">
+                            <div class="bg-indigo-100 p-3 rounded-full mb-3">
+                                <i class="fa-solid fa-table-cells-large h-8 w-8 text-indigo-600"></i>
+                            </div>
+                            <h3 class="text-lg font-semibold text-slate-800 mb-2">Nenhum módulo criado</h3>
+                            <p class="text-slate-600 max-w-md mb-4 text-sm sm:text-base">Módulos ajudam a organizar as funcionalidades do seu sistema em categorias lógicas como Vendas, Compras, Recursos Humanos, etc.</p>
+                            <button id="empty-add-module-btn" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 shadow-sm">
+                                <i class="fa-solid fa-plus h-5 w-5"></i>
+                                <span>Criar seu primeiro módulo</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Botão flutuante para adicionar módulo (visível apenas em mobile) -->
+        <div class="fixed right-4 bottom-4 sm:hidden z-20">
+            <button id="mobile-add-module-btn" class="bg-indigo-600 text-white p-3 rounded-full hover:bg-indigo-700 transition-colors shadow-lg flex items-center justify-center">
+                <i class="fa-solid fa-plus h-6 w-6"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal de Perfil de Usuário -->
+    <div id="profile-modal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center z-50 hidden p-4">
+        <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 scale-95 opacity-0 transition-all duration-300">
+            <div class="flex justify-between items-center mb-5">
+                <h2 class="text-xl font-bold text-slate-800">Meu Perfil</h2>
+                <button id="close-profile-modal" class="text-slate-500 hover:text-slate-800 p-1.5 rounded-lg hover:bg-slate-100">
+                    <i class="fa-solid fa-xmark h-5 w-5"></i>
+                </button>
+            </div>
+            <div class="flex flex-col items-center mb-6">
+                <div class="relative mb-4">
+                    <img id="modal-avatar-preview" src="https://ui-avatars.com/api/?background=random" class="h-24 w-24 rounded-full border-4 border-white shadow-lg">
+                    <button id="change-avatar-button" class="absolute bottom-0 right-0 bg-indigo-600 text-white p-2 rounded-full shadow-md hover:bg-indigo-700 transition-all">
+                        <i class="fa-solid fa-camera h-4 w-4"></i>
+                    </button>
+                </div>
+                <input type="file" id="avatar-upload-input" accept="image/*" class="hidden">
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Apelido</label>
+                    <input id="nickname-input" type="text" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">E-mail</label>
+                    <input id="email-input" type="email" class="w-full px-3 py-2 bg-slate-100 border border-slate-300 rounded-lg" readonly>
+                </div>
+            </div>
+            <div class="flex justify-end gap-3 mt-6">
+                <button id="cancel-profile-button" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200">Cancelar</button>
+                <button id="save-profile-button" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Salvar</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal de Convite -->
+    <div id="invite-modal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center z-50 hidden p-4">
+        <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 scale-95 opacity-0 transition-all duration-300">
+            <div class="flex justify-between items-center mb-5">
+                <h2 class="text-xl font-bold text-slate-800">Convidar Usuário</h2>
+                <button id="close-invite-modal" class="text-slate-500 hover:text-slate-800 p-1.5 rounded-lg hover:bg-slate-100">
+                    <i class="fa-solid fa-xmark h-5 w-5"></i>
+                </button>
+            </div>
+            <p class="text-slate-600 mb-4">Convide outros usuários para acessar o sistema como administrador.</p>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">E-mail do Usuário</label>
+                    <input id="invite-email-input" type="email" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" placeholder="ex: usuario@email.com">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Nível de Permissão</label>
+                    <select id="permission-select" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="admin">Administrador (Acesso Total)</option>
+                        <option value="editor" disabled>Editor (Em breve)</option>
+                        <option value="viewer" disabled>Leitor (Em breve)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="flex justify-end gap-3 mt-6">
+                <button id="cancel-invite-button" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200">Cancelar</button>
+                <button id="send-invite-button" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Enviar Convite</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal de Gerenciar Convites -->
+    <div id="manage-invites-modal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center z-50 hidden p-4">
+        <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl p-6 scale-95 opacity-0 transition-all duration-300">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-slate-800">Gerenciar Convites</h2>
+                <button id="close-manage-invites-modal" class="text-slate-500 hover:text-slate-800 p-1.5 rounded-lg hover:bg-slate-100">
+                    <i class="fa-solid fa-xmark h-5 w-5"></i>
+                </button>
+            </div>
+            
+            <div class="flex mb-4">
+                <button id="tab-invites-sent" class="flex-1 py-2 px-4 text-center border-b-2 border-indigo-600 font-medium text-indigo-600">Enviados</button>
+                <button id="tab-invites-received" class="flex-1 py-2 px-4 text-center border-b-2 border-slate-200 font-medium text-slate-500 relative">
+                    Recebidos
+                    <span id="received-invites-badge" class="absolute hidden top-1 right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">0</span>
+                </button>
+                <button id="tab-invites-access" class="flex-1 py-2 px-4 text-center border-b-2 border-slate-200 font-medium text-slate-500">
+                    Acessos
+                </button>
+            </div>
+            
+            <div id="sent-invites-container" class="overflow-y-auto max-h-64">
+                <div class="bg-slate-50 rounded-lg p-4 text-center text-slate-500" id="no-sent-invites">
+                    <i class="fa-solid fa-circle-info h-6 w-6 mx-auto mb-2 text-slate-400"></i>
+                    <p>Você ainda não enviou nenhum convite</p>
+                </div>
+                <!-- Aqui serão adicionados os convites enviados dinamicamente -->
+                <div class="space-y-3" id="sent-invites-list">
+                    <!-- Exemplo de cartão de convite enviado -->
+                </div>
+            </div>
+            
+            <div id="received-invites-container" class="overflow-y-auto max-h-64 hidden">
+                <div class="bg-slate-50 rounded-lg p-4 text-center text-slate-500" id="no-received-invites">
+                    <i class="fa-solid fa-circle-info h-6 w-6 mx-auto mb-2 text-slate-400"></i>
+                    <p>Você não recebeu nenhum convite</p>
+                </div>
+                <!-- Aqui serão adicionados os convites recebidos dinamicamente -->
+                <div class="space-y-3" id="received-invites-list">
+                    <!-- Exemplo de cartão de convite recebido -->
+                </div>
+            </div>
+            
+            <div id="access-management-container" class="overflow-y-auto max-h-64 hidden">
+                <div class="bg-slate-50 rounded-lg p-4 text-center text-slate-500" id="no-shared-access">
+                    <i class="fa-solid fa-circle-info h-6 w-6 mx-auto mb-2 text-slate-400"></i>
+                    <p>Nenhum usuário com acesso compartilhado encontrado</p>
+                </div>
+                <!-- Aqui serão adicionados os usuários com acesso compartilhado -->
+                <div class="space-y-3" id="shared-access-list">
+                    <!-- Os usuários com acesso serão adicionados aqui dinamicamente -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Construção de Entidade -->
+    <div id="entity-builder-modal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center z-50 hidden p-4">
+        <div class="bg-white w-full max-w-6xl h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden scale-95 opacity-0 transition-all duration-300">
+            <div class="p-4 sm:p-5 border-b border-slate-200 flex justify-between items-center bg-gradient-to-r from-indigo-50 to-purple-50">
+                <!-- Breadcrumb para navegação hierárquica -->
+                <div id="modal-breadcrumb" class="flex items-center text-sm sm:text-lg overflow-hidden"></div>
+                <div class="flex items-center gap-2 sm:gap-4">
+                    <button id="modal-back-btn" class="hidden text-slate-600 bg-white hover:bg-slate-100 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg transition-colors flex items-center gap-1 sm:gap-2 shadow-sm border border-slate-200 text-sm">
+                        <i class="fa-solid fa-arrow-left h-4 w-4 sm:h-5 sm:w-5"></i>
+                        <span class="hidden sm:inline">Voltar</span>
+                    </button>
+                    <button id="save-structure-btn" class="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-3 sm:px-5 py-1.5 sm:py-2 rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-colors flex items-center gap-1 sm:gap-2 shadow-md text-sm">
+                        <i class="fa-solid fa-floppy-disk h-4 w-4 sm:h-5 sm:w-5"></i>
+                        <span>Guardar</span>
+                    </button>
+                    <button id="close-modal-btn" class="text-slate-500 hover:text-slate-800 bg-white p-1.5 rounded-lg hover:bg-slate-100 transition-colors">
+                        <i class="fa-solid fa-xmark h-5 w-5 sm:h-6 sm:w-6"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="flex-1 flex flex-col sm:flex-row overflow-hidden">
+                <!-- Sidebar do modal - colapsável em mobile -->
+                <div id="modal-sidebar-container" class="w-full sm:w-72 bg-slate-50 border-b sm:border-r sm:border-b-0 border-slate-200 sm:flex-shrink-0 sm:overflow-y-auto">
+                    <div class="p-4 flex items-center justify-between sm:hidden border-b border-slate-200">
+                        <h3 class="font-bold text-md text-indigo-800">Caixa de Ferramentas</h3>
+                        <button id="toggle-modal-sidebar" class="p-1 rounded-lg text-slate-600 hover:bg-slate-100">
+                            <i class="fa-solid fa-chevron-down h-5 w-5"></i>
+                        </button>
+                    </div>
+                    
+                    <div id="modal-sidebar-content" class="p-4 sm:p-5 hidden sm:block">
+                        <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 mb-4">
+                            <h3 class="font-bold text-md mb-2 flex items-center gap-2 text-indigo-800">
+                                <i class="fa-solid fa-wrench text-indigo-600"></i> Caixa de Ferramentas
+                            </h3>
+                            <p class="text-xs text-slate-500 mb-3">Arraste os campos para o formulário à direita</p>
+                            <div id="fields-toolbox" class="space-y-2.5"></div>
+                        </div>
+                        
+                        <div class="bg-amber-50 p-4 rounded-lg border border-amber-200 shadow-sm">
+                            <h3 class="font-semibold text-amber-800 flex items-center gap-2 mb-2">
+                                <i class="fa-solid fa-lightbulb h-4 w-4 text-amber-500"></i> Ajuda
+                            </h3>
+                            <ul class="text-sm text-amber-700 space-y-2 list-disc pl-4">
+                                <li>Arraste campos da caixa de ferramentas para o formulário</li>
+                                <li>Configure cada campo com nome e propriedades</li>
+                                <li>Salve a estrutura quando terminar</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Área do formulário -->
+                <main class="flex-1 overflow-y-auto bg-slate-100 p-4 sm:p-6">
+                    <div class="bg-white p-4 sm:p-6 rounded-xl shadow-md min-h-full border border-slate-200">
+                        <h3 class="text-base sm:text-lg font-semibold text-slate-800 mb-3 sm:mb-4 flex items-center gap-2">
+                            <i class="fa-solid fa-align-left text-indigo-500 h-4 w-4 sm:h-5 sm:w-5"></i> Editor de Formulário
+                        </h3>
+                        <p class="text-xs sm:text-sm text-slate-500 mb-4 sm:mb-6">Crie a estrutura do formulário arrastando os campos da caixa de ferramentas</p>
+                        
+                        <div id="form-builder-dropzone" class="space-y-3 min-h-[200px] sm:min-h-[300px] bg-slate-50 p-3 sm:p-4 rounded-lg border-2 border-dashed border-slate-200"></div>
+                        
+                        <div id="empty-form-state" class="hidden flex flex-col items-center justify-center text-center py-6 sm:py-10">
+                            <div class="bg-indigo-100 p-3 rounded-full mb-3">
+                                <i class="fa-solid fa-arrow-left h-6 w-6 sm:h-8 sm:w-8 text-indigo-600"></i>
+                            </div>
+                            <h3 class="text-base sm:text-lg font-semibold text-slate-700 mb-2">Formulário Vazio</h3>
+                            <p class="text-slate-500 max-w-md text-sm">Arraste campos da caixa de ferramentas para começar a criar seu formulário.</p>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Painel de Propriedades do Campo (inspirado no Notion) -->
+    <div id="field-properties-panel" class="fixed inset-y-0 right-0 bg-white w-full sm:w-96 shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out z-50 flex flex-col">
+        <!-- Cabeçalho do painel -->
+        <div class="p-4 sm:p-5 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <i id="field-properties-icon" class="fa-solid fa-calendar h-5 w-5 text-indigo-600"></i>
+                <h3 class="font-bold text-lg text-slate-800">Propriedades do Campo</h3>
+            </div>
+            <button id="close-properties-panel" class="text-slate-500 hover:text-slate-800 p-1.5 rounded-lg hover:bg-slate-100 transition-colors">
+                <i class="fa-solid fa-xmark h-5 w-5"></i>
+            </button>
+        </div>
+        
+        <!-- Conteúdo do painel com rolagem -->
+        <div class="flex-1 overflow-y-auto p-4 sm:p-5">
+            <!-- Informações Básicas (comum a todos os tipos) -->
+            <div class="mb-6">
+                <h4 class="text-base font-semibold text-slate-700 mb-3">Informações Básicas</h4>
+                <div class="space-y-4">
+                    <div>
+                        <label for="field-label" class="block text-sm font-medium text-slate-700 mb-1">Nome do Campo</label>
+                        <input type="text" id="field-label" class="w-full p-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Ex: Data de Nascimento">
+                    </div>
+                    <div>
+                        <label for="field-description" class="block text-sm font-medium text-slate-700 mb-1">Descrição (opcional)</label>
+                        <input type="text" id="field-description" class="w-full p-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Ex: Informe a data de nascimento">
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="field-required" class="rounded text-indigo-600 focus:ring-indigo-500">
+                        <label for="field-required" class="text-sm font-medium text-slate-700">Campo obrigatório</label>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Configurações específicas do tipo de campo -->
+            <div>
+                <h4 class="text-base font-semibold text-slate-700 mb-3">Configurações Específicas</h4>
+                
+                <!-- Configurações para CAMPO DE DATA -->
+                <div id="date-field-config" class="field-type-config space-y-5">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Formato de Data</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="date-format" value="DD/MM/AAAA" class="text-indigo-600 focus:ring-indigo-500" checked>
+                                <span class="text-sm">DD/MM/AAAA (Padrão Brasil)</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="date-format" value="MM/DD/AAAA" class="text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-sm">MM/DD/AAAA (Padrão Americano)</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="date-format" value="AAAA-MM-DD" class="text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-sm">AAAA-MM-DD (Padrão ISO)</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="date-format" value="complete" class="text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-sm">25 de junho de 2025 (Completo)</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Inclusão de Horas</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="time-format" value="none" class="text-indigo-600 focus:ring-indigo-500" checked>
+                                <span class="text-sm">Sem Horas (Apenas data)</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="time-format" value="HH:mm" class="text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-sm">Com Horas e Minutos (HH:mm)</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="time-format" value="HH:mm:ss" class="text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-sm">Com Horas, Minutos e Segundos (HH:mm:ss)</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Comportamento do Campo</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="date-behavior" value="singleDate" class="text-indigo-600 focus:ring-indigo-500" checked>
+                                <span class="text-sm">Data Única</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="date-behavior" value="dateRange" class="text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-sm">Intervalo de Datas (Início e Fim)</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Valor Padrão</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="date-default" value="none" class="text-indigo-600 focus:ring-indigo-500" checked>
+                                <span class="text-sm">Nenhum</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="date-default" value="today" class="text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-sm">Data de Hoje</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Configurações para CAMPO DE TEXTO -->
+                <div id="text-field-config" class="field-type-config space-y-5 hidden">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Tipo de Conteúdo</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="text-content-type" value="text" class="text-indigo-600 focus:ring-indigo-500" checked>
+                                <span class="text-sm">Texto Simples</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="text-content-type" value="email" class="text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-sm">Email (com validação)</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="text-content-type" value="url" class="text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-sm">URL (com validação)</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Aparência</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="text-appearance" value="singleLine" class="text-indigo-600 focus:ring-indigo-500" checked>
+                                <span class="text-sm">Linha Única</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="text-appearance" value="multiLine" class="text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-sm">Múltiplas Linhas</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label for="text-max-length" class="block text-sm font-medium text-slate-700 mb-2">Limite de Caracteres</label>
+                        <input type="number" id="text-max-length" class="w-full p-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" min="0" placeholder="Deixe em branco para ilimitado">
+                    </div>
+                </div>
+                
+                <!-- Configurações para CAMPO DE NÚMERO -->
+                <div id="number-field-config" class="field-type-config space-y-5 hidden">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Formato do Número</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="number-format" value="plain" class="text-indigo-600 focus:ring-indigo-500" checked>
+                                <span class="text-sm">Número Simples</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="number-format" value="thousands" class="text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-sm">Com Separador de Milhar (1.234.567)</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="number-format" value="decimal" class="text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-sm">Número Decimal</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="number-format" value="currency" class="text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-sm">Moeda</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="number-format" value="percentage" class="text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-sm">Porcentagem (%)</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div id="decimal-precision-container" class="hidden">
+                        <label for="decimal-precision" class="block text-sm font-medium text-slate-700 mb-2">Casas Decimais</label>
+                        <input type="number" id="decimal-precision" class="w-full p-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" min="0" max="10" value="2">
+                    </div>
+                    
+                    <div id="currency-symbol-container" class="hidden">
+                        <label for="currency-symbol" class="block text-sm font-medium text-slate-700 mb-2">Símbolo da Moeda</label>
+                        <input type="text" id="currency-symbol" class="w-full p-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Ex: R$, $, €" value="R$">
+                    </div>
+                    
+                    <div>
+                        <label for="number-min-value" class="block text-sm font-medium text-slate-700 mb-2">Valor Mínimo (opcional)</label>
+                        <input type="number" id="number-min-value" class="w-full p-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Deixe em branco para ilimitado">
+                    </div>
+                    
+                    <div>
+                        <label for="number-max-value" class="block text-sm font-medium text-slate-700 mb-2">Valor Máximo (opcional)</label>
+                        <input type="number" id="number-max-value" class="w-full p-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Deixe em branco para ilimitado">
+                    </div>
+                </div>
+                
+                <!-- Configurações para CAMPO DE SELEÇÃO -->
+                <div id="select-field-config" class="field-type-config space-y-5 hidden">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Comportamento da Seleção</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="select-behavior" value="single" class="text-indigo-600 focus:ring-indigo-500" checked>
+                                <span class="text-sm">Permitir apenas uma opção</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="select-behavior" value="multiple" class="text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-sm">Permitir múltiplas opções</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Aparência</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="select-appearance" value="dropdown" class="text-indigo-600 focus:ring-indigo-500" checked>
+                                <span class="text-sm">Lista Suspensa (Dropdown)</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="select-appearance" value="buttons" class="text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-sm">Lista de Botões (Radio/Checkbox)</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <label class="text-sm font-medium text-slate-700">Opções</label>
+                            <button id="add-select-option" class="text-xs bg-indigo-50 text-indigo-600 px-2 py-1 rounded-md hover:bg-indigo-100 transition-colors">
+                                <i data-lucide="plus-circle" class="h-3 w-3 inline mr-1"></i> Adicionar
+                            </button>
+                        </div>
+                        
+                        <div id="select-options-container" class="space-y-2 bg-slate-50 p-3 rounded-lg border border-slate-200 min-h-[100px] max-h-[200px] overflow-y-auto">
+                            <!-- As opções serão adicionadas aqui dinamicamente -->
+                            <div class="select-option-item flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200">
+                                <div class="flex-1">
+                                    <input type="text" class="w-full p-1.5 border border-slate-300 rounded text-sm" placeholder="Nome da opção" value="Opção 1">
+                                </div>
+                                <button class="move-option-up text-slate-500 hover:text-slate-700 p-1">
+                                    <i data-lucide="chevron-up" class="h-4 w-4"></i>
+                                </button>
+                                <button class="move-option-down text-slate-500 hover:text-slate-700 p-1">
+                                    <i data-lucide="chevron-down" class="h-4 w-4"></i>
+                                </button>
+                                <button class="delete-option text-slate-500 hover:text-red-500 p-1">
+                                    <i data-lucide="trash-2" class="h-4 w-4"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Rodapé do painel com botões -->
+        <div class="p-4 sm:p-5 border-t border-slate-200 bg-gradient-to-r from-slate-50 to-white flex gap-3 justify-end">
+            <button id="cancel-field-properties" class="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors">
+                Cancelar
+            </button>
+            <button id="apply-field-properties" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
+                Aplicar
+            </button>
+        </div>
+    </div>
+    
+    <!-- TEMPLATES -->
+    <template id="module-template">
+        <div class="module-quadro bg-white rounded-xl shadow-md overflow-hidden border border-slate-200 hover:shadow-lg transition-shadow" data-module-id="">
+            <div class="bg-gradient-to-r from-indigo-500 to-purple-600 p-3 sm:p-4 text-white">
+                <div class="flex justify-between items-center">
+                    <h3 class="module-title text-base sm:text-lg font-bold"></h3>
+                    <button class="delete-module-btn text-white/70 hover:text-white p-1 sm:p-1.5 rounded-md transition-colors hover:bg-white/10">
+                        <i class="fa-solid fa-trash-can h-4 w-4 sm:h-5 sm:w-5"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="entities-dropzone p-3 sm:p-4 space-y-2 sm:space-y-3 min-h-[150px] sm:min-h-[220px] bg-gradient-to-b from-indigo-50/50 to-white"></div>
+            <div class="border-t border-slate-200 p-2 sm:p-3 bg-slate-50/80">
+                <div class="text-xs text-slate-500 flex items-center gap-1.5">
+                    <i class="fa-solid fa-left-right h-3 w-3 sm:h-3.5 sm:w-3.5"></i>
+                    <span>Arraste entidades para este módulo</span>
+                </div>
+            </div>
+        </div>
+    </template>
+    
+    <template id="entity-card-template">
+        <div class="entity-card bg-white p-3 sm:p-3.5 rounded-lg border border-slate-200 shadow-sm flex items-center justify-between cursor-grab transition-all hover:shadow-md hover:border-indigo-200 active:shadow-inner" data-entity-id="" data-entity-name="" data-entity-icon="">
+            <div class="flex items-center gap-2 sm:gap-3">
+                <div class="h-7 w-7 sm:h-8 sm:w-8 rounded-md bg-indigo-100 flex items-center justify-center text-indigo-600">
+                    <i class="entity-icon"></i>
+                </div>
+                <span class="entity-name font-medium text-slate-700 text-sm sm:text-base"></span>
+            </div>
+            <div class="flex items-center gap-1 sm:gap-2">
+                <button class="delete-custom-entity-btn text-slate-400 hover:text-red-600 p-1 rounded-md transition-colors hidden">
+                    <i class="fa-solid fa-trash-can h-4 w-4"></i>
+                </button>
+                <i class="fa-solid fa-grip-vertical text-slate-400 h-4 w-4 sm:h-5 sm:w-5"></i>
+            </div>
+        </div>
+    </template>
+    
+    <template id="dropped-entity-card-template">
+        <div class="dropped-entity-card bg-white p-3 sm:p-4 rounded-lg border-l-4 border border-indigo-300 border-l-indigo-500 shadow-sm flex items-center justify-between animate-pulse hover:shadow-md transition-shadow" data-entity-id="" data-entity-name="">
+            <div class="flex items-center gap-2 sm:gap-3">
+                <div class="h-8 w-8 sm:h-9 sm:w-9 rounded-md bg-indigo-100 flex items-center justify-center text-indigo-600">
+                    <i class="entity-icon"></i>
+                </div>
+                <div>
+                    <span class="entity-name font-semibold text-slate-700 block text-sm sm:text-base"></span>
+                    <span class="text-xs text-slate-500 hidden sm:inline">Clique para configurar</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-1 sm:gap-2">
+                <button class="configure-btn text-indigo-600 hover:text-indigo-800 p-1 sm:p-1.5 rounded-md transition-colors hover:bg-indigo-50">
+                    <i class="fa-solid fa-gear h-4 w-4 sm:h-5 sm:w-5"></i>
+                </button>
+                <button class="delete-entity-btn text-slate-500 hover:text-red-600 p-1 sm:p-1.5 rounded-md transition-colors hover:bg-red-50">
+                    <i class="fa-solid fa-trash-can h-4 w-4 sm:h-5 sm:w-5"></i>
+                </button>
+            </div>
+        </div>
+    </template>
+    
+    <template id="toolbox-field-template">
+        <div class="toolbox-item bg-white p-2.5 sm:p-3 rounded-lg border border-slate-200 shadow-sm flex items-center gap-2 sm:gap-3 cursor-grab hover:border-indigo-300 hover:shadow transition-all active:shadow-inner" data-field-type="">
+            <div class="h-6 w-6 sm:h-7 sm:w-7 rounded-md bg-indigo-100 flex items-center justify-center text-indigo-600">
+                <i class="field-icon"></i>
+            </div>
+            <span class="field-name font-medium text-slate-700 text-xs sm:text-sm"></span>
+        </div>
+    </template>
+    
+    <template id="form-field-template">
+        <div class="form-field-card bg-white p-3 sm:p-4 rounded-lg border border-slate-200 shadow-sm flex items-center justify-between hover:border-indigo-200 transition-colors" data-field-id="">
+            <div class="flex items-center gap-2 sm:gap-3">
+                <i class="fa-solid fa-grip-vertical cursor-move text-slate-400 h-4 w-4 sm:h-5 sm:w-5"></i>
+                <div class="h-7 w-7 sm:h-8 sm:w-8 rounded-md bg-indigo-100 flex items-center justify-center text-indigo-600">
+                    <i class="field-icon"></i>
+                </div>
+                <div class="flex flex-col">
+                    <span class="field-label font-semibold text-slate-700 text-sm sm:text-base"></span>
+                    <span class="field-type text-xs text-slate-500"></span>
+                </div>
+            </div>
+            <div class="flex items-center gap-1 sm:gap-1.5">
+                <button class="edit-sub-entity-btn text-emerald-600 hover:text-emerald-700 p-1 sm:p-1.5 rounded-md transition-colors hover:bg-emerald-50 hidden" title="Editar Estrutura da Sub-Entidade">
+                    <i class="fa-solid fa-file-pen h-4 w-4 sm:h-5 sm:w-5"></i>
+                </button>
+                <button class="edit-field-btn text-blue-600 hover:text-blue-700 p-1 sm:p-1.5 rounded-md transition-colors hover:bg-blue-50" title="Editar Propriedade">
+                    <i class="fa-solid fa-pen h-4 w-4 sm:h-5 sm:w-5"></i>
+                </button>
+                <button class="delete-field-btn text-slate-500 hover:text-red-600 p-1 sm:p-1.5 rounded-md transition-colors hover:bg-red-50" title="Eliminar Propriedade">
+                    <i class="fa-solid fa-trash-can h-4 w-4 sm:h-5 sm:w-5"></i>
+                </button>
+            </div>
+        </div>
+    </template>
+
+    <!-- Template para Convite Enviado -->
+    <template id="sent-invite-template">
+        <div class="invite-card bg-white rounded-lg border border-slate-200 shadow-sm p-3" data-invite-id="">
+            <div class="flex flex-col">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <div class="flex items-center gap-2 mb-1">
+                            <i class="fa-solid fa-envelope h-4 w-4 text-indigo-500"></i>
+                            <span class="invite-email font-medium text-slate-700"></span>
+                        </div>
+                        <div class="flex items-center gap-1 text-xs text-slate-500">
+                            <i data-lucide="clock" class="h-3 w-3"></i>
+                            <span class="invite-date"></span>
+                        </div>
+                        <div class="mt-2">
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium invite-status-badge"></span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex gap-2 mt-3 justify-end cancel-invite-container">
+                    <button class="cancel-invite-btn text-slate-700 hover:text-red-500 px-3 py-1.5 flex items-center gap-1 rounded-md bg-slate-50">
+                        <i data-lucide="x" class="h-4 w-4"></i>
+                        <span class="text-sm font-medium">Cancelar</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- Template para Convite Recebido -->
+    <template id="received-invite-template">
+        <div class="invite-card bg-white rounded-lg border border-slate-200 shadow-sm p-3" data-invite-id="">
+            <div class="flex flex-col">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <div class="flex items-center gap-2 mb-1">
+                            <i data-lucide="user" class="h-4 w-4 text-indigo-500"></i>
+                            <span class="invite-sender font-medium text-slate-700"></span>
+                        </div>
+                        <div class="flex items-center gap-1 text-xs text-slate-500">
+                            <i data-lucide="clock" class="h-3 w-3"></i>
+                            <span class="invite-date"></span>
+                        </div>
+                        <div class="mt-1 text-xs text-slate-600">
+                            <span>Permissão: </span>
+                            <span class="invite-permission font-medium"></span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex gap-2 mt-3 justify-end">
+                    <button class="accept-invite-btn text-emerald-600 hover:text-emerald-700 px-3 py-1.5 flex items-center gap-1 rounded-md bg-emerald-50">
+                        <i data-lucide="check" class="h-4 w-4"></i>
+                        <span class="text-sm font-medium">Aceitar</span>
+                    </button>
+                    <button class="decline-invite-btn text-slate-700 hover:text-red-500 px-3 py-1.5 flex items-center gap-1 rounded-md bg-slate-50">
+                        <i data-lucide="x" class="h-4 w-4"></i>
+                        <span class="text-sm font-medium">Recusar</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </template>
+    
+    <!-- Template para Recurso Compartilhado -->
+    <template id="shared-resource-template">
+        <div class="shared-resource-item bg-white rounded-lg border border-emerald-100 shadow-sm p-3 hover:shadow-md transition-shadow" data-resource-id="" data-owner-id="" data-resource-type="" data-role="">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <div class="h-8 w-8 rounded-md bg-emerald-100 flex items-center justify-center text-emerald-600">
+                        <i data-lucide="layout-grid" class="h-5 w-5"></i>
+                    </div>
+                    <div>
+                        <span class="shared-resource-owner font-medium text-slate-700 block text-sm">Creator de</span>
+                        <span class="shared-resource-role text-xs text-slate-500">Permissão: </span>
+                    </div>
+                </div>
+                <button class="access-shared-resource-btn bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-md hover:bg-emerald-100 transition-colors text-sm flex items-center gap-1">
+                    <i data-lucide="log-in" class="h-4 w-4"></i>
+                    <span>Acessar</span>
+                </button>
+            </div>
+        </div>
+    </template>
+    
+    <!-- Template para Usuário com Acesso Compartilhado -->
+    <template id="shared-access-template">
+        <div class="shared-access-item bg-white rounded-lg border border-slate-200 shadow-sm p-3" data-user-id="" data-email="" data-resource-id="" data-role="">
+            <div class="flex flex-col">
+                <div class="flex justify-between items-start">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2 mb-1">
+                            <i data-lucide="user" class="h-4 w-4 text-indigo-500"></i>
+                            <span class="user-email font-medium text-slate-700"></span>
+                        </div>
+                        <div class="flex items-center gap-2 mt-1">
+                            <span class="text-xs text-slate-600">Permissão:</span>
+                            <select class="permission-select text-xs border border-slate-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                                <option value="admin">Administrador</option>
+                                <option value="editor">Editor</option>
+                                <option value="viewer">Leitor</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex gap-2 mt-3 justify-end">
+                    <button class="save-permission-btn text-emerald-600 hover:text-emerald-700 px-3 py-1.5 flex items-center gap-1 rounded-md bg-emerald-50 hidden">
+                        <i data-lucide="check" class="h-4 w-4"></i>
+                        <span class="text-sm font-medium">Salvar</span>
+                    </button>
+                    <button class="remove-access-btn text-slate-700 hover:text-red-500 px-3 py-1.5 flex items-center gap-1 rounded-md bg-slate-50">
+                        <i data-lucide="trash-2" class="h-4 w-4"></i>
+                        <span class="text-sm font-medium">Remover</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- Scripts Modularizados -->
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>
