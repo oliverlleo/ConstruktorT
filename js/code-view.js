@@ -1,25 +1,101 @@
 // Estrutura de arquivos e diretórios do sistema - VERSÃO ATUALIZADA
 const fileStructure = {
     // Arquivos principais
-    'index.html': { path: '/index.html', type: 'html' },
-    'css/style.css': { path: '/css/style.css', type: 'css' },
-    'js/config.js': { path: '/js/config.js', type: 'javascript' },
-    'js/autenticacao.js': { path: '/js/autenticacao.js', type: 'javascript' },
-    'js/database.js': { path: '/js/database.js', type: 'javascript' },
-    'js/ui.js': { path: '/js/ui.js', type: 'javascript' },
-    'js/main.js': { path: '/js/main.js', type: 'javascript' },
-    'js/workspaces.js': { path: '/js/workspaces.js', type: 'javascript' },
-    'js/login.js': { path: '/js/login.js', type: 'javascript' },
-    'js/code-view.js': { path: '/js/code-view.js', type: 'javascript' },
-    'js/user/userProfile.js': { path: '/js/user/userProfile.js', type: 'javascript' },
-    'js/user/invitations.js': { path: '/js/user/invitations.js', type: 'javascript' },
-    'pages/login.html': { path: '/pages/login.html', type: 'html' },
-    'pages/code-view.html': { path: '/pages/code-view.html', type: 'html' },
+    'index.html': { path: '../index.html', type: 'html' },
+    'css/style.css': { path: '../css/style.css', type: 'css' },
+    'js/config.js': { path: '../js/config.js', type: 'javascript' },
+    'js/autenticacao.js': { path: '../js/autenticacao.js', type: 'javascript' },
+    'js/database.js': { path: '../js/database.js', type: 'javascript' },
+    'js/ui.js': { path: '../js/ui.js', type: 'javascript' },
+    'js/main.js': { path: '../js/main.js', type: 'javascript' },
+    'js/workspaces.js': { path: '../js/workspaces.js', type: 'javascript' },
+    'js/login.js': { path: '../js/login.js', type: 'javascript' },
+    'js/code-view.js': { path: '../js/code-view.js', type: 'javascript' },
+    'js/dark-mode.js': { path: '../js/dark-mode.js', type: 'javascript' },
+    'js/ui-enhancements.js': { path: '../js/ui-enhancements.js', type: 'javascript' },
+    'js/user/userProfile.js': { path: '../js/user/userProfile.js', type: 'javascript' },
+    'js/user/invitations.js': { path: '../js/user/invitations.js', type: 'javascript' },
+    'pages/login.html': { path: '../pages/login.html', type: 'html' },
+    'pages/code-view.html': { path: 'code-view.html', type: 'html' },
+    'pages/user-view.html': { path: '../pages/user-view.html', type: 'html' },
+    
+    // Arquivos de imagem
+    'imagem/logo.png': { path: '../imagem/logo.png', type: 'image' },
     
     // Arquivos de documentação e configuração
-    'YOUWARE.md': { path: '/YOUWARE.md', type: 'markdown' },
-    'firebase_rules.json': { path: '/firebase_rules.json', type: 'json' },
-    'database-rules-guide.md': { path: '/database-rules-guide.md', type: 'markdown' }
+    'YOUWARE.md': { path: '../YOUWARE.md', type: 'markdown' },
+    'README.md': { content: `# Construktor - Sistema de Criação de ERP/CRM
+
+## Descrição
+Construktor é uma plataforma visual que permite a criação de sistemas ERP/CRM através de uma interface intuitiva de arrastar e soltar (drag and drop). Oferece funcionalidades para definir módulos, entidades e campos personalizados.
+
+## Funcionalidades Principais
+
+### Construção de Módulos
+- Crie módulos para organizar seu sistema (ex: Vendas, Compras, RH)
+- Arraste e solte entidades nos módulos
+- Reorganize módulos livremente
+- **NOVO**: Edite nomes de módulos facilmente
+- **NOVO**: Confirmação ao remover entidades
+
+### Gerenciamento de Entidades
+- Biblioteca de entidades pré-definidas
+- Criação de entidades personalizadas
+- Personalização de campos e propriedades
+- **NOVO**: Edição de nomes de entidades
+- **NOVO**: Suporte a nomes longos com quebra de linha
+- **NOVO**: Transferência de entidades entre módulos
+
+### Interface Responsiva e Personalizável
+- Design mobile-first
+- Suporte a dispositivos touchscreen
+- **NOVO**: Biblioteca de componentes redimensionável
+- **NOVO**: Modo escuro/claro com tema padrão claro
+- **NOVO**: Novo logo personalizado
+
+### Melhorias de UX
+- **NOVO**: Confirmação antes de excluir entidades
+- **NOVO**: Feedback visual durante operações de drag-and-drop
+- **NOVO**: Persistência de preferências de interface
+- Funcionalidade Enter para envio de formulários
+
+## Tecnologias Utilizadas
+- HTML5, CSS3, JavaScript (ES6+)
+- Firebase (Autenticação, Banco de Dados, Storage)
+- TailwindCSS para estilização
+- SortableJS para funcionalidades de arrastar e soltar
+- Lucide e Font Awesome para ícones
+- SweetAlert2 para diálogos
+
+## Arquitetura Modular
+- **js/main.js**: Coordenação geral da aplicação
+- **js/ui-enhancements.js**: Melhorias avançadas de interface
+- **js/dark-mode.js**: Gerenciamento de temas
+- **js/login.js**: Sistema de autenticação
+- **css/style.css**: Estilos responsivos e modo escuro
+
+## Como Usar
+1. Faça login com sua conta
+2. Crie uma área de trabalho
+3. Adicione módulos ao seu sistema
+4. Arraste entidades para os módulos
+5. **NOVO**: Edite nomes clicando nos botões de edição
+6. **NOVO**: Redimensione a biblioteca conforme necessário
+7. Configure campos e visualize sua criação
+
+## Novidades desta Versão
+- ✅ Tema padrão claro (não mais escuro)
+- ✅ Edição de nomes de módulos e entidades
+- ✅ Transferência de entidades entre módulos (corrigido)
+- ✅ Barra de redimensionamento da biblioteca (apenas em desktop)
+- ✅ Novo logo personalizado
+- ✅ Melhor feedback visual
+- ✅ Quebra de linha para nomes longos
+- ✅ Experiência melhorada em dispositivos móveis
+- ✅ Drag and drop otimizado e corrigido
+
+## Licença
+Este projeto é protegido por direitos autorais. Todos os direitos reservados.`, type: 'markdown' }
 };
 
 // Código fonte dos arquivos
@@ -325,21 +401,22 @@ Exportada em: ${versionDate} às ${versionTime}
 
 ## ✅ Correções Aplicadas Nesta Versão
 
-### Problemas de Performance Resolvidos
-- **Corrigido**: Erros infinitos de ícones Lucide que travavam o sistema
-- **Implementado**: Sistema de debounce para atualização de ícones
-- **Otimizado**: MutationObserver com verificação inteligente de mudanças
-
-### Funcionalidades de Convites Corrigidas
-- **✅ Cancelar convites**: Agora funciona corretamente na aba "Enviados"
-- **✅ Editar permissões**: Dropdown para alterar permissões (Admin/Editor/Leitor)
-- **✅ Remover acesso**: Funcionalidade completa de remoção de usuários
-- **✅ Interface melhorada**: Botões com texto e estilo consistente
+### Sistema de Modo Escuro Implementado
+- **🌙 Modo Escuro**: Sistema completo de alternância entre modo claro e escuro
+- **☀️ Seletores de Tema**: Sol/lua na página de login e menu do usuário
+- **💾 Persistência**: Preferência salva automaticamente no localStorage
+- **🎨 Design Consistente**: Cores otimizadas para melhor experiência visual
 
 ### Melhorias na Interface
-- **Botões padronizados**: Todos os botões de ação seguem o mesmo padrão visual
-- **Feedback visual**: Melhor indicação de ações disponíveis
-- **Responsividade**: Interface otimizada para diferentes tamanhos de tela
+- **Cores Corrigidas**: Área de entidades nos módulos com cores adequadas ao modo escuro
+- **Título Login**: Nome "Construktor" agora aparece corretamente em branco no modo escuro
+- **⚡ Tecla Enter**: Formulários de login e registro respondem à tecla Enter
+- **📱 Responsividade**: Interface otimizada para diferentes tamanhos de tela
+
+### Limpeza de Código
+- **🧹 Scripts Removidos**: Scripts youware-lib removidos de todos os arquivos HTML
+- **📁 Arquivos Atualizados**: Todos os arquivos incluídos no sistema de download
+- **🔧 Modo Escuro**: Sistema dark-mode.js incluído na estrutura
 
 ## Descrição
 O Construktor é um sistema visual para construção de ERP/CRM, permitindo criar e gerenciar módulos, entidades e campos de formulários.
@@ -351,6 +428,8 @@ O Construktor é um sistema visual para construção de ERP/CRM, permitindo cria
 - 👥 Sistema completo de convites e permissões
 - 🔄 Áreas de trabalho compartilhadas
 - 🛡️ Controle granular de acesso (Admin/Editor/Leitor)
+- 🌙 Modo escuro com alternância sol/lua
+- ⚡ Suporte à tecla Enter em formulários
 
 ## Estrutura de Arquivos
 ### Arquivos Principais
@@ -358,6 +437,9 @@ O Construktor é um sistema visual para construção de ERP/CRM, permitindo cria
 - \`js/main.js\` - Arquivo JavaScript principal
 - \`js/user/invitations.js\` - Sistema de convites (TOTALMENTE REESCRITO)
 - \`js/config.js\` - Configurações da aplicação
+
+### Sistema de Temas
+- \`js/dark-mode.js\` - Gerenciador de modo escuro/claro (NOVO)
 
 ### Configuração e Documentação
 - \`firebase_rules.json\` - Regras de segurança do Firebase
@@ -372,10 +454,11 @@ O Construktor é um sistema visual para construção de ERP/CRM, permitindo cria
 - **UI**: SweetAlert2, Sortable.js
 
 ## 📝 Notas Importantes
-Esta versão inclui todas as correções críticas para:
-1. Performance e estabilidade do sistema
-2. Funcionalidades de gerenciamento de convites
-3. Interface de usuário consistente e intuitiva
+Esta versão inclui todas as correções e melhorias para:
+1. Sistema completo de modo escuro com seletores sol/lua
+2. Cores otimizadas para melhor experiência visual
+3. Funcionalidade Enter em todos os formulários de autenticação
+4. Código limpo sem dependências externas desnecessárias
 
 Para mais informações técnicas, consulte \`YOUWARE.md\`.
 `;

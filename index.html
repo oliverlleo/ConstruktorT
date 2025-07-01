@@ -1,18 +1,83 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Construktor - Construtor Visual de ERP/CRM</title>
-    
+    <link rel="icon" href="imagem/logo.png" type="image/png">
     <!-- Dependências Externas -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script>
+        // Configuração do Tailwind para modo escuro
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {}
+            }
+        }
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/js/all.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/lucide@0.395.0/dist/umd/lucide.min.js"></script>
     <script>
+        // Funções para controle do menu mobile
+        document.addEventListener('DOMContentLoaded', function() {
+            let longPressTimer = null;
+            let isDragging = false;
+            
+            // Menu mobile toggle
+            const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
+            if (mobileMenuToggle) {
+                mobileMenuToggle.addEventListener('click', function() {
+                    const sidebar = document.getElementById('desktop-sidebar');
+                    sidebar.classList.remove('-translate-x-full');
+                    sidebar.classList.add('translate-x-0');
+                });
+            }
+            
+            // Fechar menu mobile
+            const closeMobileMenu = document.getElementById('close-mobile-menu');
+            if (closeMobileMenu) {
+                closeMobileMenu.addEventListener('click', function() {
+                    const sidebar = document.getElementById('desktop-sidebar');
+                    sidebar.classList.remove('translate-x-0');
+                    sidebar.classList.add('-translate-x-full');
+                });
+            }
+            
+            // Modificar comportamento do botão + no mobile
+            const mobileAddModuleBtn = document.getElementById('mobile-add-module-btn');
+            if (mobileAddModuleBtn) {
+                mobileAddModuleBtn.addEventListener('click', function(e) {
+                    if (window.innerWidth < 640) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const sidebar = document.getElementById('desktop-sidebar');
+                        sidebar.classList.remove('-translate-x-full');
+                        sidebar.classList.add('translate-x-0');
+                        return false;
+                    }
+                }, true);
+            }
+            
+            // O listener 'touchstart' foi removido daqui. A lógica de arrastar e fechar a sidebar
+            // será gerenciada por Sortable.js em js/main.js.
+            
+            // O listener 'touchend' foi removido daqui.
+            
+            // O listener 'touchmove' foi removido daqui.
+            
+            // Adicionar evento para fechar sidebar quando clicar em uma entidade em mobile
+            document.addEventListener('click', function(e) {
+                if (window.innerWidth >= 640) return;
+                
+                // A lógica de clique conflitante que fechava a sidebar ao clicar em .entity-card foi removida.
+            });
+        });
+        
         // Configuração aprimorada para garantir que os ícones Lucide sejam registrados corretamente
         document.addEventListener('DOMContentLoaded', function() {
             if (window.lucide) {
@@ -100,7 +165,6 @@
 
     <!-- Link para o ficheiro CSS externo -->
     <link rel="stylesheet" href="css/style.css">
-</head>
 <body class="text-slate-800 bg-slate-50">
 
     <!-- Indicador de Carregamento Visual -->
@@ -118,9 +182,7 @@
                 </button>
                 <div class="relative">
                     <button id="user-menu-button" class="flex items-center gap-2 sm:gap-3 cursor-pointer p-2 rounded-lg hover:bg-slate-100">
-                        <div class="p-2 sm:p-2.5 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-lg shadow-md">
-                            <i data-lucide="layout-dashboard" class="w-4 h-4 sm:w-5 sm:h-5"></i>
-                        </div>
+                        <img src="imagem/logo.png" alt="Construktor Logo" class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg shadow-md">
                         <h1 class="text-xl sm:text-2xl font-bold text-slate-800">Construktor</h1>
                         <i class="fa-solid fa-chevron-down h-4 w-4 text-slate-400"></i>
                     </button>
@@ -160,11 +222,13 @@
                     <i class="fa-solid fa-circle-question h-5 w-5"></i>
                     <span class="text-sm font-medium hidden sm:inline">Ajuda</span>
                 </button>
-                <a href="/pages/code-view.html" target="_blank" class="bg-gradient-to-r from-green-600 to-teal-600 text-white px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg hover:from-green-700 hover:to-teal-700 transition-all shadow-md flex items-center gap-2 text-sm sm:text-base">
+                <!-- Botão Ver Código apenas visível em desktop -->
+                <a href="pages/code-view.html" target="_blank" class="hidden sm:flex bg-gradient-to-r from-green-600 to-teal-600 text-white px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg hover:from-green-700 hover:to-teal-700 transition-all shadow-md items-center gap-2 text-sm sm:text-base">
                     <i class="fa-solid fa-code h-4 w-4 sm:h-5 sm:w-5"></i>
                     <span class="font-medium">Ver Código</span>
                 </a>
-                <a href="/pages/user-view.html" target="_blank" class="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all shadow-md flex items-center gap-2 text-sm sm:text-base">
+                <!-- Botão Ver Página apenas visível em desktop -->
+                <a href="pages/user-view.html" target="_blank" class="hidden sm:flex bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all shadow-md items-center gap-2 text-sm sm:text-base">
                     <i class="fa-solid fa-eye h-4 w-4 sm:h-5 sm:w-5"></i>
                     <span class="font-medium">Ver Página</span>
                 </a>
@@ -206,12 +270,24 @@
                             <select id="workspace-select" class="flex-1 text-sm border border-slate-300 rounded-lg px-2 py-1.5 text-slate-700 bg-white focus:outline-none focus:ring-1 focus:ring-purple-500">
                                 <option value="">Carregando...</option>
                             </select>
-                            <button id="add-workspace-btn" class="bg-purple-50 text-purple-600 px-2 py-1.5 rounded-lg hover:bg-purple-100 transition-all">
-                                <i class="fa-solid fa-plus h-4 w-4"></i>
-                            </button>
+<button id="add-workspace-btn" class="bg-purple-50 text-purple-600 px-2 py-1.5 rounded-lg hover:bg-purple-100 transition-all flex items-center justify-center">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+    </svg>
+</button>
                         </div>
+
                         
-                        <div id="current-workspace-title" class="mt-1 text-xs text-slate-500 truncate">Minha Área de Trabalho</div>
+                    </div>
+
+                    <!-- Botões de ação mobile -->
+                    <div class="p-4 border-b border-slate-200 sm:hidden">
+                        <div class="flex flex-col gap-2">
+                            <a href="pages/user-view.html" target="_blank" class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-4 py-2.5 rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all shadow-md flex items-center justify-center gap-2 text-sm">
+                                <i class="fa-solid fa-eye h-4 w-4"></i>
+                                <span class="font-medium">Ver Página</span>
+                            </a>
+                        </div>
                     </div>
 
                     <div id="entity-library">
@@ -233,12 +309,17 @@
                     <!-- Seção de Recursos Compartilhados -->
                     <div id="shared-resources" class="mt-5 pt-5 border-t border-slate-200">
                         <div class="flex items-center justify-between mb-3">
-                            <h3 class="text-md font-semibold text-slate-700 flex items-center gap-1">
-                                <i class="fa-solid fa-share-nodes h-4 w-4 text-emerald-500"></i> Compartilhados Comigo
+                            <h3 class="text-sm sm:text-md font-semibold text-slate-700 flex items-center gap-1">
+                                <i class="fa-solid fa-share-nodes h-4 w-4 text-emerald-500"></i> 
+                                <span class="hidden sm:inline">Compartilhados Comigo</span>
+                                <span class="sm:hidden">Compartilhados</span>
                             </h3>
-                            <button id="refresh-shared-resources" class="text-xs bg-emerald-50 text-emerald-700 px-2 py-1 rounded-full hover:bg-emerald-100 transition-all">
-                                <i class="fa-solid fa-arrows-rotate h-3 w-3 inline-block mr-1"></i>Atualizar
-                            </button>
+                            <div>
+                                <button id="refresh-shared-resources" class="text-xs bg-emerald-50 text-emerald-700 px-2 py-1 rounded-full hover:bg-emerald-100 transition-all">
+                                    <i class="fa-solid fa-arrows-rotate h-3 w-3 inline-block mr-1"></i>
+                                    <span class="hidden sm:inline">Atualizar</span>
+                                </button>
+                            </div>
                         </div>
                         
                         <div id="shared-resources-list" class="space-y-2.5">
@@ -247,7 +328,7 @@
                         
                         <div id="no-shared-resources" class="bg-slate-50 rounded-lg p-3 text-center text-slate-500 border border-slate-200">
                             <i class="fa-solid fa-circle-info h-5 w-5 mx-auto mb-2 text-slate-400"></i>
-                            <p class="text-sm">Nenhum recurso compartilhado encontrado</p>
+                            <p class="text-xs sm:text-sm">Nenhum recurso compartilhado encontrado</p>
                         </div>
                     </div>
 
@@ -265,6 +346,9 @@
                 </div>
             </aside>
 
+            <!-- Barra de redimensionamento - visível apenas em desktop -->
+            <div id="resize-handle" class="cursor-col-resize w-1 bg-indigo-300 hover:bg-indigo-500 transition-colors absolute inset-y-0 left-80 z-30 opacity-0 sm:opacity-100 hover:w-2 hover:opacity-70 hidden sm:block"></div>
+            
             <!-- Conteúdo principal -->
             <section class="flex-1 overflow-hidden flex flex-col sm:ml-80">
                 <div class="border-b border-slate-200 bg-white py-3 px-4 sm:px-6 flex justify-between items-center shadow-sm">
@@ -342,10 +426,10 @@
             </section>
         </main>
 
-        <!-- Botão flutuante para adicionar módulo (visível apenas em mobile) -->
+        <!-- Botão flutuante para abrir entidades no mobile / adicionar módulo no desktop -->
         <div class="fixed right-4 bottom-4 sm:hidden z-20">
             <button id="mobile-add-module-btn" class="bg-indigo-600 text-white p-3 rounded-full hover:bg-indigo-700 transition-colors shadow-lg flex items-center justify-center">
-                <i class="fa-solid fa-plus h-6 w-6"></i>
+                <i class="fa-solid fa-box-archive h-6 w-6"></i>
             </button>
         </div>
     </div>
@@ -803,6 +887,223 @@
                         </div>
                     </div>
                 </div>
+                
+                <!-- ===== CONFIGURAÇÕES PARA NOVOS TIPOS DE CAMPO ===== -->
+                
+                <!-- Configurações para CAMPO PESSOA -->
+                <div id="person-field-config" class="field-type-config space-y-5 hidden">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Fonte das Pessoas</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="person-source" value="workspace" class="text-indigo-600 focus:ring-indigo-500" checked>
+                                <span class="text-sm">Usuários do Workspace</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="person-source" value="external" class="text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-sm">Lista Externa (futuro)</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Seleção</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="person-multiple" value="single" class="text-indigo-600 focus:ring-indigo-500" checked>
+                                <span class="text-sm">Uma pessoa</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="person-multiple" value="multiple" class="text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-sm">Múltiplas pessoas</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="person-notify" class="rounded text-indigo-600 focus:ring-indigo-500">
+                        <label for="person-notify" class="text-sm font-medium text-slate-700">Notificar pessoa quando atribuída</label>
+                    </div>
+                </div>
+                
+                <!-- Configurações para HORA DE CRIAÇÃO -->
+                <div id="created-time-field-config" class="field-type-config space-y-5 hidden">
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                        <div class="flex items-center gap-2 mb-2">
+                            <i data-lucide="info" class="h-4 w-4 text-blue-600"></i>
+                            <span class="text-sm font-medium text-blue-800">Campo Automático</span>
+                        </div>
+                        <p class="text-sm text-blue-700">Este campo é preenchido automaticamente quando um item é criado e não pode ser editado pelos usuários.</p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Formato de Exibição</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="created-time-format" value="DD/MM/AAAA HH:mm" class="text-indigo-600 focus:ring-indigo-500" checked>
+                                <span class="text-sm">30/06/2025 14:30</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="created-time-format" value="DD/MM/AAAA HH:mm:ss" class="text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-sm">30/06/2025 14:30:45</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="created-time-format" value="relative" class="text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-sm">Relativo (há 2 horas, ontem, etc.)</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Configurações para CRIADO POR -->
+                <div id="created-by-field-config" class="field-type-config space-y-5 hidden">
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                        <div class="flex items-center gap-2 mb-2">
+                            <i data-lucide="info" class="h-4 w-4 text-blue-600"></i>
+                            <span class="text-sm font-medium text-blue-800">Campo Automático</span>
+                        </div>
+                        <p class="text-sm text-blue-700">Este campo é preenchido automaticamente com o usuário que criou o item e não pode ser editado.</p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Formato de Exibição</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="created-by-display" value="name" class="text-indigo-600 focus:ring-indigo-500" checked>
+                                <span class="text-sm">Nome apenas</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="created-by-display" value="email" class="text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-sm">Email apenas</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="created-by-display" value="both" class="text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-sm">Nome e email</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="created-by-avatar" class="rounded text-indigo-600 focus:ring-indigo-500" checked>
+                        <label for="created-by-avatar" class="text-sm font-medium text-slate-700">Mostrar avatar do usuário</label>
+                    </div>
+                </div>
+                
+                <!-- Configurações para EDITADO POR ÚLTIMO -->
+                <div id="last-edited-by-field-config" class="field-type-config space-y-5 hidden">
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                        <div class="flex items-center gap-2 mb-2">
+                            <i data-lucide="info" class="h-4 w-4 text-blue-600"></i>
+                            <span class="text-sm font-medium text-blue-800">Campo Automático</span>
+                        </div>
+                        <p class="text-sm text-blue-700">Este campo é atualizado automaticamente sempre que algum usuário edita o item.</p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Formato de Exibição</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="last-edited-display" value="name" class="text-indigo-600 focus:ring-indigo-500" checked>
+                                <span class="text-sm">Nome apenas</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="last-edited-display" value="email" class="text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-sm">Email apenas</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="last-edited-display" value="both" class="text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-sm">Nome e email</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="last-edited-avatar" class="rounded text-indigo-600 focus:ring-indigo-500" checked>
+                        <label for="last-edited-avatar" class="text-sm font-medium text-slate-700">Mostrar avatar do usuário</label>
+                    </div>
+                    
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="last-edited-timestamp" class="rounded text-indigo-600 focus:ring-indigo-500" checked>
+                        <label for="last-edited-timestamp" class="text-sm font-medium text-slate-700">Mostrar quando foi editado</label>
+                    </div>
+                </div>
+                
+                <!-- Configurações para BOTÃO -->
+                <div id="button-field-config" class="field-type-config space-y-5 hidden">
+                    <div class="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                        <div class="flex items-center gap-2 mb-2">
+                            <i data-lucide="zap" class="h-4 w-4 text-purple-600"></i>
+                            <span class="text-sm font-medium text-purple-800">Campo de Automação</span>
+                        </div>
+                        <p class="text-sm text-purple-700">Este botão executa ações automaticamente quando clicado. Configure as ações que ele deve realizar.</p>
+                    </div>
+                    
+                    <!-- Configurações básicas do botão -->
+                    <div>
+                        <label for="button-label" class="block text-sm font-medium text-slate-700 mb-1">Texto do Botão</label>
+                        <input type="text" id="button-label" class="w-full p-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Ex: Marcar como Concluído" value="Executar Ação">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Estilo do Botão</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="button-style" value="primary" class="text-indigo-600 focus:ring-indigo-500" checked>
+                                <span class="text-sm">Primário</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="button-style" value="secondary" class="text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-sm">Secundário</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="button-style" value="success" class="text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-sm">Sucesso</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="button-style" value="warning" class="text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-sm">Aviso</span>
+                            </label>
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                <input type="radio" name="button-style" value="danger" class="text-indigo-600 focus:ring-indigo-500">
+                                <span class="text-sm">Perigo</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label for="button-icon" class="block text-sm font-medium text-slate-700 mb-1">Ícone (opcional)</label>
+                        <input type="text" id="button-icon" class="w-full p-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Ex: play, check, settings" value="play">
+                        <p class="text-xs text-slate-500 mt-1">Nome do ícone Lucide. Deixe vazio para não mostrar ícone.</p>
+                    </div>
+                    
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="button-confirm" class="rounded text-indigo-600 focus:ring-indigo-500">
+                        <label for="button-confirm" class="text-sm font-medium text-slate-700">Pedir confirmação antes de executar</label>
+                    </div>
+                    
+                    <div id="button-confirm-message-container" class="hidden">
+                        <label for="button-confirm-message" class="block text-sm font-medium text-slate-700 mb-1">Mensagem de Confirmação</label>
+                        <input type="text" id="button-confirm-message" class="w-full p-2 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Tem certeza que deseja executar esta ação?" value="Tem certeza que deseja executar esta ação?">
+                    </div>
+                    
+                    <!-- Lista de ações -->
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <label class="text-sm font-medium text-slate-700">Ações do Botão</label>
+                            <button id="add-button-action" class="text-xs bg-purple-50 text-purple-600 px-2 py-1 rounded-md hover:bg-purple-100 transition-colors">
+                                <i data-lucide="plus" class="h-3 w-3 inline mr-1"></i> Adicionar Ação
+                            </button>
+                        </div>
+                        
+                        <div id="button-actions-container" class="space-y-2 bg-slate-50 p-3 rounded-lg border border-slate-200 min-h-[100px] max-h-[300px] overflow-y-auto">
+                            <div class="text-center text-slate-500 text-sm py-4" id="no-actions-message">
+                                <i data-lucide="mouse-pointer-click" class="h-8 w-8 mx-auto mb-2 text-slate-400"></i>
+                                <p>Nenhuma ação configurada.</p>
+                                <p class="text-xs">Clique em "Adicionar Ação" para começar.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
         
@@ -817,15 +1118,195 @@
         </div>
     </div>
     
+    <!-- ===== MODAL CONSTRUTOR DE AÇÕES DO BOTÃO ===== -->
+    <div id="button-action-builder-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] hidden">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden">
+                <!-- Cabeçalho do Modal -->
+                <div class="bg-gradient-to-r from-purple-600 to-indigo-600 text-white p-6">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h2 class="text-xl font-bold">🧪 Construtor de Receitas de Ação</h2>
+                            <p class="text-purple-100 text-sm mt-1">Monte passo a passo o que o botão deve fazer quando clicado</p>
+                        </div>
+                        <button id="close-action-builder" class="text-white/70 hover:text-white p-2 rounded-lg hover:bg-white/10 transition-colors">
+                            <i data-lucide="x" class="h-6 w-6"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Conteúdo do Modal -->
+                <div class="flex h-[calc(90vh-140px)]">
+                    <!-- Painel Esquerdo - Configuração da Ação -->
+                    <div class="w-1/2 border-r border-slate-200 p-6 overflow-y-auto">
+                        <div class="space-y-6">
+                            <!-- Passo 1: ONDE aplicar -->
+                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                <div class="flex items-center gap-2 mb-3">
+                                    <div class="bg-blue-600 text-white rounded-full w-7 h-7 flex items-center justify-center text-sm font-bold">1</div>
+                                    <h3 class="font-semibold text-blue-900">ONDE aplicar a ação?</h3>
+                                </div>
+                                <div class="space-y-2">
+                                    <label class="flex items-center gap-2 p-2 rounded-lg border border-blue-200 hover:bg-blue-100 cursor-pointer">
+                                        <input type="radio" name="action-target" value="current" class="text-blue-600 focus:ring-blue-500" checked>
+                                        <span class="text-sm font-medium">Neste Registo</span>
+                                        <span class="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded">(mesmo item)</span>
+                                    </label>
+                                    <label class="flex items-center gap-2 p-2 rounded-lg border border-blue-200 hover:bg-blue-100 cursor-pointer">
+                                        <input type="radio" name="action-target" value="other" class="text-blue-600 focus:ring-blue-500">
+                                        <span class="text-sm font-medium">Em outra(s) Entidade(s)</span>
+                                        <span class="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded">⚡ Avançado</span>
+                                    </label>
+                                </div>
+                                
+                                <!-- Configuração para outro alvo - EXPANDIDA -->
+                                <div id="other-target-details" class="hidden mt-4 space-y-4 bg-white p-4 rounded-lg border border-blue-200">
+                                    <!-- Seleção de Módulos -->
+                                    <div>
+                                        <div class="flex items-center justify-between mb-2">
+                                            <label class="text-sm font-medium text-slate-700">Módulos Alvo</label>
+                                            <button id="select-all-modules" class="text-xs text-blue-600 hover:text-blue-700">Todos os módulos</button>
+                                        </div>
+                                        <div id="modules-selection" class="max-h-32 overflow-y-auto bg-slate-50 rounded-lg p-2 border">
+                                            <div class="text-center text-slate-400 py-4 text-xs">
+                                                Carregando módulos...
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Seleção de Entidades baseada nos módulos -->
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-2">Entidade Alvo</label>
+                                        <select id="target-entity-select" class="w-full p-2 border border-slate-300 rounded-lg text-sm">
+                                            <option value="">Primeiro selecione os módulos...</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <!-- Filtros Avançados (Futuro) -->
+                                    <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <i data-lucide="filter" class="h-4 w-4 text-amber-600"></i>
+                                            <span class="text-sm font-medium text-amber-800">Filtros (Futuro)</span>
+                                        </div>
+                                        <p class="text-xs text-amber-700">
+                                            A ação será aplicada a <strong>TODOS</strong> os registos da entidade selecionada.
+                                            Filtros avançados serão implementados em versões futuras.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Passo 2: O QUÊ modificar -->
+                            <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                                <div class="flex items-center gap-2 mb-3">
+                                    <div class="bg-green-600 text-white rounded-full w-7 h-7 flex items-center justify-center text-sm font-bold">2</div>
+                                    <h3 class="font-semibold text-green-900">O QUÊ modificar?</h3>
+                                </div>
+                                <div>
+                                    <select id="action-property-select" class="w-full p-2 border border-green-300 rounded-lg text-sm">
+                                        <option value="">Selecione uma propriedade...</option>
+                                    </select>
+                                    <p class="text-xs text-green-600 mt-1">
+                                        <i data-lucide="info" class="h-3 w-3 inline mr-1"></i>
+                                        As propriedades mudam baseado no alvo selecionado acima
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            <!-- Passo 3: PARA QUÊ (valor inteligente) -->
+                            <div id="value-configuration" class="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                                <div class="flex items-center gap-2 mb-3">
+                                    <div class="bg-purple-600 text-white rounded-full w-7 h-7 flex items-center justify-center text-sm font-bold">3</div>
+                                    <h3 class="font-semibold text-purple-900">PARA QUÊ valor?</h3>
+                                </div>
+                                
+                                <!-- Container dinâmico baseado no tipo de propriedade -->
+                                <div id="dynamic-value-options" class="space-y-3">
+                                    <div class="text-center text-slate-400 py-4 text-sm">
+                                        <i data-lucide="target" class="h-8 w-8 mx-auto mb-2"></i>
+                                        <p>Selecione uma propriedade acima para ver as opções de valor</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Botões de Ação -->
+                            <div class="flex gap-3 pt-4 border-t border-slate-200">
+                                <button id="cancel-action-builder" class="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors">
+                                    Cancelar
+                                </button>
+                                <button id="save-action-builder" class="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
+                                    <i data-lucide="plus" class="h-4 w-4 inline mr-1"></i>
+                                    <span id="save-action-text">Adicionar à Receita</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Painel Direito - Preview + Receita -->
+                    <div class="w-1/2 p-6 bg-slate-50 overflow-y-auto">
+                        <div class="space-y-4">
+                            <!-- Preview da Ação Atual -->
+                            <div>
+                                <h3 class="font-semibold text-slate-800 flex items-center gap-2 mb-3">
+                                    <i data-lucide="eye" class="h-5 w-5"></i>
+                                    Preview da Ação
+                                </h3>
+                                
+                                <div id="action-preview" class="bg-white rounded-lg border border-slate-200 p-4">
+                                    <div class="text-center text-slate-400 py-6">
+                                        <i data-lucide="wand-2" class="h-10 w-10 mx-auto mb-2"></i>
+                                        <p class="text-sm">Configure os parâmetros para ver o preview</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Receita Completa (lista de ações) -->
+                            <div>
+                                <h3 class="font-semibold text-slate-800 flex items-center gap-2 mb-3">
+                                    <i data-lucide="list-ordered" class="h-5 w-5"></i>
+                                    Receita do Botão
+                                    <span id="actions-count" class="text-xs bg-purple-100 text-purple-600 px-2 py-1 rounded-full">0 ações</span>
+                                </h3>
+                                
+                                <div id="recipe-preview" class="bg-white rounded-lg border border-slate-200 p-4 min-h-[200px]">
+                                    <div class="text-center text-slate-400 py-8">
+                                        <i data-lucide="chef-hat" class="h-12 w-12 mx-auto mb-3"></i>
+                                        <p class="text-sm">Sua receita aparecerá aqui conforme você adiciona ações</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Ajuda Contextual -->
+                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                <h4 class="font-medium text-blue-900 mb-2 flex items-center gap-2">
+                                    <i data-lucide="lightbulb" class="h-4 w-4"></i>
+                                    Dica Inteligente
+                                </h4>
+                                <div id="contextual-help" class="text-sm text-blue-700">
+                                    <p>🎯 Comece selecionando <strong>ONDE</strong> a ação deve ser aplicada.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     <!-- TEMPLATES -->
     <template id="module-template">
         <div class="module-quadro bg-white rounded-xl shadow-md overflow-hidden border border-slate-200 hover:shadow-lg transition-shadow" data-module-id="">
             <div class="bg-gradient-to-r from-indigo-500 to-purple-600 p-3 sm:p-4 text-white">
                 <div class="flex justify-between items-center">
                     <h3 class="module-title text-base sm:text-lg font-bold"></h3>
-                    <button class="delete-module-btn text-white/70 hover:text-white p-1 sm:p-1.5 rounded-md transition-colors hover:bg-white/10">
-                        <i class="fa-solid fa-trash-can h-4 w-4 sm:h-5 sm:w-5"></i>
-                    </button>
+                    <div class="flex items-center gap-1">
+                        <button class="edit-module-btn text-white/70 hover:text-white p-1 sm:p-1.5 rounded-md transition-colors hover:bg-white/10">
+                            <i class="fa-solid fa-pen-to-square h-4 w-4 sm:h-5 sm:w-5"></i>
+                        </button>
+                        <button class="delete-module-btn text-white/70 hover:text-white p-1 sm:p-1.5 rounded-md transition-colors hover:bg-white/10">
+                            <i class="fa-solid fa-trash-can h-4 w-4 sm:h-5 sm:w-5"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
             <div class="entities-dropzone p-3 sm:p-4 space-y-2 sm:space-y-3 min-h-[150px] sm:min-h-[220px] bg-gradient-to-b from-indigo-50/50 to-white"></div>
@@ -847,6 +1328,9 @@
                 <span class="entity-name font-medium text-slate-700 text-sm sm:text-base"></span>
             </div>
             <div class="flex items-center gap-1 sm:gap-2">
+                <button class="edit-entity-btn text-slate-400 hover:text-indigo-600 p-1 rounded-md transition-colors">
+                    <i class="fa-solid fa-pen-to-square h-4 w-4"></i>
+                </button>
                 <button class="delete-custom-entity-btn text-slate-400 hover:text-red-600 p-1 rounded-md transition-colors hidden">
                     <i class="fa-solid fa-trash-can h-4 w-4"></i>
                 </button>
@@ -867,6 +1351,9 @@
                 </div>
             </div>
             <div class="flex items-center gap-1 sm:gap-2">
+                <button class="edit-entity-btn text-slate-400 hover:text-indigo-600 p-1 sm:p-1.5 rounded-md transition-colors hover:bg-indigo-50">
+                    <i class="fa-solid fa-pen-to-square h-4 w-4 sm:h-5 sm:w-5"></i>
+                </button>
                 <button class="configure-btn text-indigo-600 hover:text-indigo-800 p-1 sm:p-1.5 rounded-md transition-colors hover:bg-indigo-50">
                     <i class="fa-solid fa-gear h-4 w-4 sm:h-5 sm:w-5"></i>
                 </button>
@@ -1035,5 +1522,9 @@
 
     <!-- Scripts Modularizados -->
     <script type="module" src="js/main.js"></script>
-</body>
+    <!-- Script do Modo Escuro -->
+    <script src="js/dark-mode.js"></script>
+    <!-- Script de Melhorias de UI -->
+    <script src="js/ui-enhancements.js"></script>
+<script src="https://lib.youware.com/youware-lib.1747145198.js" id="yourware-lib"></script></body>
 </html>
