@@ -2016,27 +2016,28 @@ async function handleEntityChange() {
  */
 async function populatePropertiesBasedOnTarget() {
     console.log('[populatePropertiesBasedOnTarget] ===== INICIANDO POPULAÇÃO DE PROPRIEDADES =====');
-    
+
     const propertySelect = document.getElementById('action-property-select');
     const targetRadio = document.querySelector('input[name="action-target"]:checked');
-    
+
+    // ... (código existente)
+    // Mantendo os logs existentes para não perder contexto de depuração anterior
     console.log('[populatePropertiesBasedOnTarget] Element propertySelect:', propertySelect);
     console.log('[populatePropertiesBasedOnTarget] Element targetRadio:', targetRadio);
-    
+
     if (!targetRadio) {
         console.log('[populatePropertiesBasedOnTarget] Nenhum target selecionado');
         propertySelect.innerHTML = '<option value="">Primeiro selecione onde aplicar a ação</option>';
         return;
     }
-    
+
     const target = targetRadio.value;
     console.log('[populatePropertiesBasedOnTarget] Target selecionado:', target);
-    
+
     let targetEntity = null;
-    
+
     if (target === 'current') {
         console.log('[populatePropertiesBasedOnTarget] Buscando entidade atual...');
-        // Usa a entidade atual (do contexto do construtor de entidades)
         targetEntity = getCurrentEntityBeingEdited();
         console.log('[populatePropertiesBasedOnTarget] Entidade atual retornada:', targetEntity);
         
@@ -2062,19 +2063,16 @@ async function populatePropertiesBasedOnTarget() {
                 console.log('[populatePropertiesBasedOnTarget] Entidade atualizada com campos frescos:', targetEntity);
             }
         }
-        
+
     } else if (target === 'other') {
         console.log('[populatePropertiesBasedOnTarget] Buscando entidade selecionada...');
-        // Usa a entidade selecionada
         const entitySelect = document.getElementById('target-entity-select');
         console.log('[populatePropertiesBasedOnTarget] EntitySelect:', entitySelect);
         console.log('[populatePropertiesBasedOnTarget] EntitySelect value:', entitySelect?.value);
-        
         if (entitySelect && entitySelect.value) {
             targetEntity = getEntityById(entitySelect.value);
             console.log('[populatePropertiesBasedOnTarget] Entidade encontrada por ID:', targetEntity);
-            
-            // Se não encontrou a entidade, tenta carregar novamente os dados
+
             if (!targetEntity) {
                 console.log('[populatePropertiesBasedOnTarget] Entidade não encontrada, recarregando dados...');
                 await loadWorkspaceDataForActionBuilder();
@@ -2087,24 +2085,14 @@ async function populatePropertiesBasedOnTarget() {
             return;
         }
     }
-    
-    console.log('[populatePropertiesBasedOnTarget] Entidade final para processamento:', targetEntity);
-    
-    if (!targetEntity) {
-        console.log('[populatePropertiesBasedOnTarget] ERRO: Entidade não encontrada');
-        propertySelect.innerHTML = '<option value="">Entidade não encontrada</option>';
-        return;
-    }
-    
-    if (!targetEntity.attributes) {
-        console.log('[populatePropertiesBasedOnTarget] ERRO: Entidade sem campo attributes');
-        propertySelect.innerHTML = '<option value="">Esta entidade não possui propriedades (attributes undefined)</option>';
-        return;
-    }
-    
-    if (targetEntity.attributes.length === 0) {
-        console.log('[populatePropertiesBasedOnTarget] ERRO: Entidade com attributes vazio');
-        propertySelect.innerHTML = '<option value="">Esta entidade não possui propriedades (attributes vazio)</option>';
+
+    // Adicione este console.log para depuração
+    console.log('[DEBUG] Entidade Alvo para popular propriedades:', targetEntity); 
+
+    if (!targetEntity || !targetEntity.attributes || targetEntity.attributes.length === 0) {
+        // Adicione este console.log para identificar o erro
+        console.error('[DEBUG] ERRO: A entidade alvo não foi encontrada ou não possui atributos.', targetEntity);
+        propertySelect.innerHTML = '<option value="">Esta entidade não possui propriedades para modificar</option>';
         return;
     }
     
