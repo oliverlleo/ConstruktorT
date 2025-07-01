@@ -5,16 +5,17 @@
 
 import { firebaseConfig, availableEntityIcons, fieldTypes, defaultFieldConfigs } from './config.js';
 import { initAutenticacao, isUsuarioLogado, getUsuarioId } from './autenticacao.js';
-import { initDatabase, loadAllEntities, loadAndRenderModules, loadDroppedEntitiesIntoModules, 
+import { initDatabase, loadAllEntities, getEntities, loadAndRenderModules,
          loadStructureForEntity, createEntity, createModule, saveEntityToModule, deleteEntityFromModule,
          deleteEntity, deleteModule, saveEntityStructure, saveSubEntityStructure, saveModulesOrder } from './database.js';
+// loadDroppedEntitiesIntoModules is now removed from imports as it's no longer used.
 import { initUI, closeMobileSidebar, createIcons, checkEmptyStates, showLoading, hideLoading, showSuccess, showError, showConfirmDialog, showInputDialog } from './ui.js';
 import { initUserProfile } from './user/userProfile.js';
 import { initInvitations, checkPendingInvitations } from './user/invitations.js';
 import { initWorkspaces, getCurrentWorkspace } from './workspaces.js';
 
 // Variáveis globais
-let db;
+// let db; // No longer needed in main.js scope if modules handle their own db instance or use database.js
 let modalNavigationStack = [];
 
 // ==== PONTO DE ENTRADA DA APLICAÇÃO ====
@@ -34,21 +35,43 @@ async function initApp() {
             return;
         }
         
-        // Inicializa o banco de dados
+        // Inicializa o banco de dados (this will set up Firestore in database.js)
         await initDatabase(firebase);
-        db = firebase.database();
+        // const firestoreInstance = getFirestoreInstance(); // Get the initialized Firestore instance
+
+        // The db variable in main.js is no longer needed if all modules use imported functions
+        // from database.js or get the instance themselves if necessary.
+        // For now, modules like userProfile, invitations, workspaces have their own 'db' variable
+        // that should be set by their respective init functions using the getFirestoreInstance or by
+        // ensuring their internal 'db' is the one from 'database.js'.
+
+        // Let's assume the init functions for other modules will correctly get/use the Firestore db
+        // instance from database.js now that database.js's internal 'db' is Firestore.
+        // The 'db' parameter passed to them previously was the RTDB instance.
+        // We need to ensure they set their internal 'db' to the Firestore one.
+        // The simplest is that they already use the module-scoped 'db' from database.js
+        // if they import anything from it, due to how JS modules work (shared scope for `db` in database.js).
+
+        // Let's verify this assumption for one module, e.g. workspaces.js:
+        // workspaces.js: `import { ... } from "./database.js"; let db; export async function initWorkspaces(database) { db = database; }`
+        // This means workspaces.js's `db` IS set by what main.js passes.
+        // So main.js MUST pass the Firestore instance.
+
+        const firestoreInstance = firebase.firestore(); // Or get from getFirestoreInstance() after initDatabase
+                                                       // but since firebase is already here, this is direct.
+                                                       // initDatabase already configures the internal db in database.js
         
         // Inicializa a interface do usuário
         initUI();
         
         // Inicializa o sistema de gerenciamento de usuário
-        initUserProfile(db);
+        initUserProfile(firestoreInstance); // Pass Firestore instance
         
         // Inicializa o sistema de convites
-        initInvitations(db);
+        initInvitations(firestoreInstance); // Pass Firestore instance
         
         // Inicializa o sistema de áreas de trabalho
-        initWorkspaces(db);
+        initWorkspaces(firestoreInstance); // Pass Firestore instance
         
         // Verifica se há convites pendentes
         try {
@@ -139,8 +162,10 @@ async function loadWorkspaceData(workspace) {
         
         populateFieldsToolbox();
         
+        // loadAndRenderModules will call renderModule for each module.
+        // renderModule will be updated to render its associated entities.
         await loadAndRenderModules(renderModule, workspaceId, ownerId);
-        await loadDroppedEntitiesIntoModules(renderDroppedEntity, workspaceId, ownerId);
+        // REMOVED: await loadDroppedEntitiesIntoModules(renderDroppedEntity, workspaceId, ownerId);
         
         // Força a reconfiguração do drag-and-drop para todos os módulos existentes
         const allModules = document.querySelectorAll('.module-quadro');
@@ -248,6 +273,18 @@ function renderModule(moduleData) {
     setupDragAndDropForModule(newModuleEl);
     createIcons();
     
+    // Render entities for this module
+    const allLoadedEntities = getEntities(); // Assumes getEntities() is imported from database.js
+    const entitiesForThisModule = allLoadedEntities.filter(e => e.moduleId === moduleData.id);
+
+    console.log(`[renderModule] Module ${moduleData.name} (${moduleData.id}) has ${entitiesForThisModule.length} entities.`);
+    entitiesForThisModule.forEach(entity => {
+        // The original renderDroppedEntity took (moduleId, entityId, entityData, entityInfo)
+        // In the new model, entityData IS entityInfo.
+        // The entity object from getEntities() contains all necessary info (id, name, icon, attributes).
+        renderDroppedEntity(moduleData.id, entity.id, entity, entity);
+    });
+
     newModuleEl.classList.add('animate-pulse');
     setTimeout(() => newModuleEl.classList.remove('animate-pulse'), 2000);
     
@@ -255,8 +292,12 @@ function renderModule(moduleData) {
 }
 
 function renderDroppedEntity(moduleId, entityId, entityData, entityInfo) {
+    // entityData and entityInfo are essentially the same object now (the full entity from Firestore)
     const moduleEl = document.querySelector(`.module-quadro[data-module-id="${moduleId}"]`);
-    if (!moduleEl) return;
+    if (!moduleEl) {
+        console.warn(`[renderDroppedEntity] Module element not found for moduleId: ${moduleId}`);
+        return;
+    }
     
     const dropzone = moduleEl.querySelector('.entities-dropzone');
     const template = document.getElementById('dropped-entity-card-template');
@@ -890,24 +931,25 @@ function openModal(context) {
     }
 
     if (context.isSubEntity) {
+        // For sub-entities, attributes are passed directly in context.subSchema.attributes
         (context.subSchema.attributes || []).forEach(renderFormField);
     } else {
-        const currentWorkspace = getCurrentWorkspace();
-        const workspaceId = currentWorkspace ? currentWorkspace.id : 'default';
-        const ownerId = currentWorkspace && !currentWorkspace.isOwner ? currentWorkspace.ownerId : null;
-        
-        loadStructureForEntity(context.moduleId, context.entityId, workspaceId, ownerId)
-            .then(schema => {
-                console.log("Estrutura carregada para entidade:", context.entityId, schema);
-                if (schema && schema.attributes && schema.attributes.length > 0) {
-                    schema.attributes.forEach(renderFormField);
-                } else {
-                    console.log("Nenhuma estrutura encontrada ou estrutura vazia para entidade:", context.entityId);
-                }
-            })
-            .catch(error => {
-                console.error("Erro ao carregar estrutura da entidade:", error);
-            });
+        // For main entities, get the entity from the already loaded list
+        const allLoadedEntities = getEntities(); // From database.js
+        const entity = allLoadedEntities.find(e => e.id === context.entityId);
+
+        if (entity && entity.attributes) {
+            console.log(`[openModal] Rendering attributes for entity ${context.entityId} from cached entity data.`, entity.attributes);
+            entity.attributes.forEach(renderFormField);
+        } else {
+            console.warn(`[openModal] Entity ${context.entityId} not found in cache or has no attributes.`);
+            // Ensure empty state is shown if no attributes
+            const dropzone = document.getElementById('form-builder-dropzone');
+            const emptyFormState = document.getElementById('empty-form-state');
+            if (dropzone.children.length === 0 && emptyFormState) {
+                 emptyFormState.classList.remove('hidden');
+            }
+        }
     }
     
     modal.classList.remove('hidden');
@@ -1056,16 +1098,15 @@ async function handleAddNewModule() {
         return;
     }
     
-    // Similar to handleAddNewEntity, this frontend check might be too restrictive
-    // if editors/admins should be allowed to create modules.
-    // Firebase rules are now in place to allow this.
-    // if (!currentWorkspace.isOwner) {
-    //     showError('Erro', 'Você não tem permissão para criar módulos nesta área de trabalho.');
-    //     return;
-    // }
+    // Client-side permission check REMOVED as per plan.
+    // Firestore security rules will handle permissions.
+    // // if (!currentWorkspace.isOwner) {
+    // //     showError('Erro', 'Você não tem permissão para criar módulos nesta área de trabalho.');
+    // //     return;
+    // // }
     
     const workspaceId = currentWorkspace.id;
-    const ownerId = !currentWorkspace.isOwner ? currentWorkspace.ownerId : null;
+    const ownerId = !currentWorkspace.isOwner ? currentWorkspace.ownerId : null; // Correctly sets ownerId for shared workspaces
 
     const result = await showInputDialog(
         'Criar Novo Módulo',
@@ -1244,30 +1285,51 @@ async function saveCurrentStructure() {
     try {
         const currentWorkspace = getCurrentWorkspace();
         const workspaceId = currentWorkspace ? currentWorkspace.id : 'default';
-        const ownerId = currentWorkspace && !currentWorkspace.isOwner ? currentWorkspace.ownerId : null;
+        // If currentWorkspace is shared, ownerId is currentWorkspace.ownerId, else it's null (current user is owner)
+        const ownerId = currentWorkspace && currentWorkspace.isShared && currentWorkspace.ownerId ? currentWorkspace.ownerId : null;
         
-        console.log("Salvando com workspaceId:", workspaceId, "ownerId:", ownerId, "isOwner:", currentWorkspace?.isOwner);
+        console.log("[saveCurrentStructure] Salvando com workspaceId:", workspaceId, "ownerId:", ownerId, "Context:", context);
         
         if (context.isSubEntity) {
-            const parentContext = modalNavigationStack[modalNavigationStack.length - 1];
-            console.log("Salvando sub-entidade para:", parentContext);
+            // This logic handles saving attributes of a sub-entity, which means updating the parent entity's attributes array.
+            if (modalNavigationStack.length === 0) {
+                throw new Error("Cannot save sub-entity structure: parent context not found in navigation stack.");
+            }
+            const parentContext = modalNavigationStack[modalNavigationStack.length - 1]; // Get parent context
             
-            // For sub-entities, the ownerId should correspond to the owner of the main entity's workspace.
-            // We assume parentContext's workspace is the same as currentWorkspace.
-            await saveSubEntityStructure(
-                parentContext.moduleId, 
-                parentContext.entityId, 
-                context.parentFieldId, 
-                attributes,
+            const allEntities = getEntities();
+            const parentEntity = allEntities.find(e => e.id === parentContext.entityId);
+
+            if (!parentEntity) {
+                throw new Error(`Parent entity with ID ${parentContext.entityId} not found for saving sub-entity structure.`);
+            }
+
+            // Deep clone parentEntity.attributes to avoid modifying the cache directly before successful save
+            const newParentAttributes = JSON.parse(JSON.stringify(parentEntity.attributes || []));
+
+            const parentField = newParentAttributes.find(attr => attr.id === context.parentFieldId);
+            if (!parentField) {
+                throw new Error(`Parent field ID ${context.parentFieldId} not found in parent entity ${parentEntity.name}.`);
+            }
+
+            if (!parentField.subSchema) parentField.subSchema = {};
+            parentField.subSchema.attributes = currentModalAttributes;
+
+            console.log(`[saveCurrentStructure] Saving modified attributes for PARENT entity ${parentEntity.id} due to sub-entity change.`);
+            await saveEntityStructure( // from database.js
+                parentEntity.id,
+                newParentAttributes, // The full, modified attributes array of the parent
                 workspaceId,
-                ownerId // Pass ownerId here
+                ownerId, // ownerId of the workspace the parent entity belongs to
+                parentEntity.name
             );
             
-            hideLoading();
-            showSuccess('Guardado!', 'A estrutura da sub-entidade foi guardada com sucesso.');
-        } else {
-            console.log("Salvando entidade principal:", {
-                moduleId: context.moduleId,
+            // Update local cache for parent entity
+            parentEntity.attributes = newParentAttributes;
+            showSuccess('Guardado!', `Estrutura da sub-entidade em '${parentField.label}' foi guardada.`);
+
+        } else { // This is a main entity
+            console.log("[saveCurrentStructure] Salvando entidade principal:", {
                 entityId: context.entityId,
                 entityName: context.entityName,
                 attributesCount: attributes.length,
@@ -1275,21 +1337,30 @@ async function saveCurrentStructure() {
                 ownerId
             });
             
+            // Call the refactored saveEntityStructure from database.js
+            // Signature: saveEntityStructure(entityId, attributes, workspaceId, ownerId, entityName = null)
             await saveEntityStructure(
-                context.moduleId, 
                 context.entityId, 
-                context.entityName, 
-                attributes, 
+                currentModalAttributes,
                 workspaceId,
-                ownerId // Pass ownerId here
+                ownerId,
+                context.entityName
             );
             
-            hideLoading();
+            // Update local cache for the current entity
+            const allEntities = getEntities();
+            const entityToUpdate = allEntities.find(e => e.id === context.entityId);
+            if (entityToUpdate) {
+                entityToUpdate.attributes = currentModalAttributes;
+                if (context.entityName) entityToUpdate.name = context.entityName;
+            }
             showSuccess('Guardado!', `A estrutura da entidade "${context.entityName}" foi guardada com sucesso.`);
         }
+
+        hideLoading();
     } catch (error) {
         hideLoading();
-        console.error("Erro ao salvar estrutura:", error);
+        console.error("[saveCurrentStructure] Erro ao salvar estrutura:", error);
         showError('Erro', 'Ocorreu um erro ao guardar a estrutura. Tente novamente.');
     }
 }

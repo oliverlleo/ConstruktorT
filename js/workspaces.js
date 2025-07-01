@@ -31,22 +31,26 @@ let sharedWorkspaces = [];
  */
 export async function initWorkspaces(database) {
   console.log("Inicializando módulo de áreas de trabalho...");
-  db = database;
+  db = database; // This should be the Firestore db instance
 
   setupWorkspaceSelector();
 
   // Carrega as áreas de trabalho próprias e compartilhadas
   await loadUserWorkspaces();
-  await _loadSharedWorkspaces(); // CORREÇÃO: Chamada da função que estava em falta
+  await _loadSharedWorkspaces();
 
-  // Configura listener para mudanças no controle de acesso
-  const userId = getUsuarioId();
-  if (userId) {
-    db.ref(`accessControl/${userId}`).on("value", (snapshot) => {
-      console.log("Mudança detectada no controle de acesso:", snapshot.val());
-      _loadSharedWorkspaces(); // CORREÇÃO: Ação a ser tomada quando as permissões mudam
-    });
-  }
+  // REMOVED: Realtime listener for accessControl changes.
+  // Firestore listeners for dynamic accessControl changes across all potential workspaces
+  // are more complex to set up here. Rely on manual refresh or event-driven reloads
+  // (e.g., after an invitation is accepted).
+  // const userId = getUsuarioId();
+  // if (userId) {
+    // Example for Firestore (complex to listen to all relevant accessControl docs):
+    // This would require knowing all workspaceIds user might have access to,
+    // or querying 'invitations' and then listening to 'accessControl' for those.
+    // For simplicity, this listener is removed as per common Firestore patterns
+    // where direct listeners on widely distributed access rights are less common.
+  // }
 }
 
 /**
@@ -97,124 +101,179 @@ function setupWorkspaceSelector() {
 async function loadUserWorkspaces() {
   try {
     const userId = getUsuarioId();
-    if (!userId) return;
-
-    const snapshot = await db.ref(`users/${userId}/workspaces`).get();
-    userWorkspaces = [];
-
-    if (snapshot.exists()) {
-      const workspaces = snapshot.val();
-      for (const workspaceId in workspaces) {
-        userWorkspaces.push({
-          id: workspaceId,
-          ...workspaces[workspaceId],
-          isOwner: true,
-        });
-      }
+    if (!userId) {
+        console.warn("[loadUserWorkspaces] User not authenticated.");
+        return [];
     }
+    const workspacesPath = `users/${userId}/workspaces`;
+    console.log(`[loadUserWorkspaces] Loading from Firestore path: ${workspacesPath}`);
+    userWorkspaces = []; // Reset local cache
 
-    // Se não houver workspaces, cria um padrão
-    if (userWorkspaces.length === 0) {
-      await createDefaultWorkspace();
+    try {
+        const snapshot = await db.collection(workspacesPath).get();
+
+        if (snapshot.empty) {
+            console.log("[loadUserWorkspaces] No workspaces found for this user. Creating default.");
+            // If no workspaces, create a default one
+            await createDefaultWorkspace(); // This function also needs refactoring for Firestore
+                                          // and will add to userWorkspaces itself.
+        } else {
+            snapshot.forEach(doc => {
+                userWorkspaces.push({
+                    id: doc.id,
+                    ...doc.data(),
+                    isOwner: true, // These are user's own workspaces
+                });
+            });
+        }
+
+        updateWorkspaceSelector();
+
+        // Define the current workspace as the first one if none is selected
+        // and if createDefaultWorkspace didn't already set it.
+        if (!currentWorkspace && userWorkspaces.length > 0) {
+            // currentWorkspace = userWorkspaces[0]; // This might trigger a load
+            // Let's call switchToWorkspace to ensure all logic runs
+            await switchToWorkspace(userWorkspaces[0]);
+        } else if (currentWorkspace && !userWorkspaces.find(ws => ws.id === currentWorkspace.id)) {
+            // If current workspace is no longer in the list (e.g. deleted elsewhere)
+            currentWorkspace = userWorkspaces.length > 0 ? userWorkspaces[0] : null;
+            if (currentWorkspace) await switchToWorkspace(currentWorkspace);
+            else {
+                 window.dispatchEvent( new CustomEvent("workspaceChanged", { detail: { workspace: null } }) );
+            }
+        }
+
+
+        console.log("[loadUserWorkspaces] User workspaces loaded:", userWorkspaces);
+        return userWorkspaces;
+    } catch (error) {
+        console.error("[loadUserWorkspaces] Error loading workspaces:", error);
+        showError("Erro de Carregamento", "Não foi possível carregar suas áreas de trabalho.");
+        return [];
     }
-
-    updateWorkspaceSelector();
-
-    // Define o workspace atual como o primeiro se não houver um selecionado
-    if (!currentWorkspace && userWorkspaces.length > 0) {
-      currentWorkspace = userWorkspaces[0];
-    }
-
-    return userWorkspaces;
-  } catch (error) {
-    console.error("Erro ao carregar áreas de trabalho:", error);
-    return [];
-  }
 }
 
 /**
  * Carrega as áreas de trabalho compartilhadas com o usuário
  */
 async function _loadSharedWorkspaces() {
-  try {
-    const userId = getUsuarioId();
-    if (!userId) return [];
+    const currentUserId = getUsuarioId();
+    const currentUserEmail = getUsuarioEmail()?.toLowerCase();
 
-    console.log("Carregando áreas de trabalho compartilhadas para:", userId);
-    sharedWorkspaces = [];
-
-    // 1. Lê a lista de permissões do próprio utilizador (isto é seguro)
-    const accessSnapshot = await db.ref(`accessControl/${userId}`).get();
-    if (!accessSnapshot.exists()) {
-      console.log("Nenhum recurso compartilhado encontrado.");
-      updateSharedWorkspacesDisplay();
-      updateWorkspaceSelector();
-      return [];
+    if (!currentUserId || !currentUserEmail) {
+        console.warn("[_loadSharedWorkspaces] User not authenticated.");
+        sharedWorkspaces = [];
+        updateSharedWorkspacesDisplay();
+        updateWorkspaceSelector();
+        return [];
     }
 
-    const accessControl = accessSnapshot.val();
-    const promises = [];
+    console.log(`[_loadSharedWorkspaces] Loading shared workspaces for user: ${currentUserId}, email: ${currentUserEmail}`);
+    sharedWorkspaces = []; // Reset local cache
 
-    // 2. Para cada ID de recurso que o utilizador tem acesso...
-    for (const resourceId in accessControl) {
-      if (resourceId === "updatedAt") continue;
+    try {
+        // 1. Query 'invitations' for accepted invites for the current user
+        const invitationsSnapshot = await db.collection('invitations')
+            .where('toEmail', '==', currentUserEmail)
+            .where('status', '==', 'accepted')
+            .get();
 
-      const role = accessControl[resourceId];
+        if (invitationsSnapshot.empty) {
+            console.log("[_loadSharedWorkspaces] No accepted invitations found.");
+            updateSharedWorkspacesDisplay();
+            updateWorkspaceSelector();
+            return [];
+        }
 
-      // 3. ...lê a informação pública desse recurso a partir do novo nó /sharedWorkspaces
-      const promise = db
-        .ref(`sharedWorkspaces/${resourceId}`)
-        .get()
-        .then((workspaceSnapshot) => {
-          if (workspaceSnapshot.exists()) {
-            const workspaceData = workspaceSnapshot.val();
-            sharedWorkspaces.push({
-              id: resourceId,
-              name: workspaceData.name,
-              isShared: true,
-              isOwner: false,
-              ownerId: workspaceData.ownerId,
-              ownerName: workspaceData.ownerName,
-              role: role,
-            });
-          } else {
-            console.warn(
-              `Informação para o workspace partilhado ${resourceId} não encontrada.`
-            );
-          }
-        })
-        .catch((error) => {
-          console.warn(
-            `Erro ao carregar informações do workspace ${resourceId}:`,
-            error
-          );
+        const workspacePromises = [];
+        invitationsSnapshot.forEach(inviteDoc => {
+            const inviteData = inviteDoc.data();
+            const workspaceId = inviteData.resourceId;
+            const ownerId = inviteData.fromUserId;
+            // const roleFromInvite = inviteData.role; // Role from invite
+
+            if (!workspaceId || !ownerId) {
+                console.warn("[_loadSharedWorkspaces] Skipping invitation with missing resourceId or fromUserId", inviteData);
+                return; // Skips this iteration
+            }
+
+            // For each accepted invite, construct a promise to fetch access control, then owner & workspace details
+            const promise = (async () => {
+                try {
+                    // 2. Verify access and get role from accessControl/{workspaceId}
+                    const accessControlRef = db.doc(`accessControl/${workspaceId}`);
+                    const accessDoc = await accessControlRef.get();
+
+                    if (!accessDoc.exists) {
+                        console.warn(`[_loadSharedWorkspaces] accessControl document for workspace ${workspaceId} not found.`);
+                        return null;
+                    }
+                    const accessData = accessDoc.data();
+                    const userRole = accessData[currentUserId];
+
+                    if (!userRole) {
+                        console.warn(`[_loadSharedWorkspaces] User ${currentUserId} role not found in accessControl/${workspaceId}. Access might have been revoked.`);
+                        return null;
+                    }
+
+                    // 3. Fetch workspace details from users/{ownerId}/workspaces/{workspaceId}
+                    const workspaceDocRef = db.doc(`users/${ownerId}/workspaces/${workspaceId}`);
+                    const workspaceDoc = await workspaceDocRef.get();
+
+                    if (!workspaceDoc.exists()) {
+                        console.warn(`[_loadSharedWorkspaces] Shared workspace document users/${ownerId}/workspaces/${workspaceId} not found.`);
+                        return null;
+                    }
+                    const workspaceData = workspaceDoc.data();
+
+                    // 4. Fetch owner's name (optional, for display)
+                    let ownerName = inviteData.fromUserName || ownerId; // Use from invite or fallback to ID
+                    if (!inviteData.fromUserName) { // If not on invite, try to fetch
+                        try {
+                            const userDoc = await db.doc(`users/${ownerId}`).get();
+                            if (userDoc.exists && userDoc.data().displayName) {
+                                ownerName = userDoc.data().displayName;
+                            }
+                        } catch (e) {
+                            console.warn(`[_loadSharedWorkspaces] Could not fetch owner display name for ${ownerId}`, e);
+                        }
+                    }
+
+                    return {
+                        id: workspaceId,
+                        name: workspaceData.name,
+                        description: workspaceData.description || "",
+                        // ... other workspace fields if needed for display or context
+                        isShared: true,
+                        isOwner: false, // By definition, these are shared TO the user
+                        ownerId: ownerId,
+                        ownerName: ownerName,
+                        role: userRole, // Role from accessControl
+                    };
+                } catch (error) {
+                    console.error(`[_loadSharedWorkspaces] Error processing shared workspace ${workspaceId} from owner ${ownerId}:`, error);
+                    return null; // Return null for this item on error
+                }
+            })();
+            workspacePromises.push(promise);
         });
-      promises.push(promise);
-    }
 
-    // Aguarda que todas as leituras terminem
-    await Promise.all(promises);
+        const resolvedWorkspaces = await Promise.all(workspacePromises);
+        sharedWorkspaces = resolvedWorkspaces.filter(ws => ws !== null); // Filter out any nulls from errors
 
-    console.log(
-      "Áreas de trabalho compartilhadas carregadas:",
-      sharedWorkspaces
-    );
-    updateSharedWorkspacesDisplay();
-    updateWorkspaceSelector();
-    return sharedWorkspaces;
-  } catch (error) {
-    console.error("Erro ao carregar áreas de trabalho compartilhadas:", error);
-    // Não mostrar o erro ao utilizador se for apenas uma negação de permissão inicial, o que é normal.
-    if (error.code !== "PERMISSION_DENIED") {
-      showError(
-        "Erro",
-        "Ocorreu um erro ao carregar as áreas de trabalho compartilhadas."
-      );
+        console.log("[_loadSharedWorkspaces] Shared workspaces loaded:", sharedWorkspaces);
+        updateSharedWorkspacesDisplay(); // Update UI
+        updateWorkspaceSelector();       // Update dropdown
+        return sharedWorkspaces;
+
+    } catch (error) {
+        console.error("[_loadSharedWorkspaces] General error loading shared workspaces:", error);
+        showError("Erro", "Ocorreu um erro ao carregar as áreas de trabalho compartilhadas.");
+        updateSharedWorkspacesDisplay();
+        updateWorkspaceSelector();
+        return [];
     }
-    updateSharedWorkspacesDisplay();
-    updateWorkspaceSelector();
-    return [];
-  }
 }
 
 /**
@@ -223,29 +282,44 @@ async function _loadSharedWorkspaces() {
 async function createDefaultWorkspace() {
   try {
     const userId = getUsuarioId();
-    if (!userId) return;
+    if (!userId) {
+        console.error("[createDefaultWorkspace] User not authenticated.");
+        throw new Error("User not authenticated, cannot create default workspace.");
+    }
+    const workspacesPath = `users/${userId}/workspaces`;
 
-    const workspaceRef = db.ref(`users/${userId}/workspaces`).push();
-    const defaultWorkspace = {
+    const defaultWorkspaceData = {
       name: "Minha Área de Trabalho",
       description: "Área de trabalho principal",
-      createdAt: firebase.database.ServerValue.TIMESTAMP,
-      updatedAt: firebase.database.ServerValue.TIMESTAMP,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(), // Firestore timestamp
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(), // Firestore timestamp
+      ownerId: userId // Explicitly set ownerId
     };
 
-    await workspaceRef.set(defaultWorkspace);
+    try {
+        const docRef = await db.collection(workspacesPath).add(defaultWorkspaceData);
+        console.log("[createDefaultWorkspace] Default workspace created with ID:", docRef.id);
 
-    userWorkspaces.push({
-      id: workspaceRef.key,
-      ...defaultWorkspace,
-      isOwner: true,
-    });
+        const newWorkspace = {
+            id: docRef.id,
+            ...defaultWorkspaceData, // Note: server timestamps will be null until server processes
+            isOwner: true,
+        };
+        userWorkspaces.push(newWorkspace); // Add to local cache
 
-    return workspaceRef.key;
-  } catch (error) {
-    console.error("Erro ao criar área de trabalho padrão:", error);
-    throw error;
-  }
+        // If this is the only workspace, set it as current
+        if (!currentWorkspace) {
+           // currentWorkspace = newWorkspace; // This might be set by loadUserWorkspaces calling switchToWorkspace
+           await switchToWorkspace(newWorkspace);
+        }
+        updateWorkspaceSelector(); // Ensure selector is updated
+
+        return docRef.id;
+    } catch (error) {
+        console.error("[createDefaultWorkspace] Error creating default workspace:", error);
+        showError("Erro Crítico", "Não foi possível criar a área de trabalho padrão.");
+        throw error;
+    }
 }
 
 /**
@@ -259,48 +333,49 @@ async function createNewWorkspace() {
   );
 
   if (result.confirmed && result.value) {
-    showLoading("Criando área de trabalho...");
+        showLoading("Criando área de trabalho...");
+        const userId = getUsuarioId();
+        if (!userId) {
+            hideLoading();
+            showError("Erro de Autenticação", "Usuário não autenticado.");
+            console.error("[createNewWorkspace] User not authenticated.");
+            return;
+        }
+        const workspacesPath = `users/${userId}/workspaces`;
 
-    try {
-      const userId = getUsuarioId();
-      if (!userId) {
-        throw new Error("Usuário não autenticado");
-      }
+        const newWorkspaceData = {
+            name: result.value,
+            description: "", // Default empty description
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            ownerId: userId // Explicitly set ownerId
+        };
 
-      const workspaceRef = db.ref(`users/${userId}/workspaces`).push();
-      const newWorkspace = {
-        name: result.value,
-        description: "",
-        createdAt: firebase.database.ServerValue.TIMESTAMP,
-        updatedAt: firebase.database.ServerValue.TIMESTAMP,
-      };
+        try {
+            const docRef = await db.collection(workspacesPath).add(newWorkspaceData);
+            console.log("[createNewWorkspace] New workspace created with ID:", docRef.id);
 
-      await workspaceRef.set(newWorkspace);
+            const workspaceForCache = {
+                id: docRef.id,
+                ...newWorkspaceData, // Timestamps will be processed by server
+                isOwner: true,
+            };
+            userWorkspaces.push(workspaceForCache);
 
-      // Adiciona à lista local
-      const workspace = {
-        id: workspaceRef.key,
-        ...newWorkspace,
-        isOwner: true,
-      };
-      userWorkspaces.push(workspace);
+            updateWorkspaceSelector();
+            await switchToWorkspace(workspaceForCache); // Switch to the new workspace
 
-      updateWorkspaceSelector();
-
-      // Seleciona a nova área de trabalho
-      await switchToWorkspace(workspace);
-
-      hideLoading();
-      showSuccess(
-        "Área de Trabalho Criada!",
-        `"${result.value}" foi criada com sucesso.`
-      );
-    } catch (error) {
-      hideLoading();
-      showError("Erro", "Ocorreu um erro ao criar a área de trabalho.");
-      console.error("Erro ao criar área de trabalho:", error);
+            hideLoading();
+            showSuccess(
+                "Área de Trabalho Criada!",
+                `"${result.value}" foi criada com sucesso.`
+            );
+        } catch (error) {
+            hideLoading();
+            showError("Erro", "Ocorreu um erro ao criar a área de trabalho.");
+            console.error("[createNewWorkspace] Error creating new workspace:", error);
+        }
     }
-  }
 }
 
 /**
@@ -455,20 +530,21 @@ async function sendWorkspaceInvitation(email, permission) {
       getUsuarioEmail() ||
       "Usuário";
 
-    // Cria o convite
-    const inviteRef = db.ref("invitations").push();
+    // Cria o convite no Firestore
+    const newInviteData = {
+        fromUserId: userId,
+        fromUserName: senderName, // This should ideally be fetched fresh or use a reliable source
+        toEmail: email.toLowerCase(),
+        resourceType: "workspace", // Type of resource being shared
+        resourceId: currentWorkspace.id, // ID of the workspace
+        resourceName: currentWorkspace.name, // Name of the workspace, for display in invite
+        role: permission, // Role being granted (e.g., "viewer", "editor")
+        status: "pending", // Initial status of the invitation
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(), // Firestore timestamp
+    };
 
-    await inviteRef.set({
-      fromUserId: userId,
-      fromUserName: senderName,
-      toEmail: email.toLowerCase(),
-      resourceType: "workspace",
-      resourceId: currentWorkspace.id,
-      resourceName: currentWorkspace.name,
-      role: permission,
-      status: "pending",
-      createdAt: firebase.database.ServerValue.TIMESTAMP,
-    });
+    await db.collection("invitations").add(newInviteData);
+    console.log("[sendWorkspaceInvitation] Invitation sent:", newInviteData);
 
     hideLoading();
     showSuccess(

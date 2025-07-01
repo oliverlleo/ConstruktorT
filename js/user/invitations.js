@@ -211,21 +211,23 @@ async function sendInvite() {
     try {
         const currentUserProfile = await getUserProfileData();
         const senderName = currentUserProfile.displayName || getUsuarioNome() || "Usuário Anônimo";
-        const newInviteRef = db.ref('invitations').push();
+
         const inviteData = {
             fromUserId: getUsuarioId(),
             fromUserName: senderName,
             toEmail: email,
-            toUserId: null, // Será preenchido quando o convite for aceite
+            // toUserId: null, // Not needed at creation, will be set on accept if they register through invite.
             resourceType: 'workspace',
             resourceId: currentWorkspace.id,
-            resourceName: currentWorkspace.name,
+            resourceName: currentWorkspace.name, // For display in the invitation list
             role: permission,
             status: 'pending',
-            createdAt: firebase.database.ServerValue.TIMESTAMP
+            createdAt: firebase.firestore.FieldValue.serverTimestamp() // Firestore timestamp
         };
 
-        await newInviteRef.set(inviteData);
+        await db.collection('invitations').add(inviteData);
+        console.log("[sendInvite] Invitation created in Firestore:", inviteData);
+
         document.getElementById('invite-modal').classList.add('hidden');
         hideLoading();
         showSuccess('Convite enviado', `Um convite foi enviado para ${email}.`);
@@ -247,43 +249,74 @@ async function sendInvite() {
  */
 async function manageInvite(inviteId, action) {
     showLoading('Processando...');
+    const inviteRef = db.doc(`invitations/${inviteId}`);
+    const batch = db.batch(); // Use a batch for atomic writes
+
     try {
-        const inviteRef = db.ref(`invitations/${inviteId}`);
-        const updates = {};
-        
-        const inviteSnapshot = await inviteRef.once('value');
-        if (!inviteSnapshot.exists()) throw new Error("Convite não encontrado.");
-        const inviteData = inviteSnapshot.val();
-        
+        const inviteSnapshot = await inviteRef.get();
+        if (!inviteSnapshot.exists) {
+            throw new Error("Convite não encontrado.");
+        }
+        const inviteData = inviteSnapshot.data();
+        const acceptedByUserId = getUsuarioId(); // User performing the action
+
         if (action === 'accept') {
-            const acceptedByUserId = getUsuarioId();
-            updates[`invitations/${inviteId}/status`] = 'accepted';
-            updates[`invitations/${inviteId}/acceptedAt`] = firebase.database.ServerValue.TIMESTAMP;
-            updates[`invitations/${inviteId}/toUserId`] = acceptedByUserId; // **CORREÇÃO CRÍTICA**: Guarda o ID do utilizador que aceitou
-            updates[`accessControl/${acceptedByUserId}/${inviteData.resourceId}`] = inviteData.role;
+            if (!acceptedByUserId) throw new Error("Usuário não autenticado para aceitar o convite.");
+
+            batch.update(inviteRef, {
+                status: 'accepted',
+                acceptedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                toUserId: acceptedByUserId // Store the ID of the user who accepted
+            });
+
+            // Update accessControl: accessControl/{workspaceId} -> { userId: role }
+            const accessControlRef = db.doc(`accessControl/${inviteData.resourceId}`);
+            batch.set(accessControlRef, {
+                [acceptedByUserId]: inviteData.role
+            }, { merge: true });
             
-            if (inviteData.resourceType === 'workspace') {
-                updates[`sharedWorkspaces/${inviteData.resourceId}`] = {
-                    name: inviteData.resourceName,
-                    ownerId: inviteData.fromUserId,
-                    ownerName: inviteData.fromUserName
-                };
-            }
+            // The old `sharedWorkspaces` update is removed as it's not part of the Firestore model.
+            // Workspace data is fetched directly from users/{ownerId}/workspaces/{workspaceId}.
+
         } else if (action === 'revoke') {
-            const invitedUserId = inviteData.toUserId; // **CORREÇÃO CRÍTICA**: Usa o `toUserId` guardado
-            if (invitedUserId) {
-                 updates[`accessControl/${invitedUserId}/${inviteData.resourceId}`] = null;
-            } else {
-                 console.warn("Não foi possível revogar o acesso: toUserId não encontrado no convite.");
+            // This action is typically performed by the sender (owner of the resource)
+            // It means removing access from someone who previously accepted.
+            const userToRevokeAccessFrom = inviteData.toUserId;
+            if (!userToRevokeAccessFrom) {
+                console.warn("[manageInvite] Cannot revoke access: toUserId not found on the accepted invite.", inviteData);
+                throw new Error("Não é possível revogar o acesso: informações do destinatário ausentes.");
             }
-            updates[`invitations/${inviteId}/status`] = 'revoked';
+
+            batch.update(inviteRef, { status: 'revoked' });
+
+            // Remove from accessControl
+            const accessControlRef = db.doc(`accessControl/${inviteData.resourceId}`);
+            batch.update(accessControlRef, {
+                [userToRevokeAccessFrom]: firebase.firestore.FieldValue.delete()
+            });
+
+        } else if (action === 'cancel') { // Sender cancels a pending invite
+            if (inviteData.fromUserId !== acceptedByUserId) throw new Error("Apenas quem enviou pode cancelar o convite.");
+            if (inviteData.status !== 'pending') throw new Error("Apenas convites pendentes podem ser cancelados.");
+            batch.update(inviteRef, { status: 'canceled' });
+
+        } else if (action === 'decline') { // Recipient declines a pending invite
+            if (inviteData.toEmail.toLowerCase() !== getUsuarioEmail()?.toLowerCase() && inviteData.toUserId !== acceptedByUserId) {
+                 // Check either email if toUserId not yet set, or toUserId if it was set (e.g. direct assignment)
+                throw new Error("Você só pode recusar convites endereçados a você.");
+            }
+            if (inviteData.status !== 'pending') throw new Error("Apenas convites pendentes podem ser recusados.");
+            batch.update(inviteRef, {
+                status: 'declined',
+                declinedByUserId: acceptedByUserId // Optionally store who declined
+            });
         } else {
-            updates[`invitations/${inviteId}/status`] = action === 'decline' ? 'declined' : 'canceled';
+            throw new Error(`Ação desconhecida: ${action}`);
         }
 
-        await db.ref().update(updates);
+        await batch.commit();
         hideLoading();
-        showSuccess('Sucesso!', 'O convite foi processado.');
+        showSuccess('Sucesso!', `O convite foi ${action === 'accept' ? 'aceito' : (action === 'revoke' ? 'revogado' : (action === 'cancel' ? 'cancelado' : 'recusado'))}.`);
 
         // Recarrega a aba atual
         if (activeTab === 'access') loadSharedAccess();
@@ -305,28 +338,52 @@ async function manageInvite(inviteId, action) {
  */
 async function updateUserPermission(inviteId, newRole) {
     showLoading('Atualizando permissão...');
+    const inviteRef = db.doc(`invitations/${inviteId}`);
+    const batch = db.batch();
+
     try {
-        const inviteSnapshot = await db.ref(`invitations/${inviteId}`).once('value');
-        if (!inviteSnapshot.exists()) throw new Error("Convite não encontrado");
-        
-        const inviteData = inviteSnapshot.val();
-        if (inviteData.fromUserId !== getUsuarioId()) throw new Error("Apenas o dono do convite pode alterar a permissão.");
-        if (inviteData.status !== 'accepted') throw new Error("Só é possível alterar permissões de convites já aceitos.");
-        
-        const invitedUserId = inviteData.toUserId; // **CORREÇÃO CRÍTICA**: Usa o `toUserId` guardado
-        if (!invitedUserId) throw new Error("O ID do usuário convidado não foi encontrado. O convite pode não ter sido devidamente aceito.");
+        const inviteSnapshot = await inviteRef.get();
+        if (!inviteSnapshot.exists()) {
+            throw new Error("Convite não encontrado para atualizar permissão.");
+        }
+        const inviteData = inviteSnapshot.data();
 
-        const updates = {};
-        updates[`invitations/${inviteId}/role`] = newRole;
-        updates[`accessControl/${invitedUserId}/${inviteData.resourceId}`] = newRole;
+        if (inviteData.fromUserId !== getUsuarioId()) {
+            throw new Error("Apenas o proprietário do recurso (quem enviou o convite) pode alterar a permissão.");
+        }
+        if (inviteData.status !== 'accepted') {
+            throw new Error("Só é possível alterar permissões de convites que já foram aceitos.");
+        }
+        
+        const invitedUserId = inviteData.toUserId;
+        if (!invitedUserId) {
+            throw new Error("O ID do usuário convidado (toUserId) não foi encontrado no convite. A permissão não pode ser alterada.");
+        }
 
-        await db.ref().update(updates);
+        // Update role in the invitation document
+        batch.update(inviteRef, { role: newRole });
+
+        // Update role in accessControl/{workspaceId}
+        const accessControlRef = db.doc(`accessControl/${inviteData.resourceId}`);
+        batch.update(accessControlRef, {
+            [invitedUserId]: newRole
+            // Note: Using update assumes the accessControl doc and invitedUserId field exist.
+            // If it's possible they don't (e.g., data inconsistency), set with merge might be safer:
+            // batch.set(accessControlRef, { [invitedUserId]: newRole }, { merge: true });
+            // However, for an accepted invite, these should exist.
+        });
+
+        await batch.commit();
         hideLoading();
-        showSuccess('Permissão atualizada!');
-        loadSharedAccess();
+        showSuccess('Permissão atualizada!', 'A permissão do usuário foi atualizada com sucesso.');
+
+        // Recarrega a aba de acessos compartilhados para refletir a mudança
+        if (activeTab === 'access') {
+            loadSharedAccess();
+        }
         
     } catch (error) {
-        console.error('Erro ao atualizar permissão:', error);
+        console.error('[updateUserPermission] Erro ao atualizar permissão:', error);
         hideLoading();
         showError('Erro na Atualização', error.message);
     }
@@ -344,25 +401,33 @@ async function loadInvites(type) {
     showLoading(`Carregando convites...`);
     
     try {
-        const queryField = type === 'sent' ? 'fromUserId' : 'toEmail';
-        const queryValue = type === 'sent' ? userId : userEmail;
-        const query = db.ref('invitations').orderByChild(queryField).equalTo(queryValue);
-        
-        const snapshot = await query.once('value');
-        let invites = [];
-        snapshot.forEach(child => {
-            invites.push({ id: child.key, ...child.val() });
-        });
-
-        if (type === 'received') {
-            invites = invites.filter(invite => invite.status === 'pending');
+        let query;
+        if (type === 'sent') {
+            query = db.collection('invitations')
+                      .where('fromUserId', '==', userId)
+                      .orderBy('createdAt', 'desc'); // Order by creation time
+        } else { // 'received'
+            query = db.collection('invitations')
+                      .where('toEmail', '==', userEmail)
+                      // For received, we typically only care about pending ones in this view
+                      .where('status', '==', 'pending')
+                      .orderBy('createdAt', 'desc');
         }
         
-        renderInvites(invites.sort((a,b) => b.createdAt - a.createdAt), type);
+        const snapshot = await query.get();
+        const invites = [];
+        snapshot.forEach(doc => {
+            invites.push({ id: doc.id, ...doc.data() });
+        });
+        
+        // The filtering for 'pending' for received invites is now done in the query itself.
+        // Sorting by createdAt is also done in the query.
+        renderInvites(invites, type);
         hideLoading();
     } catch (error) {
+        console.error(`[loadInvites] Error loading ${type} invites:`, error);
         hideLoading();
-        showError('Erro', `Ocorreu um erro ao carregar os convites.`);
+        showError('Erro', `Ocorreu um erro ao carregar os convites ${type === 'sent' ? 'enviados' : 'recebidos'}.`);
     }
 }
 
@@ -419,19 +484,26 @@ function renderInvites(invites, type) {
  */
 export async function checkPendingInvitations() {
     const userEmail = getUsuarioEmail()?.toLowerCase();
-    if (!userEmail) return 0;
+    if (!userEmail) {
+        console.warn("[checkPendingInvitations] User email not available.");
+        updateReceivedInvitesBadge(0); // Ensure badge is cleared
+        return 0;
+    }
     
     try {
-        const query = db.ref('invitations').orderByChild('toEmail').equalTo(userEmail);
-        const snapshot = await query.once('value');
-        let pendingCount = 0;
-        snapshot.forEach(child => {
-            if (child.val().status === 'pending') pendingCount++;
-        });
+        const query = db.collection('invitations')
+                        .where('toEmail', '==', userEmail)
+                        .where('status', '==', 'pending');
+
+        const snapshot = await query.get();
+        const pendingCount = snapshot.size; // Firestore snapshots have a .size property
+
         updateReceivedInvitesBadge(pendingCount);
+        console.log(`[checkPendingInvitations] Found ${pendingCount} pending invitations for ${userEmail}`);
         return pendingCount;
     } catch (error) {
-        console.error('Erro ao verificar convites pendentes:', error);
+        console.error('[checkPendingInvitations] Erro ao verificar convites pendentes:', error);
+        updateReceivedInvitesBadge(0); // Clear badge on error
         return 0;
     }
 }
@@ -459,23 +531,24 @@ async function loadSharedAccess() {
     showLoading('Carregando usuários com acesso...');
     
     try {
-        const query = db.ref('invitations').orderByChild('fromUserId').equalTo(userId);
-        const snapshot = await query.once('value');
+        const query = db.collection('invitations')
+                        .where('fromUserId', '==', userId) // Invites sent by the current user
+                        .where('status', '==', 'accepted') // That have been accepted
+                        .orderBy('acceptedAt', 'desc'); // Show most recently accepted first
         
-        let sharedAccess = [];
-        if(snapshot.exists()){
-            snapshot.forEach(child => {
-                const invite = child.val();
-                if (invite.status === 'accepted') {
-                    sharedAccess.push({ id: child.key, ...invite });
-                }
-            });
-        }
+        const snapshot = await query.get();
+
+        const sharedAccess = [];
+        snapshot.forEach(doc => {
+            sharedAccess.push({ id: doc.id, ...doc.data() });
+        });
         
-        renderSharedAccess(sharedAccess.sort((a, b) => (b.acceptedAt || 0) - (a.acceptedAt || 0)));
+        renderSharedAccess(sharedAccess); // Already sorted by query
         hideLoading();
+        console.log(`[loadSharedAccess] Loaded ${sharedAccess.length} accepted invites sent by user ${userId}`);
     } catch (error) {
         hideLoading();
+        console.error('[loadSharedAccess] Erro ao carregar usuários com acesso:', error);
         showError('Erro', 'Ocorreu um erro ao carregar os usuários com acesso.');
     }
 }

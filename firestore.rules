@@ -1,0 +1,42 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Função auxiliar para verificar permissões em workspaces compartilhados
+    function hasAccess(workspaceId, roles) {
+      let userAccess = get(/databases/$(database)/documents/accessControl/$(workspaceId)).data;
+      return request.auth.uid in userAccess && userAccess[request.auth.uid] in roles;
+    }
+
+    // Regras para a coleção de usuários
+    match /users/{userId}/{documents=**} {
+      // Um usuário só pode ler e escrever em seus próprios documentos e subcoleções
+      allow read, write: if request.auth.uid == userId;
+    }
+
+    // Regras para workspaces compartilhados (acesso por outros usuários)
+    match /users/{ownerId}/workspaces/{workspaceId}/{documents=**} {
+      // Permite leitura para 'viewer', 'editor', 'admin'
+      allow read: if hasAccess(workspaceId, ['viewer', 'editor', 'admin']);
+      // Permite escrita para 'editor', 'admin'
+      allow write: if hasAccess(workspaceId, ['editor', 'admin']);
+    }
+
+    // Regras para a coleção de convites
+    match /invitations/{inviteId} {
+      // Permite que o criador do convite o leia
+      allow read: if resource.data.fromUserId == request.auth.uid;
+      // Permite que o destinatário leia e atualize (aceite/recuse) o convite
+      allow read, update: if resource.data.toEmail == request.auth.token.email;
+      // Permite que qualquer usuário autenticado crie um novo convite
+      allow create: if request.auth != null;
+    }
+
+    // Regras para a coleção de controle de acesso
+    match /accessControl/{workspaceId} {
+        // Ninguém pode ler ou escrever diretamente neste documento,
+        // ele só deve ser acessado por regras de segurança (via get()) e Cloud Functions.
+        allow read, write: if false;
+    }
+  }
+}

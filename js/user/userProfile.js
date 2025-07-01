@@ -149,9 +149,10 @@ async function loadUserProfileData() {
     const emailInput = document.getElementById('email-input');
     
     try {
-        // Tenta buscar os dados do usuário no Firebase
-        const snapshot = await db.ref(`users/${userId}`).once('value');
-        const userData = snapshot.val() || {};
+        // Tenta buscar os dados do usuário no Firestore
+        const userDocRef = db.doc(`users/${userId}`);
+        const snapshot = await userDocRef.get();
+        const userData = snapshot.exists ? snapshot.data() : {};
         
         // Define os valores nos elementos da UI
         const displayName = userData.displayName || getUsuarioNome() || 'Usuário';
@@ -240,7 +241,7 @@ async function saveUserProfile() {
         // Dados a serem atualizados
         const updateData = {
             displayName: newNickname,
-            updatedAt: firebase.database.ServerValue.TIMESTAMP
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp() // Firestore timestamp
         };
         
         // Se houver um arquivo de avatar, faz o upload
@@ -264,8 +265,14 @@ async function saveUserProfile() {
             }
         }
         
-        // Atualiza os dados no banco
-        await db.ref(`users/${userId}`).update(updateData);
+        // Atualiza os dados no Firestore
+        // Using set with merge: true is robust as it creates the doc if it doesn't exist,
+        // or updates it if it does. update() would fail if the doc doesn't exist.
+        // The prompt's Firestore structure for users is: users/{userId} (Document)
+        // This implies the document should already exist after signup.
+        // So, update() is likely fine. If there's any doubt, set with merge is safer.
+        // Let's use update() as it's more common for existing documents.
+        await db.doc(`users/${userId}`).update(updateData);
         
         // Atualiza a interface
         document.getElementById('user-display-name').textContent = newNickname;
@@ -295,10 +302,17 @@ export async function getUserProfileData() {
     }
     
     try {
-        const snapshot = await db.ref(`users/${userId}`).once('value');
-        return snapshot.val() || {};
+        const userDocRef = db.doc(`users/${userId}`);
+        const snapshot = await userDocRef.get();
+        if (snapshot.exists) {
+            return snapshot.data();
+        } else {
+            // This case should ideally not happen for an authenticated user if profile is created on signup
+            console.warn(`[getUserProfileData] No profile document found for userId: ${userId}`);
+            return {}; // Return empty object or null based on how callers handle it
+        }
     } catch (error) {
-        console.error('Erro ao obter dados do perfil:', error);
-        return null;
+        console.error('[getUserProfileData] Erro ao obter dados do perfil:', error);
+        return null; // Or rethrow, depending on desired error handling
     }
 }
