@@ -11,10 +11,31 @@ let mobileSidebarOpen = false;
 let modalSidebarOpen = false;
 let isLoading = false;
 
+// Exportações centralizadas
+export {
+    initUI,
+    openMobileSidebar,
+    closeMobileSidebar,
+    createIcons,
+    checkEmptyStates,
+    showLoading,
+    hideLoading,
+    showSuccess,
+    showError,
+    showConfirmDialog,
+    showInputDialog,
+    setupTips, // Adicionada setupTips
+    setupMobileInteractions, // Adicionada setupMobileInteractions
+    showNotification, // Adicionada showNotification
+    setupModal, // Adicionada setupModal
+    openModal, // Adicionada openModal
+    closeModal // Adicionada closeModal
+};
+
 /**
  * Inicializa elementos e comportamentos da interface do usuário
  */
-export function initUI() {
+function initUI() {
     // Font Awesome já é inicializado automaticamente
     
     setupMobileInteractions();
@@ -23,10 +44,34 @@ export function initUI() {
 }
 
 /**
+ * Abre a sidebar em dispositivos móveis.
+ */
+function openMobileSidebar() {
+    const sidebar = document.getElementById('desktop-sidebar');
+    if (sidebar) {
+        sidebar.classList.remove('-translate-x-full');
+        sidebar.classList.add('translate-x-0');
+        mobileSidebarOpen = true; // Atualiza a variável de estado
+    }
+}
+
+/**
+ * Fecha a sidebar em dispositivos móveis.
+ */
+function closeMobileSidebar() {
+    const sidebar = document.getElementById('desktop-sidebar');
+    if (sidebar) {
+        sidebar.classList.remove('translate-x-0');
+        sidebar.classList.add('-translate-x-full');
+        mobileSidebarOpen = false; // Atualiza a variável de estado
+    }
+}
+
+/**
  * Função para inicializar ícones
  * Agora também inicializa os ícones Lucide, quando disponíveis
  */
-export function createIcons() {
+function createIcons() {
     // Font Awesome é inicializado automaticamente
     
     // Também inicializa ícones Lucide, se disponíveis
@@ -43,62 +88,30 @@ export function createIcons() {
 /**
  * Configura interações específicas para dispositivos móveis
  */
-export function setupMobileInteractions() {
+function setupMobileInteractions() {
     // Toggle menu mobile
     const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
-    const desktopSidebar = document.getElementById('desktop-sidebar');
     const closeMobileMenu = document.getElementById('close-mobile-menu');
     
-    // Variável para controlar o estado da barra lateral no modo móvel
-    let mobileSidebarOpen = false;
-
-    // Função para fechar o menu
-    const closeMenu = () => {
-        if (desktopSidebar) {
-            desktopSidebar.classList.remove('translate-x-0');
-            desktopSidebar.classList.add('-translate-x-full');
-            mobileSidebarOpen = false;
-        }
-    };
-
-    // Função para abrir o menu
-    const openMenu = () => {
-         if (desktopSidebar) {
-            desktopSidebar.classList.remove('-translate-x-full');
-            desktopSidebar.classList.add('translate-x-0');
-            mobileSidebarOpen = true;
-        }
-    };
-
-    if (mobileMenuToggle && desktopSidebar) {
-        mobileMenuToggle.addEventListener('click', () => {
-            // Verifica o estado atual e alterna
-            if (mobileSidebarOpen) {
-                closeMenu();
-            } else {
-                openMenu();
-            }
-        });
+    if (mobileMenuToggle) {
+        mobileMenuToggle.addEventListener('click', openMobileSidebar);
     }
     
-    if (closeMobileMenu && desktopSidebar) {
-        closeMobileMenu.addEventListener('click', () => {
-            closeMenu();
-        });
+    if (closeMobileMenu) {
+        closeMobileMenu.addEventListener('click', closeMobileSidebar);
     }
     
     // Fechar menu ao clicar fora (overlay)
     document.addEventListener('click', (e) => {
-        // Garante que o menu esteja aberto e o clique foi fora da sidebar e do botão que a abre
-        if (mobileSidebarOpen && desktopSidebar && !desktopSidebar.contains(e.target) && !mobileMenuToggle.contains(e.target)) {
-            closeMenu();
+        const sidebar = document.getElementById('desktop-sidebar');
+        if (mobileSidebarOpen && sidebar && !sidebar.contains(e.target) && !e.target.closest('#mobile-menu-toggle')) {
+            closeMobileSidebar();
         }
     });
     
     // Toggle para a sidebar do modal em dispositivos móveis
     const toggleModalSidebar = document.getElementById('toggle-modal-sidebar');
     const modalSidebarContent = document.getElementById('modal-sidebar-content');
-    let modalSidebarOpen = false; // Variável local para o estado do modal
     
     if (toggleModalSidebar && modalSidebarContent) {
         toggleModalSidebar.addEventListener('click', () => {
@@ -113,10 +126,7 @@ export function setupMobileInteractions() {
                 } else {
                     icon.setAttribute('data-lucide', 'chevron-down');
                 }
-                // Recria os ícones Lucide
-                if (window.lucide) {
-                    window.lucide.createIcons();
-                }
+                createIcons();
             }
         });
     }
@@ -125,7 +135,7 @@ export function setupMobileInteractions() {
     const mobileAddModuleBtn = document.getElementById('mobile-add-module-btn');
     if (mobileAddModuleBtn) {
         mobileAddModuleBtn.addEventListener('click', () => {
-            // A ação específica será conectada no módulo principal (main.js)
+            // A ação específica será conectada no módulo principal
         });
     }
 }
@@ -133,7 +143,7 @@ export function setupMobileInteractions() {
 /**
  * Configura o sistema de dicas
  */
-export function setupTips() {
+function setupTips() {
     // Verifica o estado das dicas (primeiro no Firebase, depois no localStorage como fallback)
     const welcomeTipClosed = getUserPreference(TIPS_STATE.WELCOME_TIP, false);
     const quickTipClosed = getUserPreference(TIPS_STATE.QUICK_TIP, false);
@@ -223,7 +233,7 @@ export function setupTips() {
 /**
  * Verifica e atualiza os estados vazios
  */
-export function checkEmptyStates() {
+function checkEmptyStates() {
     // Verifica se existem módulos
     const moduleContainer = document.getElementById('module-container');
     const emptyState = document.getElementById('empty-state');
@@ -244,7 +254,7 @@ export function checkEmptyStates() {
  * @param {string} type - Tipo da notificação (success, error, warning, info)
  * @param {number} duration - Duração em ms (default: 3000)
  */
-export function showNotification(title, message, type = 'info', duration = 3000) {
+function showNotification(title, message, type = 'info', duration = 3000) {
     if (typeof Swal !== 'undefined') {
         const Toast = Swal.mixin({
             toast: true,
@@ -273,7 +283,7 @@ export function showNotification(title, message, type = 'info', duration = 3000)
  * @param {string} title - Título da mensagem
  * @param {string} message - Texto da mensagem
  */
-export function showSuccess(title, message) {
+function showSuccess(title, message) {
     if (typeof Swal !== 'undefined') {
         Swal.fire({
             icon: 'success',
@@ -296,7 +306,7 @@ export function showSuccess(title, message) {
  * @param {string} title - Título do erro
  * @param {string} message - Mensagem de erro
  */
-export function showError(title, message) {
+function showError(title, message) {
     if (typeof Swal !== 'undefined') {
         Swal.fire({
             icon: 'error',
@@ -321,7 +331,7 @@ export function showError(title, message) {
  * @param {string} type - Tipo da confirmação (warning, danger, info)
  * @returns {Promise<boolean>} - True se confirmado, False se cancelado
  */
-export async function showConfirmDialog(title, message, confirmText = 'Confirmar', cancelText = 'Cancelar', type = 'warning') {
+async function showConfirmDialog(title, message, confirmText = 'Confirmar', cancelText = 'Cancelar', type = 'warning') {
     if (typeof Swal !== 'undefined') {
         const result = await Swal.fire({
             title: title,
@@ -353,7 +363,7 @@ export async function showConfirmDialog(title, message, confirmText = 'Confirmar
  * @param {string} cancelText - Texto do botão de cancelamento
  * @returns {Promise<{confirmed: boolean, value: string}>} - Resultado da entrada
  */
-export async function showInputDialog(title, inputLabel, placeholder = '', confirmText = 'Confirmar', cancelText = 'Cancelar') {
+async function showInputDialog(title, inputLabel, placeholder = '', confirmText = 'Confirmar', cancelText = 'Cancelar') {
     if (typeof Swal !== 'undefined') {
         const result = await Swal.fire({
             title: title,
@@ -392,7 +402,7 @@ export async function showInputDialog(title, inputLabel, placeholder = '', confi
  * Mostra um indicador de carregamento
  * @param {string} message - Mensagem a ser exibida durante o carregamento
  */
-export function showLoading(message = 'Carregando...') {
+function showLoading(message = 'Carregando...') {
     if (isLoading) return;
     isLoading = true;
     
@@ -435,7 +445,7 @@ export function showLoading(message = 'Carregando...') {
 /**
  * Esconde o indicador de carregamento
  */
-export function hideLoading() {
+function hideLoading() {
     if (!isLoading) return;
     isLoading = false;
     
@@ -456,7 +466,7 @@ export function hideLoading() {
  * @param {Function} onOpenCallback - Função a ser chamada quando o modal abrir
  * @param {Function} onCloseCallback - Função a ser chamada quando o modal fechar
  */
-export function setupModal(modalId, onOpenCallback = null, onCloseCallback = null) {
+function setupModal(modalId, onOpenCallback = null, onCloseCallback = null) {
     const modal = document.getElementById(modalId);
     if (!modal) return;
     
@@ -489,7 +499,7 @@ export function setupModal(modalId, onOpenCallback = null, onCloseCallback = nul
  * Abre um modal
  * @param {string} modalId - ID do elemento modal
  */
-export function openModal(modalId) {
+function openModal(modalId) {
     const modal = document.getElementById(modalId);
     if (modal) {
         modal.classList.remove('hidden');
@@ -508,7 +518,7 @@ export function openModal(modalId) {
  * Fecha um modal
  * @param {string} modalId - ID do elemento modal
  */
-export function closeModal(modalId) {
+function closeModal(modalId) {
     const modal = document.getElementById(modalId);
     if (modal) {
         // Se houver um elemento interno com transição

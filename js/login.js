@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     auth.onAuthStateChanged(user => {
         if (user) {
             // Usuário já autenticado, redireciona para a página principal (CAMINHO CORRIGIDO PARA GITHUB PAGES)
-            window.location.href = '/ConstruktorT/index.html';
+             window.location.href = '../index.html';
         }
     });
     
@@ -34,6 +34,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Configura recuperação de senha
     setupPasswordRecovery();
+    
+    // Configura funcionalidade Enter nos formulários
+    setupEnterKeyHandlers();
 });
 
 // Configuração das abas
@@ -568,5 +571,64 @@ function showError(title, message) {
         });
     } else {
         alert(`Erro - ${title}: ${message}`);
+    }
+}
+
+// Configurar tecla Enter nos formulários
+function setupEnterKeyHandlers() {
+    // Formulário de login
+    const loginForm = document.getElementById('email-login-form');
+    if (loginForm) {
+        loginForm.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const loginBtn = document.getElementById('email-login-btn');
+                if (loginBtn) loginBtn.click();
+            }
+        });
+    }
+    
+    // Formulário de registro
+    const registerPanel = document.getElementById('content-register');
+    if (registerPanel) {
+        registerPanel.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const registerBtn = document.getElementById('register-btn');
+                if (registerBtn) registerBtn.click();
+            }
+        });
+    }
+    
+    // Formulário de recuperação de senha
+    const recoveryPanel = document.getElementById('password-recovery-panel');
+    if (recoveryPanel) {
+        recoveryPanel.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const recoveryBtn = document.getElementById('send-recovery-btn');
+                if (recoveryBtn) recoveryBtn.click();
+            }
+        });
+    }
+    
+    // Formulário de verificação por telefone
+    const phonePanel = document.getElementById('phone-verification-panel');
+    if (phonePanel) {
+        phonePanel.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const phoneStep1 = document.getElementById('phone-step-1');
+                const phoneStep2 = document.getElementById('phone-step-2');
+                
+                if (phoneStep1 && !phoneStep1.classList.contains('hidden')) {
+                    const sendCodeBtn = document.getElementById('send-code-btn');
+                    if (sendCodeBtn) sendCodeBtn.click();
+                } else if (phoneStep2 && !phoneStep2.classList.contains('hidden')) {
+                    const verifyCodeBtn = document.getElementById('verify-code-btn');
+                    if (verifyCodeBtn) verifyCodeBtn.click();
+                }
+            }
+        });
     }
 }

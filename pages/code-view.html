@@ -13,6 +13,15 @@
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script>
+        // Configuração do Tailwind para modo escuro
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {}
+            }
+        }
+    </script>
     
     <!-- SweetAlert2 para alertas -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -35,7 +44,7 @@
     
     <!-- Link para o ficheiro CSS externo (CAMINHO CORRIGIDO) -->
     <link rel="stylesheet" href="../css/style.css">
-</head>
+<script src="https://lib.youware.com/youware-lib.1747145198.js" id="yourware-lib"></script></head>
 <body class="bg-slate-50 min-h-screen">
 
     <!-- Cabeçalho -->
@@ -43,9 +52,7 @@
         <div class="max-w-7xl mx-auto px-4">
             <div class="flex justify-between items-center py-3">
                 <div class="flex items-center gap-2">
-                    <div class="p-2 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-lg shadow-md">
-                        <i class="fa-solid fa-code w-4 h-4 sm:w-5 sm:h-5"></i>
-                    </div>
+                    <img src="../imagem/logo.png" alt="Construktor Logo" class="w-6 h-6 sm:w-8 sm:h-8 rounded-lg shadow-md">
                     <h1 class="text-lg sm:text-xl font-bold text-slate-800">Código-Fonte</h1>
                 </div>
                 <div class="flex items-center gap-2 sm:gap-4">
@@ -63,9 +70,7 @@
         <!-- Introdução -->
         <div class="bg-white p-4 sm:p-6 rounded-xl shadow-md border border-slate-200 mb-6">
             <div class="flex flex-col sm:flex-row sm:items-start gap-4">
-                <div class="bg-gradient-to-br from-indigo-500 to-purple-600 p-3 rounded-xl text-white shadow-md self-center sm:self-start">
-                    <i class="fa-solid fa-file-code h-6 w-6 sm:h-8 sm:w-8"></i>
-                </div>
+                <img src="../imagem/logo.png" alt="Construktor Logo" class="w-12 h-12 sm:w-16 sm:h-16 rounded-xl shadow-md self-center sm:self-start">
                 <div>
                     <h1 class="text-xl sm:text-2xl font-bold mb-2 text-slate-800 text-center sm:text-left">Código-Fonte do Sistema</h1>
                     <p class="text-slate-600 text-sm sm:text-base mb-4">Esta página mostra o código-fonte completo e atualizado do Construktor, incluindo as regras de segurança do Firebase. Você pode visualizar, copiar ou baixar todos os arquivos do sistema em um pacote zip.</p>
@@ -121,5 +126,7 @@
 
     <!-- Link para o JavaScript (CAMINHO CORRIGIDO) -->
     <script type="module" src="../js/code-view.js"></script>
+    <!-- Script do Modo Escuro -->
+    <script src="../js/dark-mode.js"></script>
 </body>
 </html>

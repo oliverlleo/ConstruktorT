@@ -4,10 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - Construktor</title>
-    
+    <link rel="icon" href="../imagem/logo.png" type="image/png">
     <!-- Google Fonts: Inter -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script>
+        // Configuração do Tailwind para modo escuro
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {}
+            }
+        }
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/js/all.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/lucide@0.395.0/dist/umd/lucide.min.js"></script>
@@ -252,16 +261,282 @@
             background-color: white;
             box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
         }
+        
+        /* ===== OTIMIZAÇÕES PARA MOBILE ===== */
+        @media (max-width: 640px) {
+            .notion-auth-container {
+                padding: 1rem 0.75rem;
+                min-height: 100vh;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+            }
+            
+            .notion-auth-card {
+                width: 100%;
+                max-width: 100%;
+            }
+            
+            .notion-auth-header {
+                margin-bottom: 1.25rem;
+            }
+            
+            .notion-auth-logo {
+                margin-bottom: 1rem;
+            }
+            
+            .notion-logo-container {
+                width: 56px;
+                height: 56px;
+                border-radius: 10px;
+            }
+            
+            .notion-logo-container i {
+                width: 32px !important;
+                height: 32px !important;
+            }
+            
+            .notion-auth-header h1 {
+                font-size: 1.75rem;
+                margin-bottom: 0.5rem;
+            }
+            
+            .notion-auth-header p {
+                font-size: 0.9rem;
+                line-height: 1.4;
+            }
+            
+            .notion-auth-form {
+                border-radius: 8px;
+            }
+            
+            .notion-auth-content {
+                padding: 0.5rem 1rem 1.25rem 1rem;
+            }
+            
+            .notion-social-btn {
+                padding: 0.875rem 1rem;
+                margin-bottom: 0.625rem;
+                font-size: 0.95rem;
+                gap: 0.625rem;
+            }
+            
+            .notion-social-btn svg {
+                width: 16px;
+                height: 16px;
+            }
+            
+            .notion-divider {
+                margin: 1.25rem 0;
+            }
+            
+            .notion-input-group {
+                margin-bottom: 1rem;
+            }
+            
+            .notion-input-group label {
+                font-size: 0.8rem;
+                margin-bottom: 0.375rem;
+            }
+            
+            .notion-input {
+                padding: 0.875rem 0.75rem;
+                font-size: 1rem;
+                border-radius: 6px;
+            }
+            
+            .notion-submit-btn {
+                padding: 0.875rem;
+                font-size: 0.95rem;
+                border-radius: 6px;
+            }
+            
+            .notion-footer {
+                margin-top: 1.5rem;
+                font-size: 0.8rem;
+                line-height: 1.4;
+            }
+            
+            .notion-verification-code {
+                margin: 1.25rem 0;
+                gap: 0.375rem;
+            }
+            
+            .notion-code-input {
+                width: 2.5rem;
+                height: 2.5rem;
+                font-size: 1.125rem;
+                border-radius: 6px;
+            }
+            
+            /* Ajustes específicos para tabs */
+            .notion-auth-tabs {
+                margin-bottom: 1.25rem;
+                padding-bottom: 0.375rem;
+            }
+            
+            .notion-auth-tab {
+                padding: 0.625rem 0;
+                font-size: 0.95rem;
+            }
+            
+            /* Otimizações para formulários */
+            #email-login-form .flex.justify-end {
+                margin-bottom: 1rem;
+            }
+            
+            /* Melhor aproveitamento do espaço em recovery */
+            #password-recovery-panel h3 {
+                font-size: 1.125rem;
+                margin-bottom: 0.75rem;
+            }
+            
+            #password-recovery-panel p {
+                font-size: 0.875rem;
+                margin-bottom: 1rem;
+            }
+            
+            /* Otimizações para verificação por telefone */
+            #phone-step-2 h3 {
+                font-size: 1.125rem;
+                margin-bottom: 0.75rem;
+            }
+            
+            #phone-step-2 p {
+                font-size: 0.875rem;
+                margin-bottom: 1rem;
+            }
+            
+            /* Input de telefone com melhor UX */
+            #phone-number {
+                font-size: 1rem;
+            }
+            
+            #phone-number + p {
+                font-size: 0.75rem;
+                margin-top: 0.375rem;
+            }
+            
+            /* Botões de navegação */
+            .notion-link {
+                font-size: 0.875rem;
+            }
+            
+            /* Ajustes para recaptcha */
+            #recaptcha-container {
+                margin: 1rem 0;
+            }
+            
+            /* Melhor espaçamento para texto de ajuda */
+            .text-center.text-sm.text-slate-500 {
+                margin-bottom: 1rem;
+            }
+        }
+        
+        /* ===== OTIMIZAÇÕES PARA TELAS MUITO PEQUENAS ===== */
+        @media (max-width: 360px) {
+            .notion-auth-container {
+                padding: 0.75rem 0.5rem;
+            }
+            
+            .notion-logo-container {
+                width: 48px;
+                height: 48px;
+            }
+            
+            .notion-logo-container i {
+                width: 28px !important;
+                height: 28px !important;
+            }
+            
+            .notion-auth-header h1 {
+                font-size: 1.5rem;
+            }
+            
+            .notion-auth-content {
+                padding: 0.5rem 0.75rem 1rem 0.75rem;
+            }
+            
+            .notion-social-btn {
+                padding: 0.75rem 0.875rem;
+                font-size: 0.9rem;
+            }
+            
+            .notion-input {
+                padding: 0.75rem 0.625rem;
+                font-size: 0.95rem;
+            }
+            
+            .notion-verification-code {
+                gap: 0.25rem;
+            }
+            
+            .notion-code-input {
+                width: 2.25rem;
+                height: 2.25rem;
+                font-size: 1rem;
+            }
+        }
+        
+        /* ===== OTIMIZAÇÕES PARA LANDSCAPE EM MOBILE ===== */
+        @media (max-width: 640px) and (orientation: landscape) and (max-height: 500px) {
+            .notion-auth-container {
+                padding: 0.75rem;
+                min-height: auto;
+            }
+            
+            .notion-auth-header {
+                margin-bottom: 1rem;
+            }
+            
+            .notion-auth-logo {
+                margin-bottom: 0.75rem;
+            }
+            
+            .notion-logo-container {
+                width: 48px;
+                height: 48px;
+            }
+            
+            .notion-logo-container i {
+                width: 28px !important;
+                height: 28px !important;
+            }
+            
+            .notion-auth-header h1 {
+                font-size: 1.5rem;
+                margin-bottom: 0.25rem;
+            }
+            
+            .notion-auth-header p {
+                font-size: 0.85rem;
+            }
+            
+            .notion-auth-content {
+                padding: 0.375rem 1rem 1rem 1rem;
+            }
+            
+            .notion-footer {
+                margin-top: 1rem;
+                font-size: 0.75rem;
+            }
+            
+            .notion-divider {
+                margin: 1rem 0;
+            }
+            
+            .notion-input-group {
+                margin-bottom: 0.875rem;
+            }
+        }
     </style>
-</head>
+<script src="https://lib.youware.com/youware-lib.1747145198.js" id="yourware-lib"></script></head>
 <body>
     <div class="notion-auth-container">
         <div class="notion-auth-card">
             <div class="notion-auth-header">
                 <div class="notion-auth-logo">
-                    <div class="notion-logo-container">
-                        <i data-lucide="layout-dashboard" class="w-9 h-9"></i>
-                    </div>
+                    <img src="../imagem/logo.png" alt="Construktor Logo" class="w-16 h-16 rounded-xl shadow-lg">
                 </div>
                 <h1 class="text-2xl font-bold text-slate-900 mb-1">Construktor</h1>
                 <p class="text-slate-500">Sua plataforma visual para construção de sistemas</p>
@@ -402,5 +677,7 @@
 
     <!-- Script JS modularizado (CAMINHO CORRIGIDO) -->
     <script type="module" src="../js/login.js"></script>
+    <!-- Script do Modo Escuro -->
+    <script src="../js/dark-mode.js"></script>
 </body>
 </html>
