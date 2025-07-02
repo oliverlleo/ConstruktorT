@@ -5,9 +5,10 @@
 
 import { firebaseConfig, availableEntityIcons, fieldTypes, defaultFieldConfigs } from './config.js';
 import { initAutenticacao, isUsuarioLogado, getUsuarioId } from './autenticacao.js';
-import { initDatabase, loadAllEntities, loadAndRenderModules, loadDroppedEntitiesIntoModules, 
-         loadStructureForEntity, createEntity, createModule, saveEntityToModule, deleteEntityFromModule,
-         deleteEntity, deleteModule, saveEntityStructure, saveSubEntityStructure, saveModulesOrder } from './database.js';
+import { initDatabase, loadAllEntities, loadAndRenderModules, createEntity, createModule, 
+         saveEntityToModule, deleteEntityFromModule, deleteEntity, deleteModule, 
+         saveEntityStructure, saveSubEntityStructure, saveModulesOrder,
+         copyEntityToModule, moveEntityToModule, getEntities } from './database.js';
 import { initUI, closeMobileSidebar, createIcons, checkEmptyStates, showLoading, hideLoading, showSuccess, showError, showConfirmDialog, showInputDialog } from './ui.js';
 import { initUserProfile } from './user/userProfile.js';
 import { initInvitations, checkPendingInvitations } from './user/invitations.js';
@@ -16,6 +17,12 @@ import { initWorkspaces, getCurrentWorkspace } from './workspaces.js';
 // Variáveis globais
 let db;
 let modalNavigationStack = [];
+
+// Função helper para buscar entidade por ID
+function getEntityById(entityId) {
+    const allEntities = getEntities();
+    return allEntities.find(e => e.id === entityId);
+}
 
 // ==== PONTO DE ENTRADA DA APLICAÇÃO ====
 async function initApp() {
@@ -36,7 +43,7 @@ async function initApp() {
         
         // Inicializa o banco de dados
         await initDatabase(firebase);
-        db = firebase.database();
+        db = firebase.firestore();
         
         // Inicializa a interface do usuário
         initUI();
@@ -140,7 +147,14 @@ async function loadWorkspaceData(workspace) {
         populateFieldsToolbox();
         
         await loadAndRenderModules(renderModule, workspaceId, ownerId);
-        await loadDroppedEntitiesIntoModules(renderDroppedEntity, workspaceId, ownerId);
+        
+        // NOVA LÓGICA: Renderizar entidades nos módulos baseado no moduleId
+        const allEntities = await loadAllEntities(workspaceId, ownerId);
+        allEntities.forEach(entity => {
+            if (entity.moduleId) {
+                renderDroppedEntity(entity.moduleId, entity.id, { entityName: entity.name, attributes: entity.attributes || [] }, entity);
+            }
+        });
         
         // Força a reconfiguração do drag-and-drop para todos os módulos existentes
         const allModules = document.querySelectorAll('.module-quadro');
@@ -660,59 +674,142 @@ function setupEventListeners() {
 }
 
 async function handleEntityDrop(event) {
-    console.log('handleEntityDrop chamada com evento:', event);
-    const { item, to } = event;
+    const { item, to, from } = event;
     const { entityId, entityName, entityIcon } = item.dataset;
     const moduleEl = to.closest('.module-quadro');
     const moduleId = moduleEl.dataset.moduleId;
-    
-    console.log('Dados da entidade sendo solta:', { entityId, entityName, entityIcon, moduleId });
+    const isFromModule = from && from.classList.contains('entities-dropzone');
+    const sourceModuleEl = isFromModule ? from.closest('.module-quadro') : null;
+    const sourceModuleId = sourceModuleEl ? sourceModuleEl.dataset.moduleId : null;
 
-    if (moduleEl.querySelector(`.dropped-entity-card[data-entity-id="${entityId}"]`)) {
-        item.remove();
-        showError('Entidade já existe!', `A entidade "${entityName}" já está presente neste módulo.`);
-        return;
-    }
-    
+    // Remove o item temporário do arraste
     item.remove();
     
-    const template = document.getElementById('dropped-entity-card-template');
-    const clone = template.content.cloneNode(true);
-    const card = clone.querySelector('.dropped-entity-card');
-    card.dataset.entityId = entityId;
-    card.dataset.entityName = entityName;
-    card.dataset.moduleId = moduleId;
+    // Ação padrão é adicionar da biblioteca
+    let actionType = 'add';
     
-    const iconEl = clone.querySelector('.entity-icon');
-    if (entityIcon) {
-       iconEl.setAttribute('data-lucide', entityIcon);
-    } else {
-       iconEl.style.display = 'none';
-    }
-
-    clone.querySelector('.entity-name').textContent = entityName;
-    to.appendChild(clone);
-    
-    if (window.lucide) {
-        lucide.createIcons();
-    } else {
-        createIcons();
-    }
-    
-    const entityCard = to.querySelector(`.dropped-entity-card[data-entity-id="${entityId}"]`);
-    if (entityCard) {
-        setTimeout(() => {
-            entityCard.classList.remove('animate-pulse');
-        }, 2000);
+    // Se está vindo de outro módulo, pergunta se quer copiar ou mover
+    if (isFromModule && sourceModuleId && sourceModuleId !== moduleId) {
+        const choice = await showCopyOrMoveDialog(entityName);
+        if (choice === null) {
+            // Usuário cancelou, recria o item na origem para não perdê-lo de vista
+            const entityInfo = getEntityById(entityId);
+            if (sourceModuleId && entityInfo) {
+                renderDroppedEntity(sourceModuleId, entityId, { entityName, attributes: entityInfo.attributes || [] }, entityInfo);
+            }
+            return;
+        }
+        actionType = choice;
     }
     
     const currentWorkspace = getCurrentWorkspace();
     const workspaceId = currentWorkspace ? currentWorkspace.id : 'default';
-    const ownerId = currentWorkspace && currentWorkspace.isShared ? currentWorkspace.ownerId : null;
-    await saveEntityToModule(moduleId, entityId, entityName, workspaceId, ownerId);
+    const ownerId = currentWorkspace && !currentWorkspace.isOwner ? currentWorkspace.ownerId : null;
     
-    console.log('Entidade salva no módulo com sucesso');
-    showSuccess('Entidade adicionada!', 'Clique em configurar para definir seus campos.');
+    try {
+        if (actionType === 'copy') {
+            const newEntityInfo = await copyEntityToModule(entityId, moduleId, workspaceId, ownerId);
+            if (newEntityInfo) {
+                renderDroppedEntity(moduleId, newEntityInfo.id, { entityName: newEntityInfo.name }, newEntityInfo);
+                 // Recria o card na origem pois a cópia não deve remover o original
+                const originalEntityInfo = getEntityById(entityId);
+                 if (sourceModuleId && originalEntityInfo) {
+                    renderDroppedEntity(sourceModuleId, entityId, { entityName: originalEntityInfo.name }, originalEntityInfo);
+                }
+            }
+        } else if (actionType === 'move') {
+            await moveEntityToModule(entityId, moduleId, workspaceId, ownerId);
+            
+            // Remove o card visual do DOM do módulo de origem
+            const sourceCard = sourceModuleEl.querySelector(`.dropped-entity-card[data-entity-id="${entityId}"]`);
+            if (sourceCard) {
+                sourceCard.remove();
+            }
+            
+            // Renderiza o card no novo módulo
+            const entityInfo = getEntityById(entityId);
+            renderDroppedEntity(moduleId, entityId, { entityName }, entityInfo);
+            showSuccess('Entidade movida!', `"${entityName}" foi transferida.`);
+
+        } else { // actionType === 'add'
+            await saveEntityToModule(moduleId, entityId, entityName, workspaceId, ownerId);
+            const entityInfo = getEntityById(entityId);
+            renderDroppedEntity(moduleId, entityId, { entityName }, entityInfo);
+            showSuccess('Entidade adicionada!', `"${entityName}" foi adicionada ao módulo.`);
+        }
+    } catch (error) {
+        console.error('Erro na operação de drop:', error);
+        showError('Erro', 'Não foi possível completar a operação.');
+        // Se der erro, tenta restaurar o card na origem
+        const entityInfo = getEntityById(entityId);
+        if(sourceModuleId && entityInfo) {
+            renderDroppedEntity(sourceModuleId, entityId, { entityName }, entityInfo);
+        }
+    }
+}
+
+/**
+ * Mostra um diálogo perguntando se o usuário quer copiar ou mover a entidade
+ * @param {string} entityName - Nome da entidade
+ * @returns {Promise<string|null>} 'copy', 'move' ou null se cancelado
+ */
+async function showCopyOrMoveDialog(entityName) {
+    return new Promise((resolve) => {
+        Swal.fire({
+            title: `Mover "${entityName}"?`,
+            html: `
+                <div class="text-sm text-gray-600 mb-4">
+                    Escolha como deseja transferir esta entidade:
+                </div>
+                <div class="flex flex-col gap-3">
+                    <button id="copy-btn" class="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors">
+                        <i data-lucide="copy" class="h-5 w-5 text-blue-600"></i>
+                        <div class="text-left">
+                            <div class="font-medium text-gray-900">Copiar</div>
+                            <div class="text-sm text-gray-500">Criar uma cópia no novo módulo</div>
+                        </div>
+                    </button>
+                    <button id="move-btn" class="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-green-50 hover:border-green-300 transition-colors">
+                        <i data-lucide="move" class="h-5 w-5 text-green-600"></i>
+                        <div class="text-left">
+                            <div class="font-medium text-gray-900">Mover</div>
+                            <div class="text-sm text-gray-500">Transferir para o novo módulo</div>
+                        </div>
+                    </button>
+                </div>
+            `,
+            showConfirmButton: false,
+            showCancelButton: true,
+            cancelButtonText: 'Cancelar',
+            allowOutsideClick: false,
+            allowEscapeKey: true,
+            customClass: {
+                popup: 'swal2-popup-custom',
+                htmlContainer: 'swal2-html-custom'
+            },
+            didOpen: () => {
+                // Cria os ícones do Lucide
+                if (window.lucide) {
+                    lucide.createIcons();
+                }
+                
+                // Adiciona event listeners aos botões
+                document.getElementById('copy-btn').addEventListener('click', () => {
+                    Swal.close();
+                    resolve('copy');
+                });
+                
+                document.getElementById('move-btn').addEventListener('click', () => {
+                    Swal.close();
+                    resolve('move');
+                });
+            },
+            willClose: () => {
+                // Se chegou aqui sem ter clicado em copy ou move, foi cancelado
+                resolve(null);
+            }
+        });
+    });
 }
 
 async function handleFieldDrop(event) {
@@ -896,18 +993,14 @@ function openModal(context) {
         const workspaceId = currentWorkspace ? currentWorkspace.id : 'default';
         const ownerId = currentWorkspace && !currentWorkspace.isOwner ? currentWorkspace.ownerId : null;
         
-        loadStructureForEntity(context.moduleId, context.entityId, workspaceId, ownerId)
-            .then(schema => {
-                console.log("Estrutura carregada para entidade:", context.entityId, schema);
-                if (schema && schema.attributes && schema.attributes.length > 0) {
-                    schema.attributes.forEach(renderFormField);
-                } else {
-                    console.log("Nenhuma estrutura encontrada ou estrutura vazia para entidade:", context.entityId);
-                }
-            })
-            .catch(error => {
-                console.error("Erro ao carregar estrutura da entidade:", error);
-            });
+        // NOVA LÓGICA: A entidade já contém os attributes
+        const entity = getEntityById(context.entityId);
+        console.log("Entidade carregada:", context.entityId, entity);
+        if (entity && entity.attributes && entity.attributes.length > 0) {
+            entity.attributes.forEach(renderFormField);
+        } else {
+            console.log("Nenhuma estrutura encontrada ou estrutura vazia para entidade:", context.entityId);
+        }
     }
     
     modal.classList.remove('hidden');
@@ -953,16 +1046,7 @@ async function handleAddNewEntity() {
     const ownerId = !currentWorkspace.isOwner ? currentWorkspace.ownerId : null;
 
 
-    // Original check - this might prevent editors on shared workspaces from creating entities
-    // if (ownerId && !currentWorkspace.isOwner) { //Simplified from !currentWorkspace.isOwner
-    // This check seems to contradict the goal of allowing editors to create entities.
-    // Let's assume the Firebase rules will handle permissions.
-    // The original code had:
-    // if (!currentWorkspace.isOwner) {
-    //     showError('Erro', 'Você não tem permissão para criar entidades nesta área de trabalho.');
-    //     return;
-    // }
-    // This check will be re-evaluated after seeing if Firebase correctly denies based on rules for viewers.
+    // PERMISSÕES REMOVIDAS: Agora controladas pelas Regras de Segurança do Firestore
 
     const iconHtml = availableEntityIcons.map(icon => 
         `<button class="icon-picker-btn p-2 rounded-md hover:bg-indigo-100 transition-all" data-icon="${icon}">
@@ -1056,13 +1140,7 @@ async function handleAddNewModule() {
         return;
     }
     
-    // Similar to handleAddNewEntity, this frontend check might be too restrictive
-    // if editors/admins should be allowed to create modules.
-    // Firebase rules are now in place to allow this.
-    // if (!currentWorkspace.isOwner) {
-    //     showError('Erro', 'Você não tem permissão para criar módulos nesta área de trabalho.');
-    //     return;
-    // }
+    // PERMISSÕES REMOVIDAS: Agora controladas pelas Regras de Segurança do Firestore
     
     const workspaceId = currentWorkspace.id;
     const ownerId = !currentWorkspace.isOwner ? currentWorkspace.ownerId : null;
@@ -2016,28 +2094,27 @@ async function handleEntityChange() {
  */
 async function populatePropertiesBasedOnTarget() {
     console.log('[populatePropertiesBasedOnTarget] ===== INICIANDO POPULAÇÃO DE PROPRIEDADES =====');
-
+    
     const propertySelect = document.getElementById('action-property-select');
     const targetRadio = document.querySelector('input[name="action-target"]:checked');
-
-    // ... (código existente)
-    // Mantendo os logs existentes para não perder contexto de depuração anterior
+    
     console.log('[populatePropertiesBasedOnTarget] Element propertySelect:', propertySelect);
     console.log('[populatePropertiesBasedOnTarget] Element targetRadio:', targetRadio);
-
+    
     if (!targetRadio) {
         console.log('[populatePropertiesBasedOnTarget] Nenhum target selecionado');
         propertySelect.innerHTML = '<option value="">Primeiro selecione onde aplicar a ação</option>';
         return;
     }
-
+    
     const target = targetRadio.value;
     console.log('[populatePropertiesBasedOnTarget] Target selecionado:', target);
-
+    
     let targetEntity = null;
-
+    
     if (target === 'current') {
         console.log('[populatePropertiesBasedOnTarget] Buscando entidade atual...');
+        // Usa a entidade atual (do contexto do construtor de entidades)
         targetEntity = getCurrentEntityBeingEdited();
         console.log('[populatePropertiesBasedOnTarget] Entidade atual retornada:', targetEntity);
         
@@ -2063,16 +2140,19 @@ async function populatePropertiesBasedOnTarget() {
                 console.log('[populatePropertiesBasedOnTarget] Entidade atualizada com campos frescos:', targetEntity);
             }
         }
-
+        
     } else if (target === 'other') {
         console.log('[populatePropertiesBasedOnTarget] Buscando entidade selecionada...');
+        // Usa a entidade selecionada
         const entitySelect = document.getElementById('target-entity-select');
         console.log('[populatePropertiesBasedOnTarget] EntitySelect:', entitySelect);
         console.log('[populatePropertiesBasedOnTarget] EntitySelect value:', entitySelect?.value);
+        
         if (entitySelect && entitySelect.value) {
             targetEntity = getEntityById(entitySelect.value);
             console.log('[populatePropertiesBasedOnTarget] Entidade encontrada por ID:', targetEntity);
-
+            
+            // Se não encontrou a entidade, tenta carregar novamente os dados
             if (!targetEntity) {
                 console.log('[populatePropertiesBasedOnTarget] Entidade não encontrada, recarregando dados...');
                 await loadWorkspaceDataForActionBuilder();
@@ -2085,14 +2165,24 @@ async function populatePropertiesBasedOnTarget() {
             return;
         }
     }
-
-    // Adicione este console.log para depuração
-    console.log('[DEBUG] Entidade Alvo para popular propriedades:', targetEntity); 
-
-    if (!targetEntity || !targetEntity.attributes || targetEntity.attributes.length === 0) {
-        // Adicione este console.log para identificar o erro
-        console.error('[DEBUG] ERRO: A entidade alvo não foi encontrada ou não possui atributos.', targetEntity);
-        propertySelect.innerHTML = '<option value="">Esta entidade não possui propriedades para modificar</option>';
+    
+    console.log('[populatePropertiesBasedOnTarget] Entidade final para processamento:', targetEntity);
+    
+    if (!targetEntity) {
+        console.log('[populatePropertiesBasedOnTarget] ERRO: Entidade não encontrada');
+        propertySelect.innerHTML = '<option value="">Entidade não encontrada</option>';
+        return;
+    }
+    
+    if (!targetEntity.attributes) {
+        console.log('[populatePropertiesBasedOnTarget] ERRO: Entidade sem campo attributes');
+        propertySelect.innerHTML = '<option value="">Esta entidade não possui propriedades (attributes undefined)</option>';
+        return;
+    }
+    
+    if (targetEntity.attributes.length === 0) {
+        console.log('[populatePropertiesBasedOnTarget] ERRO: Entidade com attributes vazio');
+        propertySelect.innerHTML = '<option value="">Esta entidade não possui propriedades (attributes vazio)</option>';
         return;
     }
     
@@ -2193,14 +2283,7 @@ function getCurrentEntityBeingEdited() {
     };
 }
 
-/**
- * Obtém entidade por ID
- */
-function getEntityById(entityId) {
-    if (!window.actionBuilderData || !window.actionBuilderData.entities) return null;
-    
-    return window.actionBuilderData.entities.find(entity => entity.id === entityId);
-}
+
 
 /**
  * Manipula mudança na propriedade selecionada (O QUÊ)

@@ -27,7 +27,7 @@ let sharedWorkspaces = [];
 
 /**
  * Inicializa o módulo de áreas de trabalho
- * @param {Object} database - Referência ao banco de dados Firebase
+ * @param {Object} database - Referência ao banco de dados Firestore
  */
 export async function initWorkspaces(database) {
   console.log("Inicializando módulo de áreas de trabalho...");
@@ -39,11 +39,11 @@ export async function initWorkspaces(database) {
   await loadUserWorkspaces();
   await _loadSharedWorkspaces(); // CORREÇÃO: Chamada da função que estava em falta
 
-  // Configura listener para mudanças no controle de acesso
+  // Configura listener para mudanças no controle de acesso (Firestore onSnapshot)
   const userId = getUsuarioId();
   if (userId) {
-    db.ref(`accessControl/${userId}`).on("value", (snapshot) => {
-      console.log("Mudança detectada no controle de acesso:", snapshot.val());
+    db.doc(`accessControl/${userId}`).onSnapshot((snapshot) => {
+      console.log("Mudança detectada no controle de acesso:", snapshot.data());
       _loadSharedWorkspaces(); // CORREÇÃO: Ação a ser tomada quando as permissões mudam
     });
   }
@@ -99,18 +99,17 @@ async function loadUserWorkspaces() {
     const userId = getUsuarioId();
     if (!userId) return;
 
-    const snapshot = await db.ref(`users/${userId}/workspaces`).get();
+    const snapshot = await db.collection(`users/${userId}/workspaces`).get();
     userWorkspaces = [];
 
-    if (snapshot.exists()) {
-      const workspaces = snapshot.val();
-      for (const workspaceId in workspaces) {
+    if (!snapshot.empty) {
+      snapshot.forEach(doc => {
         userWorkspaces.push({
-          id: workspaceId,
-          ...workspaces[workspaceId],
+          id: doc.id,
+          ...doc.data(),
           isOwner: true,
         });
-      }
+      });
     }
 
     // Se não houver workspaces, cria um padrão
@@ -144,15 +143,15 @@ async function _loadSharedWorkspaces() {
     sharedWorkspaces = [];
 
     // 1. Lê a lista de permissões do próprio utilizador (isto é seguro)
-    const accessSnapshot = await db.ref(`accessControl/${userId}`).get();
-    if (!accessSnapshot.exists()) {
+    const accessSnapshot = await db.doc(`accessControl/${userId}`).get();
+    if (!accessSnapshot.exists) {
       console.log("Nenhum recurso compartilhado encontrado.");
       updateSharedWorkspacesDisplay();
       updateWorkspaceSelector();
       return [];
     }
 
-    const accessControl = accessSnapshot.val();
+    const accessControl = accessSnapshot.data();
     const promises = [];
 
     // 2. Para cada ID de recurso que o utilizador tem acesso...
@@ -163,11 +162,11 @@ async function _loadSharedWorkspaces() {
 
       // 3. ...lê a informação pública desse recurso a partir do novo nó /sharedWorkspaces
       const promise = db
-        .ref(`sharedWorkspaces/${resourceId}`)
+        .doc(`sharedWorkspaces/${resourceId}`)
         .get()
         .then((workspaceSnapshot) => {
-          if (workspaceSnapshot.exists()) {
-            const workspaceData = workspaceSnapshot.val();
+          if (workspaceSnapshot.exists) {
+            const workspaceData = workspaceSnapshot.data();
             sharedWorkspaces.push({
               id: resourceId,
               name: workspaceData.name,
@@ -225,23 +224,22 @@ async function createDefaultWorkspace() {
     const userId = getUsuarioId();
     if (!userId) return;
 
-    const workspaceRef = db.ref(`users/${userId}/workspaces`).push();
     const defaultWorkspace = {
       name: "Minha Área de Trabalho",
       description: "Área de trabalho principal",
-      createdAt: firebase.database.ServerValue.TIMESTAMP,
-      updatedAt: firebase.database.ServerValue.TIMESTAMP,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     };
 
-    await workspaceRef.set(defaultWorkspace);
+    const docRef = await db.collection(`users/${userId}/workspaces`).add(defaultWorkspace);
 
     userWorkspaces.push({
-      id: workspaceRef.key,
+      id: docRef.id,
       ...defaultWorkspace,
       isOwner: true,
     });
 
-    return workspaceRef.key;
+    return docRef.id;
   } catch (error) {
     console.error("Erro ao criar área de trabalho padrão:", error);
     throw error;
@@ -267,19 +265,18 @@ async function createNewWorkspace() {
         throw new Error("Usuário não autenticado");
       }
 
-      const workspaceRef = db.ref(`users/${userId}/workspaces`).push();
       const newWorkspace = {
         name: result.value,
         description: "",
-        createdAt: firebase.database.ServerValue.TIMESTAMP,
-        updatedAt: firebase.database.ServerValue.TIMESTAMP,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       };
 
-      await workspaceRef.set(newWorkspace);
+      const docRef = await db.collection(`users/${userId}/workspaces`).add(newWorkspace);
 
       // Adiciona à lista local
       const workspace = {
-        id: workspaceRef.key,
+        id: docRef.id,
         ...newWorkspace,
         isOwner: true,
       };
@@ -456,9 +453,7 @@ async function sendWorkspaceInvitation(email, permission) {
       "Usuário";
 
     // Cria o convite
-    const inviteRef = db.ref("invitations").push();
-
-    await inviteRef.set({
+    const inviteData = {
       fromUserId: userId,
       fromUserName: senderName,
       toEmail: email.toLowerCase(),
@@ -467,8 +462,10 @@ async function sendWorkspaceInvitation(email, permission) {
       resourceName: currentWorkspace.name,
       role: permission,
       status: "pending",
-      createdAt: firebase.database.ServerValue.TIMESTAMP,
-    });
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    };
+
+    await db.collection("invitations").add(inviteData);
 
     hideLoading();
     showSuccess(

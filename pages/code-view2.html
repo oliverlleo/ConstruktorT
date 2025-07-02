@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Código-Fonte do Construktor - Versão Atual</title>
+    
+    <!-- Google Fonts: Inter & Fira Code para código -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script>
+        // Configuração do Tailwind para modo escuro
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {}
+            }
+        }
+    </script>
+    
+    <!-- SweetAlert2 para alertas -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <!-- Font Awesome Icons -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/js/all.min.js"></script>
+    <!-- Lucide Icons (apenas para o logo) -->
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.395.0/dist/umd/lucide.min.js"></script>
+    
+    <!-- Highlight.js para formatação de código -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/xml.min.js"></script>
+    
+    <!-- JSZip para downloads -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    
+    <!-- Link para o ficheiro CSS externo (CAMINHO CORRIGIDO) -->
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body class="bg-slate-50 min-h-screen">
+
+    <!-- Cabeçalho -->
+    <header class="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-10">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-between items-center py-3">
+                <div class="flex items-center gap-2">
+                    <img src="../imagem/logo.png" alt="Construktor Logo" class="w-6 h-6 sm:w-8 sm:h-8 rounded-lg shadow-md">
+                    <h1 class="text-lg sm:text-xl font-bold text-slate-800">Código-Fonte</h1>
+                </div>
+                <div class="flex items-center gap-2 sm:gap-4">
+                    <a href="../index.html" class="text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1 sm:gap-2 text-sm sm:text-base">
+                        <i class="fa-solid fa-arrow-left h-4 w-4"></i>
+                        <span>Voltar ao Construktor</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Container Principal -->
+    <div class="max-w-7xl mx-auto py-6 px-4">
+        <!-- Introdução -->
+        <div class="bg-white p-4 sm:p-6 rounded-xl shadow-md border border-slate-200 mb-6">
+            <div class="flex flex-col sm:flex-row sm:items-start gap-4">
+                <img src="../imagem/logo.png" alt="Construktor Logo" class="w-12 h-12 sm:w-16 sm:h-16 rounded-xl shadow-md self-center sm:self-start">
+                <div>
+                    <h1 class="text-xl sm:text-2xl font-bold mb-2 text-slate-800 text-center sm:text-left">Código-Fonte do Sistema</h1>
+                    <p class="text-slate-600 text-sm sm:text-base mb-4">Esta página mostra o código-fonte completo e atualizado do Construktor, incluindo as regras de segurança do Firebase. Você pode visualizar, copiar ou baixar todos os arquivos do sistema em um pacote zip.</p>
+                    <p class="text-indigo-600 text-sm mb-4"><i class="fa-solid fa-circle-info h-4 w-4 inline-block mr-1"></i> <strong>Atualizado:</strong> Versão mais recente com correções de segurança para o Firebase</p>
+                    
+                    <div class="flex flex-col sm:flex-row gap-3 justify-center sm:justify-start">
+                        <button id="download-all-btn" class="inline-flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm text-sm sm:text-base">
+                            <i class="fa-solid fa-download h-4 w-4 sm:h-5 sm:w-5"></i>
+                            <span>Baixar Sistema Completo</span>
+                        </button>
+                        <button id="copy-all-btn" class="inline-flex items-center justify-center gap-2 px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors shadow-sm text-sm sm:text-base">
+                            <i class="fa-solid fa-clipboard h-4 w-4 sm:h-5 sm:w-5"></i>
+                            <span>Copiar Todos</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Navegação de arquivos -->
+        <div class="bg-white rounded-t-xl shadow-md border border-slate-200 p-1">
+            <div class="overflow-x-auto whitespace-nowrap py-1 px-2 flex items-center gap-1 border-b border-slate-200" id="file-tabs">
+                <!-- Navegação de arquivos será gerada dinamicamente pelo JavaScript -->
+                <div class="flex items-center justify-center p-4">
+                    <div class="spinner"></div>
+                </div>
+            </div>
+            
+            <!-- Barra de ações para o arquivo atual -->
+            <div class="flex items-center justify-between px-4 py-2 border-b border-slate-200">
+                <div class="text-sm text-slate-500 flex items-center gap-2">
+                    <i class="fa-solid fa-file h-4 w-4 text-indigo-500"></i>
+                    <span id="current-file">Carregando...</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="copy-file-btn" class="inline-flex items-center justify-center gap-1 px-2.5 py-1 bg-slate-100 text-slate-700 rounded-md hover:bg-slate-200 transition-colors text-xs">
+                        <i class="fa-solid fa-clipboard h-3.5 w-3.5"></i>
+                        <span>Copiar</span>
+                    </button>
+                    <button id="download-file-btn" class="inline-flex items-center justify-center gap-1 px-2.5 py-1 bg-indigo-100 text-indigo-700 rounded-md hover:bg-indigo-200 transition-colors text-xs">
+                        <i class="fa-solid fa-download h-3.5 w-3.5"></i>
+                        <span>Baixar</span>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Conteúdo do código -->
+            <div class="code-container" id="code-content">
+                <pre><code class="language-html" id="code-display">Carregando...</code></pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- Link para o JavaScript (CAMINHO CORRIGIDO) -->
+    <script type="module" src="../js/code-view.js"></script>
+    <!-- Script do Modo Escuro -->
+    <script src="../js/dark-mode.js"></script>
+</body>
+</html>

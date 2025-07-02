@@ -2,7 +2,6 @@
 export const firebaseConfig = {
     apiKey: "AIzaSyAtuwWlErlNOW_c5BlBE_ktwSSmHGLjN2c",
     authDomain: "prototipoos.firebaseapp.com",
-    databaseURL: "https://prototipoos-default-rtdb.firebaseio.com",
     projectId: "prototipoos",
     storageBucket: "prototipoos.firebasestorage.app",
     messagingSenderId: "969276068015",

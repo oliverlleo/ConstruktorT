@@ -64,8 +64,8 @@ class DarkModeManager {
     }
 
     createHeaderSelector() {
-        // Adiciona o seletor ao menu dropdown do usuário no index.html
-        const userMenuDropdown = document.getElementById('user-menu-dropdown');
+        // Adiciona o seletor ao menu dropdown de configurações no index.html
+        const userMenuDropdown = document.getElementById('settings-menu-dropdown');
         if (userMenuDropdown) {
             // Cria o elemento de seletor de tema
             const themeSelector = document.createElement('div');

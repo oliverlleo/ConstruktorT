@@ -14,7 +14,7 @@ let userMenuActive = false;
 
 /**
  * Inicializa o módulo de perfil do usuário
- * @param {Object} database - Referência ao banco de dados Firebase
+ * @param {Object} database - Referência ao banco de dados Firestore
  */
 export function initUserProfile(database) {
     console.log('Inicializando módulo de perfil do usuário...');
@@ -22,68 +22,72 @@ export function initUserProfile(database) {
     auth = firebase.auth();
     storage = firebase.storage();
     
-    setupUserMenu();
+    setupConstruktorMenu();
+    setupSettingsMenu();
     setupProfileModal();
     loadUserProfileData();
 }
 
 /**
- * Configura o menu do usuário
+ * Configura o menu principal do Construktor
  */
-function setupUserMenu() {
-    const userMenuButton = document.getElementById('user-menu-button');
-    const userMenuDropdown = document.getElementById('user-menu-dropdown');
-    
-    // Mostra/Esconde o menu ao clicar no botão
-    userMenuButton.addEventListener('click', () => {
-        userMenuDropdown.classList.toggle('hidden');
-        userMenuActive = !userMenuActive;
-        
-        // Atualiza o ícone de chevron
-        const chevronIcon = userMenuButton.querySelector('[data-lucide="chevron-down"]');
+function setupConstruktorMenu() {
+    const menuButton = document.getElementById('construktor-menu-button');
+    const menuDropdown = document.getElementById('construktor-menu-dropdown');
+    if (!menuButton || !menuDropdown) return;
+
+    menuButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isHidden = menuDropdown.classList.toggle('hidden');
+        const chevronIcon = menuButton.querySelector('[data-lucide]');
         if (chevronIcon) {
-            chevronIcon.setAttribute('data-lucide', userMenuActive ? 'chevron-up' : 'chevron-down');
-            const iconsToUpdate = document.querySelectorAll('[data-lucide]');
-            if (window.lucide && iconsToUpdate) {
-                lucide.createIcons({
-                    icons: iconsToUpdate
-                });
-            }
+            chevronIcon.setAttribute('data-lucide', isHidden ? 'chevron-down' : 'chevron-up');
+            if(window.lucide) lucide.createIcons();
         }
     });
-    
-    // Fecha o menu ao clicar fora dele
+
     document.addEventListener('click', (event) => {
-        if (!userMenuButton.contains(event.target) && !userMenuDropdown.contains(event.target)) {
-            if (!userMenuDropdown.classList.contains('hidden')) {
-                userMenuDropdown.classList.add('hidden');
-                userMenuActive = false;
-                
-                // Atualiza o ícone de chevron
-                const chevronIcon = userMenuButton.querySelector('[data-lucide]');
-                if (chevronIcon) {
-                    chevronIcon.setAttribute('data-lucide', 'chevron-down');
-                    const iconsToUpdate = document.querySelectorAll('[data-lucide]');
-                    if (window.lucide && iconsToUpdate) {
-                        lucide.createIcons({
-                            icons: iconsToUpdate
-                        });
-                    }
-                }
+        if (!menuButton.contains(event.target) && !menuDropdown.contains(event.target)) {
+            if (!menuDropdown.classList.contains('hidden')) {
+                 menuDropdown.classList.add('hidden');
+                 const chevronIcon = menuButton.querySelector('[data-lucide]');
+                 if (chevronIcon) {
+                     chevronIcon.setAttribute('data-lucide', 'chevron-down');
+                     if(window.lucide) lucide.createIcons();
+                 }
             }
         }
     });
-    
+}
+
+/**
+ * Configura o menu de configurações (engrenagem)
+ */
+function setupSettingsMenu() {
+    const settingsButton = document.getElementById('settings-menu-button');
+    const settingsDropdown = document.getElementById('settings-menu-dropdown');
+    if (!settingsButton || !settingsDropdown) return;
+
+    settingsButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        settingsDropdown.classList.toggle('hidden');
+    });
+
+    document.addEventListener('click', (event) => {
+        if (!settingsButton.contains(event.target) && !settingsDropdown.contains(event.target)) {
+            settingsDropdown.classList.add('hidden');
+        }
+    });
+
     // Configura o botão de editar perfil
-    document.getElementById('edit-profile-button').addEventListener('click', () => {
-        userMenuDropdown.classList.add('hidden');
-        userMenuActive = false;
+    settingsDropdown.querySelector('#edit-profile-button').addEventListener('click', () => {
+        settingsDropdown.classList.add('hidden');
         openProfileModal();
     });
     
     // Configura o botão de logout
-    document.getElementById('logout-button').addEventListener('click', async () => {
-        userMenuDropdown.classList.add('hidden');
+    settingsDropdown.querySelector('#logout-button').addEventListener('click', async () => {
+        settingsDropdown.classList.add('hidden');
         const result = await logout();
         if (result.success) {
             // O redirecionamento será tratado pelo módulo de autenticação
@@ -149,9 +153,9 @@ async function loadUserProfileData() {
     const emailInput = document.getElementById('email-input');
     
     try {
-        // Tenta buscar os dados do usuário no Firebase
-        const snapshot = await db.ref(`users/${userId}`).once('value');
-        const userData = snapshot.val() || {};
+        // Tenta buscar os dados do usuário no Firestore
+        const snapshot = await db.doc(`users/${userId}`).get();
+        const userData = snapshot.exists ? snapshot.data() : {};
         
         // Define os valores nos elementos da UI
         const displayName = userData.displayName || getUsuarioNome() || 'Usuário';
@@ -240,7 +244,7 @@ async function saveUserProfile() {
         // Dados a serem atualizados
         const updateData = {
             displayName: newNickname,
-            updatedAt: firebase.database.ServerValue.TIMESTAMP
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
         
         // Se houver um arquivo de avatar, faz o upload
@@ -265,7 +269,7 @@ async function saveUserProfile() {
         }
         
         // Atualiza os dados no banco
-        await db.ref(`users/${userId}`).update(updateData);
+        await db.doc(`users/${userId}`).update(updateData);
         
         // Atualiza a interface
         document.getElementById('user-display-name').textContent = newNickname;
@@ -295,8 +299,8 @@ export async function getUserProfileData() {
     }
     
     try {
-        const snapshot = await db.ref(`users/${userId}`).once('value');
-        return snapshot.val() || {};
+        const snapshot = await db.doc(`users/${userId}`).get();
+        return snapshot.exists ? snapshot.data() : {};
     } catch (error) {
         console.error('Erro ao obter dados do perfil:', error);
         return null;

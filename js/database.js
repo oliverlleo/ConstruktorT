@@ -32,7 +32,7 @@ function getDbPath(workspaceId, ownerId, path = '') {
  */
 export async function initDatabase(firebase) {
     try {
-        db = firebase.database();
+        db = firebase.firestore();
         await loadUserPreferences();
         await loadSharedResources();
     } catch (error) {
@@ -49,27 +49,28 @@ export async function initDatabase(firebase) {
  * @returns {Promise<Array>} - Array com todas as entidades
  */
 export async function loadAllEntities(workspaceId = 'default', ownerId = null) {
-    const readPath = getDbPath(workspaceId, ownerId, 'entities');
-    console.log(`[loadAllEntities] Caminho de leitura: ${readPath}`);
+    const currentUserId = getUsuarioId();
+    const targetUserId = ownerId || currentUserId;
+    const collectionPath = `users/${targetUserId}/workspaces/${workspaceId}/entities`;
+    console.log(`[loadAllEntities] Caminho de leitura: ${collectionPath}`);
 
     try {
-        const snapshot = await db.ref(readPath).get();
+        const snapshot = await db.collection(collectionPath).get();
         allEntities = [];
         
-        if (snapshot.exists()) {
-            console.log("[loadAllEntities] Entidades encontradas no Firebase.", snapshot.val());
-            const customEntities = snapshot.val();
-            for (const entityId in customEntities) {
-                allEntities.push({ ...customEntities[entityId], id: entityId });
-            }
+        if (!snapshot.empty) {
+            console.log("[loadAllEntities] Entidades encontradas no Firestore.");
+            snapshot.forEach(doc => {
+                allEntities.push({ id: doc.id, ...doc.data() });
+            });
         } else {
-            console.log("[loadAllEntities] Nenhuma entidade encontrada no Firebase neste caminho.");
+            console.log("[loadAllEntities] Nenhuma entidade encontrada no Firestore neste caminho.");
         }
         
         console.log(`[loadAllEntities] Sucesso. Total de entidades carregadas: ${allEntities.length}`);
         return allEntities;
     } catch (error) {
-        console.error(`[loadAllEntities] Falha ao carregar entidades do caminho: ${readPath}`, error);
+        console.error(`[loadAllEntities] Falha ao carregar entidades do caminho: ${collectionPath}`, error);
         showError('Erro de Dados', 'Não foi possível carregar as entidades. Verifique as permissões.');
         throw error;
     }
@@ -92,117 +93,49 @@ export function getEntities() {
  * @returns {Promise<Array>} - Array com todos os módulos
  */
 export async function loadAndRenderModules(renderCallback, workspaceId = 'default', ownerId = null) {
-    const modulesPath = getDbPath(workspaceId, ownerId, 'modules');
-    console.log(`[loadAndRenderModules] Carregando de: ${modulesPath}`);
+    const currentUserId = getUsuarioId();
+    const targetUserId = ownerId || currentUserId;
+    const collectionPath = `users/${targetUserId}/workspaces/${workspaceId}/modules`;
+    console.log(`[loadAndRenderModules] Carregando de: ${collectionPath}`);
     
     try {
-        const snapshot = await db.ref(modulesPath).get();
-        if (!snapshot.exists()) {
+        const snapshot = await db.collection(collectionPath).orderBy('order').get();
+        if (snapshot.empty) {
             console.log("[loadAndRenderModules] Nenhum módulo encontrado.");
             return [];
         }
         
-        const modules = snapshot.val();
+        const modules = {};
+        const orderedModules = [];
         
-        const orderPath = getDbPath(workspaceId, ownerId, 'modules_order');
-        const orderSnapshot = await db.ref(orderPath).get();
-        if (orderSnapshot.exists()) {
-            modulesOrder = orderSnapshot.val().filter(id => modules[id]);
-            Object.keys(modules).forEach(moduleId => {
-                if (!modulesOrder.includes(moduleId)) modulesOrder.push(moduleId);
-            });
-        } else {
-            modulesOrder = Object.keys(modules);
-        }
+        snapshot.forEach(doc => {
+            const moduleData = { id: doc.id, ...doc.data() };
+            modules[doc.id] = moduleData;
+            orderedModules.push(moduleData);
+        });
+        
+        modulesOrder = orderedModules.map(m => m.id);
         
         if (renderCallback) {
-            modulesOrder.forEach(moduleId => {
-                if (modules[moduleId]) renderCallback({ ...modules[moduleId], id: moduleId });
+            orderedModules.forEach(module => {
+                renderCallback(module);
             });
         }
         
-        return modulesOrder.map(moduleId => ({...modules[moduleId], id: moduleId}));
+        return orderedModules;
     } catch (error) {
-        console.error(`[loadAndRenderModules] Erro ao carregar módulos de ${modulesPath}:`, error);
+        console.error(`[loadAndRenderModules] Erro ao carregar módulos de ${collectionPath}:`, error);
         showError('Erro de Dados', 'Não foi possível carregar os módulos.');
         throw error;
     }
 }
 
-/**
- * Carrega as entidades adicionadas em cada módulo
- * @param {Function} renderCallback - Função para renderizar cada entidade em seu módulo
- * @param {string} workspaceId - ID da área de trabalho
- * @param {string} ownerId - ID do dono da área de trabalho (opcional, para workspaces compartilhados)
- * @returns {Promise<Object>} - Objeto com os schemas carregados
- */
-export async function loadDroppedEntitiesIntoModules(renderCallback, workspaceId = 'default', ownerId = null) {
-    const schemasPath = getDbPath(workspaceId, ownerId, 'schemas');
-    console.log(`[loadDroppedEntitiesIntoModules] Carregando de: ${schemasPath}`);
+// FUNÇÃO ELIMINADA: loadDroppedEntitiesIntoModules
+// No novo modelo Firestore, as entidades já contêm o moduleId e attributes
+// A renderização será feita no main.js filtrando as entidades por moduleId
 
-    try {
-        const snapshot = await db.ref(schemasPath).get();
-        if (!snapshot.exists()) return {};
-        
-        const schemas = snapshot.val();
-        
-        if (renderCallback) {
-            for (const moduleId in schemas) {
-                for (const entityId in schemas[moduleId]) {
-                    if (!schemas[moduleId][entityId]) continue;
-                    
-                    const entityInfo = allEntities.find(e => e.id === entityId);
-                    if (entityInfo) {
-                        renderCallback(moduleId, entityId, schemas[moduleId][entityId], entityInfo);
-                    }
-                }
-            }
-        }
-        
-        return schemas;
-    } catch (error) {
-        console.error(`[loadDroppedEntitiesIntoModules] Erro ao carregar schemas de ${schemasPath}:`, error);
-        showError('Erro de Dados', 'Não foi possível carregar as entidades dos módulos.');
-        throw error;
-    }
-}
-
-/**
- * Carrega a estrutura de uma entidade específica
- * @param {string} moduleId - ID do módulo
- * @param {string} entityId - ID da entidade
- * @param {string} workspaceId - ID da área de trabalho
- * @param {string} ownerId - ID do dono da área de trabalho (opcional, para workspaces compartilhados)
- * @returns {Promise<Object>} - Estrutura da entidade
- */
-export async function loadStructureForEntity(moduleId, entityId, workspaceId = 'default', ownerId = null) {
-    try {
-        const path = getDbPath(workspaceId, ownerId, `schemas/${moduleId}/${entityId}`);
-        
-        console.log("Carregando estrutura do Firebase:", {
-            path,
-            workspaceId,
-            moduleId,
-            entityId,
-            ownerId
-        });
-        
-        const snapshot = await db.ref(path).get();
-        if (!snapshot.exists()) {
-            console.log("Nenhuma estrutura encontrada no Firebase para:", path);
-            return { attributes: [] };
-        }
-        
-        const structure = snapshot.val();
-        console.log("Estrutura carregada do Firebase:", structure);
-        
-        return structure;
-    } catch (error) {
-        console.error("Erro ao carregar estrutura da entidade:", error);
-        showError('Erro de Dados', 'Não foi possível carregar a estrutura da entidade.');
-        throw error;
-    }
-}
+// FUNÇÃO ELIMINADA: loadStructureForEntity  
+// No novo modelo Firestore, a estrutura (attributes) já vem carregada com a entidade
 
 /**
  * Cria uma nova entidade na área de trabalho atual
@@ -215,20 +148,26 @@ export async function createEntity(entityData, workspaceId = 'default', ownerId 
     try {
         showLoading('Criando entidade...');
         
-        const path = getDbPath(workspaceId, ownerId, 'entities');
-        const newEntityRef = db.ref(path).push();
-        await newEntityRef.set(entityData);
+        const currentUserId = getUsuarioId();
+        const targetUserId = ownerId || currentUserId;
+        const collectionPath = `users/${targetUserId}/workspaces/${workspaceId}/entities`;
         
-        // Atualiza a lista local apenas se não for uma operação em workspace compartilhado (ou se ownerId for o do usuário atual)
-        // A lógica de atualização de 'allEntities' pode precisar ser mais sofisticada
-        // se entidades de múltiplos workspaces (próprios e compartilhados) forem gerenciadas centralmente.
-        // Por ora, só atualiza se ownerId não for fornecido (implica ser do usuário atual).
-        if (!ownerId || ownerId === getUsuarioId()) {
-            allEntities.push({ ...entityData, id: newEntityRef.key });
+        // Adiciona campos obrigatórios para o novo modelo
+        const entityDataWithDefaults = {
+            ...entityData,
+            attributes: entityData.attributes || [],
+            moduleId: entityData.moduleId || null
+        };
+        
+        const docRef = await db.collection(collectionPath).add(entityDataWithDefaults);
+        
+        // Atualiza a lista local apenas se for do usuário atual
+        if (!ownerId || ownerId === currentUserId) {
+            allEntities.push({ ...entityDataWithDefaults, id: docRef.id });
         }
         
         hideLoading();
-        return newEntityRef.key;
+        return docRef.id;
     } catch (error) {
         hideLoading();
         console.error("Erro ao criar entidade:", error);
@@ -248,34 +187,28 @@ export async function createModule(name, workspaceId = 'default', ownerId = null
     try {
         showLoading('Criando módulo...');
         
-        const modulesPath = getDbPath(workspaceId, ownerId, 'modules');
-        const newModuleRef = db.ref(modulesPath).push();
-        const newModuleData = { id: newModuleRef.key, name }; // Ensure id is part of the data written
-        await newModuleRef.set(newModuleData);
+        const currentUserId = getUsuarioId();
+        const targetUserId = ownerId || currentUserId;
+        const collectionPath = `users/${targetUserId}/workspaces/${workspaceId}/modules`;
         
-        // Adiciona à ordem de módulos - esta lógica pode precisar de ajuste
-        // Se ownerId for diferente do usuário atual, a atualização de modulesOrder local pode ser incorreta.
-        // A ordem dos módulos deve ser salva no caminho do proprietário.
-        if (!ownerId || ownerId === getUsuarioId()) {
-            modulesOrder.push(newModuleRef.key);
+        // Primeiro, pega o número atual de módulos para definir a ordem
+        const existingModules = await db.collection(collectionPath).get();
+        const nextOrder = existingModules.size;
+        
+        const newModuleData = { 
+            name: name,
+            order: nextOrder
+        };
+        
+        const docRef = await db.collection(collectionPath).add(newModuleData);
+        
+        // Atualiza a ordem local apenas se for do usuário atual
+        if (!ownerId || ownerId === currentUserId) {
+            modulesOrder.push(docRef.id);
         }
-        // Sempre salva a ordem no caminho correto (do dono ou do usuário atual)
-        const orderPath = getDbPath(workspaceId, ownerId, 'modules_order');
-        // Para ler a ordem atual antes de modificar, precisamos de uma leitura assíncrona.
-        // Temporariamente, se for compartilhado, vamos apenas adicionar, o que pode levar a duplicatas se não for tratado corretamente no carregamento.
-        // Uma solução mais robusta seria ler a ordem, adicionar e depois salvar.
-        const currentOrderSnapshot = await db.ref(orderPath).get();
-        let currentOrder = [];
-        if (currentOrderSnapshot.exists()) {
-            currentOrder = currentOrderSnapshot.val();
-        }
-        if (!currentOrder.includes(newModuleRef.key)) {
-            currentOrder.push(newModuleRef.key);
-        }
-        await db.ref(orderPath).set(currentOrder);
         
         hideLoading();
-        return newModuleRef.key;
+        return docRef.id;
     } catch (error) {
         hideLoading();
         console.error("Erro ao criar módulo:", error);
@@ -295,16 +228,116 @@ export async function createModule(name, workspaceId = 'default', ownerId = null
  */
 export async function saveEntityToModule(moduleId, entityId, entityName, workspaceId = 'default', ownerId = null) {
     try {
-        const path = getDbPath(workspaceId, ownerId, `schemas/${moduleId}/${entityId}`);
-        const snapshot = await db.ref(path).get();
+        const currentUserId = getUsuarioId();
+        const targetUserId = ownerId || currentUserId;
+        const docPath = `users/${targetUserId}/workspaces/${workspaceId}/entities/${entityId}`;
         
-        if (!snapshot.exists()) {
-            // Garante que, ao salvar, estamos usando o entityName fornecido, e inicializamos 'attributes' como um array vazio.
-            await db.ref(path).set({ entityName: entityName, attributes: [] });
-        }
+        // Atualiza o campo moduleId na entidade
+        await db.doc(docPath).update({ moduleId: moduleId });
+        
+        console.log(`Entidade ${entityId} associada ao módulo ${moduleId}`);
     } catch (error) {
         console.error("Erro ao salvar entidade no módulo:", error);
         showError('Erro ao Salvar', 'Não foi possível adicionar a entidade ao módulo.');
+        throw error;
+    }
+}
+
+/**
+ * Copia uma entidade para outro módulo (cria uma nova instância)
+ * @param {string} sourceEntityId - ID da entidade origem
+ * @param {string} targetModuleId - ID do módulo de destino
+ * @param {string} workspaceId - ID da área de trabalho
+ * @param {string} ownerId - ID do dono da área de trabalho (opcional)
+ * @returns {Promise<string>} ID da nova entidade criada
+ */
+export async function copyEntityToModule(sourceEntityId, targetModuleId, workspaceId = 'default', ownerId = null) {
+    try {
+        showLoading('Copiando entidade e dados...');
+        const currentUserId = getUsuarioId();
+        const targetUserId = ownerId || currentUserId;
+        const entitiesCollectionPath = `users/${targetUserId}/workspaces/${workspaceId}/entities`;
+        const sourceEntityRef = db.doc(`${entitiesCollectionPath}/${sourceEntityId}`);
+
+        // 1. Obter a entidade original
+        const sourceEntityDoc = await sourceEntityRef.get();
+        if (!sourceEntityDoc.exists) {
+            throw new Error("Entidade de origem não encontrada.");
+        }
+        const sourceData = sourceEntityDoc.data();
+
+        // 2. Preparar dados para a nova entidade
+        const newEntityData = {
+            ...sourceData,
+            moduleId: targetModuleId,
+            name: `${sourceData.name} (Cópia)`,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+        };
+
+        // 3. Criar a nova entidade e obter sua referência
+        const newEntityRef = await db.collection(entitiesCollectionPath).add(newEntityData);
+        const newEntityId = newEntityRef.id;
+
+        // 4. Obter todos os registros da subcoleção da entidade original
+        const recordsSnapshot = await sourceEntityRef.collection('records').get();
+
+        // 5. Copiar todos os registros para a nova entidade usando um batch write para eficiência
+        if (!recordsSnapshot.empty) {
+            const batch = db.batch();
+            recordsSnapshot.docs.forEach(doc => {
+                const newRecordRef = newEntityRef.collection('records').doc(); // Cria um novo doc com ID automático
+                batch.set(newRecordRef, doc.data());
+            });
+            await batch.commit();
+            console.log(`${recordsSnapshot.size} registros copiados com sucesso.`);
+        }
+
+        // 6. Atualizar a lista local de entidades
+        if (!ownerId || ownerId === currentUserId) {
+            if (typeof allEntities !== 'undefined' && allEntities) {
+                allEntities.push({ ...newEntityData, id: newEntityId });
+            }
+        }
+        
+        hideLoading();
+        showSuccess('Copiado!', `A entidade e todos os seus dados foram copiados.`);
+
+        // Retorna os dados da nova entidade para a UI
+        return { id: newEntityId, name: newEntityData.name, icon: newEntityData.icon };
+
+    } catch (error) {
+        hideLoading();
+        console.error("Erro ao copiar entidade e seus dados:", error);
+        showError('Erro ao Copiar', 'Não foi possível copiar a entidade e seus dados.');
+        throw error;
+    }
+}
+
+/**
+ * Move uma entidade para outro módulo (transfere completamente)
+ * @param {string} entityId - ID da entidade
+ * @param {string} targetModuleId - ID do módulo de destino
+ * @param {string} workspaceId - ID da área de trabalho
+ * @param {string} ownerId - ID do dono da área de trabalho (opcional)
+ * @returns {Promise<void>}
+ */
+export async function moveEntityToModule(entityId, targetModuleId, workspaceId = 'default', ownerId = null) {
+    try {
+        const currentUserId = getUsuarioId();
+        const targetUserId = ownerId || currentUserId;
+        const entityPath = `users/${targetUserId}/workspaces/${workspaceId}/entities/${entityId}`;
+        
+        // Atualiza o moduleId da entidade para o novo módulo
+        await db.doc(entityPath).update({ 
+            moduleId: targetModuleId,
+            updatedAt: new Date().toISOString()
+        });
+        
+        console.log(`Entidade ${entityId} movida para o módulo ${targetModuleId}`);
+    } catch (error) {
+        console.error("Erro ao mover entidade:", error);
+        showError('Erro ao Mover', 'Não foi possível mover a entidade para o módulo.');
         throw error;
     }
 }
@@ -319,8 +352,14 @@ export async function saveEntityToModule(moduleId, entityId, entityName, workspa
  */
 export async function deleteEntityFromModule(moduleId, entityId, workspaceId = 'default', ownerId = null) {
     try {
-        const path = getDbPath(workspaceId, ownerId, `schemas/${moduleId}/${entityId}`);
-        await db.ref(path).remove();
+        const currentUserId = getUsuarioId();
+        const targetUserId = ownerId || currentUserId;
+        const docPath = `users/${targetUserId}/workspaces/${workspaceId}/entities/${entityId}`;
+        
+        // Remove a associação com o módulo (define moduleId como null)
+        await db.doc(docPath).update({ moduleId: null });
+        
+        console.log(`Entidade ${entityId} removida do módulo ${moduleId}`);
     } catch (error) {
         console.error("Erro ao remover entidade do módulo:", error);
         showError('Erro ao Remover', 'Não foi possível remover a entidade do módulo.');
@@ -339,27 +378,19 @@ export async function deleteEntity(entityId, workspaceId = 'default', ownerId = 
     try {
         showLoading('Excluindo entidade...');
         
-        const entityPath = getDbPath(workspaceId, ownerId, `entities/${entityId}`);
-        await db.ref(entityPath).remove();
+        const currentUserId = getUsuarioId();
+        const targetUserId = ownerId || currentUserId;
+        const entityPath = `users/${targetUserId}/workspaces/${workspaceId}/entities/${entityId}`;
         
-        // Remove a entidade de todos os módulos no caminho correto
-        const schemasPath = getDbPath(workspaceId, ownerId, 'schemas');
-        const snapshot = await db.ref(schemasPath).get();
-        if (snapshot.exists()) {
-            const updates = {};
-            snapshot.forEach(moduleSnapshot => {
-                const moduleId = moduleSnapshot.key;
-                if (moduleSnapshot.hasChild(entityId)) {
-                    updates[`${schemasPath}/${moduleId}/${entityId}`] = null;
-                }
-            });
-            if (Object.keys(updates).length > 0) {
-                await db.ref().update(updates);
-            }
-        }
+        // Exclui a entidade (isso NÃO exclui automaticamente a subcoleção records no Firestore)
+        await db.doc(entityPath).delete();
+        
+        // ATENÇÃO: A exclusão das subcoleções 'records' deve ser feita via Cloud Function
+        // pois o Firestore não exclui subcoleções automaticamente
+        console.warn('ATENÇÃO: Records da entidade devem ser excluídos via Cloud Function');
         
         // Atualiza a lista local apenas se a operação for no workspace do usuário atual
-        if (!ownerId || ownerId === getUsuarioId()) {
+        if (!ownerId || ownerId === currentUserId) {
             allEntities = allEntities.filter(e => e.id !== entityId);
         }
         
@@ -383,24 +414,30 @@ export async function deleteModule(moduleId, workspaceId = 'default', ownerId = 
     try {
         showLoading('Excluindo módulo...');
         
-        const modulePath = getDbPath(workspaceId, ownerId, `modules/${moduleId}`);
-        await db.ref(modulePath).remove();
+        const currentUserId = getUsuarioId();
+        const targetUserId = ownerId || currentUserId;
+        const modulePath = `users/${targetUserId}/workspaces/${workspaceId}/modules/${moduleId}`;
         
-        const schemaPath = getDbPath(workspaceId, ownerId, `schemas/${moduleId}`);
-        await db.ref(schemaPath).remove();
+        // Exclui o módulo
+        await db.doc(modulePath).delete();
         
-        // Atualiza a ordem de módulos
-        // Esta parte precisa ler a ordem atual do DB, remover o ID e salvar.
-        const orderPath = getDbPath(workspaceId, ownerId, 'modules_order');
-        const orderSnapshot = await db.ref(orderPath).get();
-        if (orderSnapshot.exists()) {
-            let currentOrder = orderSnapshot.val();
-            currentOrder = currentOrder.filter(id => id !== moduleId);
-            await db.ref(orderPath).set(currentOrder);
-            // Atualiza a ordem local apenas se for o workspace do usuário atual
-            if (!ownerId || ownerId === getUsuarioId()) {
-                modulesOrder = currentOrder;
-            }
+        // Remove a associação das entidades com este módulo (define moduleId como null)
+        const entitiesPath = `users/${targetUserId}/workspaces/${workspaceId}/entities`;
+        const entitiesSnapshot = await db.collection(entitiesPath)
+            .where('moduleId', '==', moduleId)
+            .get();
+        
+        if (!entitiesSnapshot.empty) {
+            const batch = db.batch();
+            entitiesSnapshot.forEach(doc => {
+                batch.update(doc.ref, { moduleId: null });
+            });
+            await batch.commit();
+        }
+        
+        // Atualiza a ordem local apenas se for o workspace do usuário atual
+        if (!ownerId || ownerId === currentUserId) {
+            modulesOrder = modulesOrder.filter(id => id !== moduleId);
         }
         
         hideLoading();
@@ -426,12 +463,13 @@ export async function saveEntityStructure(moduleId, entityId, entityName, attrib
     try {
         showLoading('Salvando estrutura...');
         
-        const schema = { entityName, attributes };
-        const path = getDbPath(workspaceId, ownerId, `schemas/${moduleId}/${entityId}`);
+        const currentUserId = getUsuarioId();
+        const targetUserId = ownerId || currentUserId;
+        const docPath = `users/${targetUserId}/workspaces/${workspaceId}/entities/${entityId}`;
         
-        console.log("Salvando estrutura no Firebase:", {
-            path,
-            schema,
+        console.log("Salvando estrutura no Firestore:", {
+            docPath,
+            entityName,
             workspaceId,
             moduleId,
             entityId,
@@ -439,9 +477,13 @@ export async function saveEntityStructure(moduleId, entityId, entityName, attrib
             attributesCount: attributes.length
         });
         
-        await db.ref(path).set(schema);
+        // Atualiza o campo attributes na entidade
+        await db.doc(docPath).update({ 
+            name: entityName,
+            attributes: attributes 
+        });
         
-        console.log("Estrutura salva com sucesso no Firebase");
+        console.log("Estrutura salva com sucesso no Firestore");
         hideLoading();
     } catch (error) {
         hideLoading();
@@ -465,12 +507,17 @@ export async function saveSubEntityStructure(moduleId, entityId, parentFieldId, 
     try {
         showLoading('Salvando estrutura...');
         
-        const schemaPath = getDbPath(workspaceId, ownerId, `schemas/${moduleId}/${entityId}`);
-        const parentSchemaSnapshot = await db.ref(schemaPath).get();
+        const currentUserId = getUsuarioId();
+        const targetUserId = ownerId || currentUserId;
+        const docPath = `users/${targetUserId}/workspaces/${workspaceId}/entities/${entityId}`;
         
-        if (parentSchemaSnapshot.exists()) {
-            const parentSchema = parentSchemaSnapshot.val();
-            const parentField = parentSchema.attributes.find(attr => attr.id === parentFieldId);
+        // Migrado para Firestore: busca a entidade
+        const docRef = db.doc(docPath);
+        const docSnap = await docRef.get();
+        
+        if (docSnap.exists) {
+            const entityData = docSnap.data();
+            const parentField = entityData.attributes?.find(attr => attr.id === parentFieldId);
             
             if (parentField) {
                 // Certifique-se de que subSchema existe
@@ -478,7 +525,9 @@ export async function saveSubEntityStructure(moduleId, entityId, parentFieldId, 
                     parentField.subSchema = {};
                 }
                 parentField.subSchema.attributes = attributes;
-                await db.ref(schemaPath).set(parentSchema);
+                
+                // Atualiza a entidade com a nova estrutura de sub-entidade
+                await docRef.update({ attributes: entityData.attributes });
             }
         }
         
@@ -500,15 +549,24 @@ export async function saveSubEntityStructure(moduleId, entityId, parentFieldId, 
  */
 export async function saveModulesOrder(orderArray, workspaceId = 'default', ownerId = null) {
     try {
-        const orderPath = getDbPath(workspaceId, ownerId, 'modules_order');
+        const currentUserId = getUsuarioId();
+        const targetUserId = ownerId || currentUserId;
+        const collectionPath = `users/${targetUserId}/workspaces/${workspaceId}/modules`;
         
         // Atualiza a variável global somente se estiver operando no workspace do usuário logado
-        if (!ownerId || ownerId === getUsuarioId()) {
+        if (!ownerId || ownerId === currentUserId) {
             modulesOrder = orderArray;
         }
         
-        // Salva no Firebase
-        await db.ref(orderPath).set(orderArray);
+        // Usa batch write para atualizar a ordem de todos os módulos
+        const batch = db.batch();
+        orderArray.forEach((moduleId, index) => {
+            const moduleRef = db.doc(`${collectionPath}/${moduleId}`);
+            batch.update(moduleRef, { order: index });
+        });
+        await batch.commit();
+        
+        console.log("Ordem dos módulos salva com sucesso no Firestore");
     } catch (error) {
         console.error("Erro ao salvar ordem dos módulos:", error);
         showError('Erro ao Salvar', 'Não foi possível salvar a ordem dos módulos.');
@@ -535,11 +593,13 @@ export async function loadUserPreferences() {
             throw new Error('Usuário não autenticado');
         }
         
-        const snapshot = await db.ref(`users/${userId}/preferences`).get();
-        if (snapshot.exists()) {
-            userPreferences = snapshot.val();
-        } else {
-            userPreferences = {};
+        const snapshot = await db.collection(`users/${userId}/preferences`).get();
+        userPreferences = {};
+        
+        if (!snapshot.empty) {
+            snapshot.forEach(doc => {
+                userPreferences[doc.id] = doc.data().value;
+            });
         }
         
         return userPreferences;
@@ -565,14 +625,14 @@ export async function saveUserPreference(key, value) {
         // Atualiza o objeto local de preferências
         userPreferences[key] = value;
         
-        // Salva no Firebase
-        await db.ref(`users/${userId}/preferences/${key}`).set(value);
+        // Salva no Firestore
+        await db.doc(`users/${userId}/preferences/${key}`).set({ value: value });
         
         // Também salva no localStorage como fallback
         localStorage.setItem(key, JSON.stringify(value));
     } catch (error) {
         console.error("Erro ao salvar preferência do usuário:", error);
-        // Fallback para localStorage se o Firebase falhar
+        // Fallback para localStorage se o Firestore falhar
         localStorage.setItem(key, JSON.stringify(value));
     }
 }
@@ -621,34 +681,28 @@ export async function saveEntityData(moduleId, entityId, data, workspaceId = 'de
     try {
         showLoading('Salvando dados...');
         
-        const currentUserId = getUsuarioId(); // Quem está realizando a ação
-        const targetUserId = ownerId || currentUserId; // Onde os dados do workspace "original" estão.
-                                                  // No entanto, a estrutura 'data' está em users/${userId}/data, não users/${userId}/workspaces/.../data
-
+        const currentUserId = getUsuarioId();
+        const targetUserId = ownerId || currentUserId;
+        
         if (!currentUserId) {
             throw new Error('Usuário não autenticado');
         }
         
-        data['created_at'] = new Date().toISOString();
-        data['updated_at'] = new Date().toISOString();
-        data['created_by'] = currentUserId; // Quem criou o registro
+        // Dados com metadados do sistema
+        const recordData = {
+            ...data,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            created_by: currentUserId
+        };
         
-        // O caminho para 'data' não parece ser por workspace na estrutura atual.
-        // Se for para ser por workspace, o path `users/${targetUserId}/workspaces/${workspaceId}/data/...` seria mais apropriado.
-        // Mantendo o path original por enquanto:
-        const dataPath = `users/${currentUserId}/data/${moduleId}/${entityId}`;
-        // Se a intenção é que os dados fiquem sob o ownerId:
-        // const dataPath = `users/${targetUserId}/data/${moduleId}/${entityId}`; // <-- Revisar esta decisão.
-                                                                            // Se um editor adiciona dados a um workspace compartilhado,
-                                                                            // onde esses dados devem residir? Sob o editor ou sob o dono?
-                                                                            // As regras de segurança atuais não cobrem 'data'.
-                                                                            // Vamos assumir por agora que os dados são sempre do usuário que os cria.
-
-        const newRef = db.ref(dataPath).push();
-        await newRef.set(data);
+        // Nova estrutura: users/{userId}/workspaces/{workspaceId}/entities/{entityId}/records
+        const recordsPath = `users/${targetUserId}/workspaces/${workspaceId}/entities/${entityId}/records`;
+        
+        const docRef = await db.collection(recordsPath).add(recordData);
         
         hideLoading();
-        return newRef.key;
+        return docRef.id;
     } catch (error) {
         hideLoading();
         console.error("Erro ao salvar dados:", error);
@@ -671,20 +725,23 @@ export async function updateEntityData(moduleId, entityId, recordId, data, works
     try {
         showLoading('Atualizando dados...');
         
-        const currentUserId = getUsuarioId(); // Quem está realizando a ação
-        // const targetUserId = ownerId || currentUserId; // Para referência se a lógica de path mudar.
+        const currentUserId = getUsuarioId();
+        const targetUserId = ownerId || currentUserId;
 
         if (!currentUserId) {
             throw new Error('Usuário não autenticado');
         }
         
-        data['updated_at'] = new Date().toISOString();
+        // Adiciona timestamp de atualização
+        const updateData = {
+            ...data,
+            updated_at: new Date().toISOString()
+        };
         
-        // Mantendo a lógica original de path para 'data' (sob o usuário que executa a ação)
-        const dataPath = `users/${currentUserId}/data/${moduleId}/${entityId}/${recordId}`;
-        // Se a intenção for que os dados fiquem sob o ownerId:
-        // const dataPath = `users/${targetUserId}/data/${moduleId}/${entityId}/${recordId}`;
-        await db.ref(dataPath).update(data);
+        // Nova estrutura: users/{userId}/workspaces/{workspaceId}/entities/{entityId}/records/{recordId}
+        const recordPath = `users/${targetUserId}/workspaces/${workspaceId}/entities/${entityId}/records/${recordId}`;
+        
+        await db.doc(recordPath).update(updateData);
         
         hideLoading();
     } catch (error) {
@@ -705,9 +762,6 @@ export async function updateEntityData(moduleId, entityId, recordId, data, works
  */
 export async function loadEntityData(moduleId, entityId, workspaceId = 'default', ownerId = null) {
     try {
-        // Para carregar dados, precisamos saber de qual usuário carregar.
-        // Se for um workspace compartilhado, idealmente carregaríamos os dados do ownerId.
-        // Se for o workspace próprio do usuário, usamos o currentUserId.
         const currentUserId = getUsuarioId();
         const targetUserId = ownerId || currentUserId; 
 
@@ -715,23 +769,21 @@ export async function loadEntityData(moduleId, entityId, workspaceId = 'default'
             throw new Error('Usuário não autenticado ou ID do dono não especificado para recurso compartilhado.');
         }
         
-        // Assumindo que os dados estão em users/${targetUserId}/data/...
-        const dataPath = `users/${targetUserId}/data/${moduleId}/${entityId}`;
-        const snapshot = await db.ref(dataPath).get();
+        // Nova estrutura: users/{userId}/workspaces/{workspaceId}/entities/{entityId}/records
+        const recordsPath = `users/${targetUserId}/workspaces/${workspaceId}/entities/${entityId}/records`;
+        const snapshot = await db.collection(recordsPath).get();
         
-        if (!snapshot.exists()) {
+        if (snapshot.empty) {
             return [];
         }
         
-        const data = snapshot.val();
         const records = [];
-        
-        for (const id in data) {
+        snapshot.forEach(doc => {
             records.push({
-                id,
-                ...data[id]
+                id: doc.id,
+                ...doc.data()
             });
-        }
+        });
         
         return records;
     } catch (error) {
@@ -754,18 +806,17 @@ export async function deleteEntityRecord(moduleId, entityId, recordId, workspace
     try {
         showLoading('Excluindo registro...');
         
-        const currentUserId = getUsuarioId(); // Quem está realizando a ação
-        // const targetUserId = ownerId || currentUserId; // Para referência se a lógica de path mudar.
+        const currentUserId = getUsuarioId();
+        const targetUserId = ownerId || currentUserId;
 
         if (!currentUserId) {
             throw new Error('Usuário não autenticado');
         }
         
-        // Mantendo a lógica original de path para 'data' (sob o usuário que executa a ação)
-        const dataPath = `users/${currentUserId}/data/${moduleId}/${entityId}/${recordId}`;
-        // Se a intenção for que os dados fiquem sob o ownerId:
-        // const dataPath = `users/${targetUserId}/data/${moduleId}/${entityId}/${recordId}`;
-        await db.ref(dataPath).remove();
+        // Nova estrutura: users/{userId}/workspaces/{workspaceId}/entities/{entityId}/records/{recordId}
+        const recordPath = `users/${targetUserId}/workspaces/${workspaceId}/entities/${entityId}/records/${recordId}`;
+        
+        await db.doc(recordPath).delete();
         
         hideLoading();
     } catch (error) {
@@ -790,39 +841,42 @@ export async function loadSharedResources() {
         
         console.log("Carregando recursos compartilhados para o usuário:", userId);
         
-        // Verifica permissões do usuário
-        const accessControlSnapshot = await db.ref(`accessControl/${userId}`).get();
-        if (!accessControlSnapshot.exists()) {
+        // Migrado para Firestore: Verifica permissões do usuário
+        const accessControlDocRef = db.collection('accessControl').doc(userId);
+        const accessControlSnap = await accessControlDocRef.get();
+        
+        // CORREÇÃO: Usar .exists em vez de .exists()
+        if (!accessControlSnap.exists) {
             console.log("Nenhum recurso compartilhado encontrado para o usuário:", userId);
             sharedResources = [];
             return [];
         }
         
-        const accessControl = accessControlSnapshot.val();
+        const accessControl = accessControlSnap.data();
         console.log("Permissões encontradas:", accessControl);
         
         // Lista para armazenar os recursos compartilhados
         sharedResources = [];
         
         try {
-            // Busca todos os convites aceitos enviados para este usuário
-            const invitationsSnapshot = await db.ref('invitations')
-                .orderByChild('toEmail')
-                .equalTo(userEmail)
-                .once('value');
+            // Migrado para Firestore: Busca todos os convites aceitos enviados para este usuário
+            const invitationsSnapshot = await db.collection('invitations')
+                .where('toEmail', '==', userEmail)
+                .where('status', '==', 'accepted')
+                .get();
             
-            if (!invitationsSnapshot.exists()) {
-                console.log("Nenhum convite encontrado para o usuário:", userEmail);
+            if (invitationsSnapshot.empty) {
+                console.log("Nenhum convite aceito encontrado para o usuário:", userEmail);
                 return [];
             }
             
             // Processa cada convite
-            invitationsSnapshot.forEach(childSnapshot => {
-                const invite = childSnapshot.val();
+            invitationsSnapshot.forEach(doc => {
+                const invite = doc.data();
                 const resourceId = invite.resourceId;
                 
-                // Verifica se é um convite aceito e se o usuário tem permissão no accessControl
-                if (invite.status === 'accepted' && accessControl[resourceId]) {
+                // Verifica se o usuário tem permissão no accessControl
+                if (accessControl[resourceId]) {
                     // Adiciona o recurso à lista
                     sharedResources.push({
                         id: resourceId,
@@ -864,8 +918,15 @@ export async function checkResourceAccess(resourceId) {
         const userId = getUsuarioId();
         if (!userId) return null;
         
-        const snapshot = await db.ref(`accessControl/${userId}/${resourceId}`).get();
-        return snapshot.exists() ? snapshot.val() : null;
+        // Migrado para Firestore: usando db.collection() e db.doc()
+        const docRef = db.collection('accessControl').doc(userId);
+        const docSnap = await docRef.get();
+        
+        // CORREÇÃO: Usar .exists em vez de .exists()
+        if (docSnap.exists && docSnap.data()[resourceId]) {
+            return docSnap.data()[resourceId];
+        }
+        return null;
     } catch (error) {
         console.error("Erro ao verificar acesso ao recurso:", error);
         return null;
@@ -883,26 +944,26 @@ export async function loadSharedUserModules(ownerId, workspaceId = 'default') {
         if (!ownerId) {
             throw new Error('ID do usuário dono não fornecido');
         }
-        const modulesPath = getDbPath(workspaceId, ownerId, 'modules');
-        console.log(`Carregando módulos compartilhados de: ${modulesPath}`);
+        const collectionPath = `users/${ownerId}/workspaces/${workspaceId}/modules`;
+        console.log(`Carregando módulos compartilhados de: ${collectionPath}`);
         
-        const snapshot = await db.ref(modulesPath).get();
-        if (!snapshot.exists()) {
-            console.log(`Nenhum módulo encontrado em ${modulesPath}`);
+        // Migrado para Firestore: usando db.collection()
+        const snapshot = await db.collection(collectionPath).orderBy('order').get();
+        if (snapshot.empty) {
+            console.log(`Nenhum módulo encontrado em ${collectionPath}`);
             return [];
         }
         
-        const modules = snapshot.val();
         const modulesList = [];
         
-        for (const moduleId in modules) {
+        snapshot.forEach(doc => {
             modulesList.push({
-                id: moduleId,
-                ...modules[moduleId],
+                id: doc.id,
+                ...doc.data(),
                 isShared: true,
                 ownerId: ownerId
             });
-        }
+        });
         
         return modulesList;
     } catch (error) {
@@ -923,26 +984,26 @@ export async function loadSharedUserEntities(ownerId, workspaceId = 'default') {
         if (!ownerId) {
             throw new Error('ID do usuário dono não fornecido');
         }
-        const entitiesPath = getDbPath(workspaceId, ownerId, 'entities');
-        console.log(`Carregando entidades compartilhadas de: ${entitiesPath}`);
+        const collectionPath = `users/${ownerId}/workspaces/${workspaceId}/entities`;
+        console.log(`Carregando entidades compartilhadas de: ${collectionPath}`);
         
-        const snapshot = await db.ref(entitiesPath).get();
-        if (!snapshot.exists()) {
-            console.log(`Nenhuma entidade encontrada em ${entitiesPath}`);
+        // Migrado para Firestore: usando db.collection()
+        const snapshot = await db.collection(collectionPath).get();
+        if (snapshot.empty) {
+            console.log(`Nenhuma entidade encontrada em ${collectionPath}`);
             return [];
         }
         
-        const entities = snapshot.val();
         const entitiesList = [];
         
-        for (const entityId in entities) {
+        snapshot.forEach(doc => {
             entitiesList.push({
-                id: entityId,
-                ...entities[entityId],
+                id: doc.id,
+                ...doc.data(),
                 isShared: true,
                 ownerId: ownerId
             });
-        }
+        });
         
         return entitiesList;
     } catch (error) {
@@ -964,16 +1025,28 @@ export async function loadSharedModuleSchemas(ownerId, workspaceId = 'default', 
         if (!ownerId || !moduleId) {
             throw new Error('Parâmetros necessários não fornecidos');
         }
-        const schemasPath = getDbPath(workspaceId, ownerId, `schemas/${moduleId}`);
-        console.log(`Carregando esquemas compartilhados de: ${schemasPath}`);
+        const collectionPath = `users/${ownerId}/workspaces/${workspaceId}/entities`;
+        console.log(`Carregando esquemas compartilhados de: ${collectionPath} (módulo: ${moduleId})`);
         
-        const snapshot = await db.ref(schemasPath).get();
-        if (!snapshot.exists()) {
-            console.log(`Nenhum esquema encontrado em ${schemasPath}`);
+        // Migrado para Firestore: busca entidades do módulo específico
+        const snapshot = await db.collection(collectionPath)
+            .where('moduleId', '==', moduleId)
+            .get();
+        
+        if (snapshot.empty) {
+            console.log(`Nenhum esquema encontrado para o módulo ${moduleId}`);
             return {};
         }
         
-        return snapshot.val();
+        const schemas = {};
+        snapshot.forEach(doc => {
+            schemas[doc.id] = {
+                id: doc.id,
+                ...doc.data()
+            };
+        });
+        
+        return schemas;
     } catch (error) {
         console.error("Erro ao carregar esquemas compartilhados:", error);
         return {};
@@ -993,16 +1066,20 @@ export async function loadStructureForEntityShared(moduleId, entityId, workspace
         if (!ownerId) {
             throw new Error('ID do usuário dono não fornecido');
         }
-        const structurePath = getDbPath(workspaceId, ownerId, `schemas/${moduleId}/${entityId}`);
-        console.log(`Carregando estrutura compartilhada de: ${structurePath}`);
+        const docPath = `users/${ownerId}/workspaces/${workspaceId}/entities/${entityId}`;
+        console.log(`Carregando estrutura compartilhada de: ${docPath}`);
         
-        const snapshot = await db.ref(structurePath).get();
-        if (!snapshot.exists()) {
-            console.log(`Estrutura não encontrada em ${structurePath}`);
+        // Migrado para Firestore: usando db.doc()
+        const docRef = db.doc(docPath);
+        const docSnap = await docRef.get();
+        
+        // CORREÇÃO: Usar .exists em vez de .exists()
+        if (!docSnap.exists) {
+            console.log(`Estrutura não encontrada em ${docPath}`);
             return null;
         }
         
-        return snapshot.val();
+        return docSnap.data();
     } catch (error) {
         console.error("Erro ao carregar estrutura da entidade compartilhada:", error);
         return null;
